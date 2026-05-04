@@ -227,6 +227,33 @@
   text-decoration: line-through;
 }
 
+.dp-block.is-implicit-duration {
+  background: color-mix(in srgb, var(--interactive-accent) 70%, transparent);
+  border-style: dashed;
+}
+
+.dp-card.is-implicit-duration {
+  border-style: dashed;
+}
+
+.dp-warn {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 3px;
+  color: var(--color-orange, #e0aa3e);
+  vertical-align: middle;
+}
+
+.dp-warn .svg-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.dp-card .dp-warn .svg-icon {
+  width: 13px;
+  height: 13px;
+}
+
 .dp-block-time {
   font-weight: 600;
   font-size: 10px;

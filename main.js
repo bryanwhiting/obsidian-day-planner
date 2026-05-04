@@ -111,8 +111,6 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
   const body = m[3];
   const explicitDuration = parseDuration(body, prefixes);
   const startMin = parseTime(body, prefixes);
-  if (explicitDuration === null && startMin === null)
-    return null;
   const durationMin = explicitDuration != null ? explicitDuration : defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const checked = m[2] !== " ";
@@ -122,6 +120,7 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
     rawLine,
     body,
     durationMin,
+    hasExplicitDuration: explicitDuration !== null,
     startMin,
     order,
     checked
@@ -676,9 +675,16 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     el.style.width = `${block.widthPct}%`;
     if (block.task.checked)
       el.addClass("is-done");
+    if (!block.task.hasExplicitDuration)
+      el.addClass("is-implicit-duration");
     el.draggable = true;
     const time = el.createDiv({ cls: "dp-block-time" });
-    time.textContent = this.formatBlockTime(block.task);
+    if (!block.task.hasExplicitDuration) {
+      const warn = time.createSpan({ cls: "dp-warn" });
+      (0, import_obsidian2.setIcon)(warn, "alert-triangle");
+      warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
+    }
+    time.createSpan({ text: this.formatBlockTime(block.task) });
     const text = el.createDiv({ cls: "dp-block-text" });
     text.textContent = this.cleanBody(block.task.body);
     el.addEventListener("dragstart", (ev) => {
@@ -801,9 +807,16 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       const card = list.createDiv({ cls: "dp-card" });
       if (task.checked)
         card.addClass("is-done");
+      if (!task.hasExplicitDuration)
+        card.addClass("is-implicit-duration");
       card.draggable = true;
       const meta = card.createDiv({ cls: "dp-card-meta" });
-      meta.textContent = formatTotal(task.durationMin);
+      if (!task.hasExplicitDuration) {
+        const warn = meta.createSpan({ cls: "dp-warn" });
+        (0, import_obsidian2.setIcon)(warn, "alert-triangle");
+        warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
+      }
+      meta.createSpan({ text: formatTotal(task.durationMin) });
       const text = card.createDiv({ cls: "dp-card-text" });
       text.textContent = this.cleanBody(task.body);
       card.addEventListener("dragstart", (ev) => {

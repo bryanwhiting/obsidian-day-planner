@@ -423,10 +423,16 @@ export class DayPlannerView extends ItemView {
     el.style.left = `${block.leftPct}%`;
     el.style.width = `${block.widthPct}%`;
     if (block.task.checked) el.addClass("is-done");
+    if (!block.task.hasExplicitDuration) el.addClass("is-implicit-duration");
     el.draggable = true;
 
     const time = el.createDiv({ cls: "dp-block-time" });
-    time.textContent = this.formatBlockTime(block.task);
+    if (!block.task.hasExplicitDuration) {
+      const warn = time.createSpan({ cls: "dp-warn" });
+      setIcon(warn, "alert-triangle");
+      warn.setAttribute("aria-label", "No #d/ tag — using default duration");
+    }
+    time.createSpan({ text: this.formatBlockTime(block.task) });
 
     const text = el.createDiv({ cls: "dp-block-text" });
     text.textContent = this.cleanBody(block.task.body);
@@ -569,9 +575,15 @@ export class DayPlannerView extends ItemView {
     unscheduled.forEach((task, idx) => {
       const card = list.createDiv({ cls: "dp-card" });
       if (task.checked) card.addClass("is-done");
+      if (!task.hasExplicitDuration) card.addClass("is-implicit-duration");
       card.draggable = true;
       const meta = card.createDiv({ cls: "dp-card-meta" });
-      meta.textContent = formatTotal(task.durationMin);
+      if (!task.hasExplicitDuration) {
+        const warn = meta.createSpan({ cls: "dp-warn" });
+        setIcon(warn, "alert-triangle");
+        warn.setAttribute("aria-label", "No #d/ tag — using default duration");
+      }
+      meta.createSpan({ text: formatTotal(task.durationMin) });
       const text = card.createDiv({ cls: "dp-card-text" });
       text.textContent = this.cleanBody(task.body);
 

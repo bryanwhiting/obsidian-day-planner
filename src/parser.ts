@@ -4,6 +4,7 @@ export interface ParsedTask {
   rawLine: string;
   body: string;
   durationMin: number;
+  hasExplicitDuration: boolean;
   startMin: number | null;
   order: number | null;
   checked: boolean;
@@ -116,7 +117,6 @@ export function parseTaskLine(
   const body = m[3];
   const explicitDuration = parseDuration(body, prefixes);
   const startMin = parseTime(body, prefixes);
-  if (explicitDuration === null && startMin === null) return null;
   const durationMin = explicitDuration ?? defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const checked = m[2] !== " ";
@@ -126,6 +126,7 @@ export function parseTaskLine(
     rawLine,
     body,
     durationMin,
+    hasExplicitDuration: explicitDuration !== null,
     startMin,
     order,
     checked,
