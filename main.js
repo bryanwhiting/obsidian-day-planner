@@ -714,15 +714,21 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     if (!block.task.hasExplicitDuration)
       el.addClass("is-implicit-duration");
     el.draggable = true;
-    const time = el.createDiv({ cls: "dp-block-time" });
+    const row = el.createDiv({ cls: "dp-block-row" });
     if (!block.task.hasExplicitDuration) {
-      const warn = time.createSpan({ cls: "dp-warn" });
+      const warn = row.createSpan({ cls: "dp-warn" });
       (0, import_obsidian2.setIcon)(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
     }
-    time.createSpan({ text: this.formatBlockTime(block.task) });
-    const text = el.createDiv({ cls: "dp-block-text" });
-    text.textContent = this.cleanBody(block.task.body);
+    row.createSpan({
+      cls: "dp-block-time",
+      text: this.formatBlockTime(block.task)
+    });
+    row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
+    row.createSpan({
+      cls: "dp-block-text",
+      text: this.cleanBody(block.task.body)
+    });
     el.addEventListener("dragstart", (ev) => {
       var _a;
       const rect = el.getBoundingClientRect();

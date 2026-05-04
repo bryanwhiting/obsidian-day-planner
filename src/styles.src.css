@@ -1,0 +1,667 @@
+/* Day Planner — Tailwind v4 source.
+ * Compiled to ../styles.css by `npm run build:css`. */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+/* Tailwind v4: theme tokens + utilities only.
+ * Skipping preflight prevents the global CSS reset from clobbering Obsidian.
+ * source(none) disables content auto-detection so utilities used outside
+ * @apply (e.g., words in .ts files like "block", "grid") don't leak as
+ * standalone rules that would override Obsidian's own UI classes. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+@theme {
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans:
+    "IBM Plex Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, "SFMono-Regular", "JetBrains Mono",
+    Menlo, monospace;
+
+  --color-ink: var(--text-normal);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-faint: var(--text-faint);
+  --color-paper: var(--background-primary);
+  --color-paper-2: var(--background-secondary);
+  --color-hairline: var(--background-modifier-border);
+  --color-surface-hover: var(--background-modifier-hover);
+  --color-accent: var(--interactive-accent);
+  --color-on-accent: var(--text-on-accent);
+  --color-warn: var(--color-orange, #c8741c);
+
+  --radius-tab: 4px;
+  --radius-card: 6px;
+  --radius-pill: 999px;
+
+  --shadow-paper: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-float:
+    0 1px 2px rgba(0, 0, 0, 0.06), 0 12px 28px rgba(0, 0, 0, 0.16);
+
+  --tracking-eyebrow: 0.18em;
+  --tracking-display: -0.012em;
+}
+
+/* ============================================================
+ *  BASE
+ * ============================================================ */
+
+@layer base {
+  .day-planner-root {
+    @apply font-sans h-full overflow-y-auto;
+    color: var(--color-ink);
+    padding: 14px 14px 28px;
+    font-feature-settings: "ss01", "cv11", "cv05";
+    line-height: 1.45;
+  }
+
+  .day-planner-root *::selection {
+    background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  }
+}
+
+/* ============================================================
+ *  COMPONENTS
+ * ============================================================ */
+
+@layer components {
+  /* ---------- top navbar ---------- */
+
+  .dp-datenav {
+    @apply sticky top-0 z-20 flex items-center;
+    gap: 4px;
+    margin: -14px -14px 12px;
+    padding: 10px 12px 9px;
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .dp-datenav-label {
+    @apply flex-1 text-center;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-variation-settings: "opsz" 36;
+    font-size: 15px;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    /* tighten the comma spacing in dates like "Mon, May 4, 2026" */
+    font-feature-settings: "ss01";
+  }
+
+  .dp-nav-btn {
+    @apply inline-flex items-center justify-center cursor-pointer transition;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-tab);
+    color: var(--color-ink-muted);
+    transition-property: color, background-color, border-color, transform;
+    transition-duration: 120ms;
+  }
+
+  .dp-nav-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-ink);
+  }
+
+  .dp-nav-btn:active {
+    transform: translateY(0.5px);
+  }
+
+  .dp-nav-arrow .svg-icon {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2px;
+  }
+
+  .dp-today-btn {
+    @apply inline-flex items-center cursor-pointer transition;
+    padding: 3px 9px 2px;
+    background: transparent;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-pill);
+    color: var(--color-ink-muted);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: var(--tracking-eyebrow);
+    text-transform: uppercase;
+    transition-property: color, background-color, border-color;
+    transition-duration: 120ms;
+  }
+
+  .dp-today-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-ink);
+    border-color: var(--color-ink-faint);
+  }
+
+  .dp-cal-btn {
+    @apply inline-flex items-center justify-center cursor-pointer transition;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-tab);
+    color: var(--color-ink-muted);
+    transition-property: color, background-color, border-color;
+    transition-duration: 120ms;
+  }
+
+  .dp-cal-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-ink);
+  }
+
+  .dp-cal-btn.is-active {
+    background: var(--color-surface-hover);
+    color: var(--color-ink);
+    border-color: var(--color-hairline);
+  }
+
+  .dp-cal-btn .svg-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  /* ---------- calendar dropdown ---------- */
+
+  .dp-calendar {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 12px;
+    width: min(284px, calc(100% - 24px));
+    padding: 10px 10px 12px;
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-float);
+    z-index: 30;
+    /* soft entrance */
+    animation: dp-pop 120ms ease-out;
+  }
+
+  @keyframes dp-pop {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .dp-cal-head {
+    @apply flex items-center;
+    gap: 4px;
+    margin-bottom: 8px;
+    padding: 0 2px;
+  }
+
+  .dp-cal-month {
+    @apply flex-1 text-center;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-variation-settings: "opsz" 36;
+    font-size: 13px;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+  }
+
+  .dp-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+  }
+
+  .dp-cal-dow {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--color-ink-faint);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+    padding: 6px 0 4px;
+  }
+
+  .dp-cal-day {
+    @apply flex items-center justify-center cursor-pointer select-none transition;
+    height: 30px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--color-ink);
+    transition-property: color, background-color, box-shadow;
+    transition-duration: 100ms;
+  }
+
+  .dp-cal-day:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .dp-cal-day.is-other-month {
+    color: var(--color-ink-faint);
+  }
+
+  .dp-cal-day.is-today {
+    color: var(--color-accent);
+    box-shadow: inset 0 0 0 1px var(--color-accent);
+    font-weight: 700;
+  }
+
+  .dp-cal-day.is-selected {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    box-shadow: none;
+  }
+
+  .dp-cal-day.is-selected.is-today {
+    color: var(--color-on-accent);
+    box-shadow: none;
+  }
+
+  /* ---------- sections ---------- */
+
+  .dp-section {
+    margin-bottom: 18px;
+  }
+
+  .dp-section + .dp-section {
+    padding-top: 16px;
+    border-top: 1px solid var(--color-hairline);
+  }
+
+  .dp-header {
+    @apply flex flex-col;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .dp-title {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-variation-settings: "opsz" 30;
+    font-size: 14px;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+  }
+
+  .dp-subtitle {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-ink-faint);
+    letter-spacing: 0.04em;
+  }
+
+  .dp-totals {
+    @apply flex;
+    gap: 14px;
+    margin-top: 2px;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  .dp-totals span {
+    position: relative;
+  }
+
+  .dp-totals span + span::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    width: 1px;
+    height: 9px;
+    transform: translateY(-50%);
+    background: var(--color-hairline);
+  }
+
+  .dp-create {
+    @apply w-full cursor-pointer transition;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: transparent;
+    color: var(--color-ink);
+    border: 1px dashed var(--color-hairline);
+    border-radius: var(--radius-card);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    transition-property: color, background-color, border-color;
+    transition-duration: 120ms;
+  }
+
+  .dp-create:hover {
+    background: var(--color-surface-hover);
+    border-color: var(--color-ink-faint);
+  }
+
+  .dp-body {
+    @apply flex flex-col;
+    gap: 14px;
+  }
+
+  /* ---------- timeline ---------- */
+
+  .dp-timeline-wrap {
+    position: relative;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    background: var(--color-paper);
+    max-height: 60vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-paper);
+  }
+
+  .dp-timeline {
+    position: relative;
+    padding-left: 46px;
+  }
+
+  .dp-hour-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0;
+  }
+
+  .dp-hour-label {
+    position: absolute;
+    left: 0;
+    width: 42px;
+    top: -7px;
+    text-align: right;
+    color: var(--color-ink-faint);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    padding-right: 8px;
+  }
+
+  .dp-hour-line {
+    position: absolute;
+    left: 46px;
+    right: 0;
+    top: 0;
+    border-top: 1px dotted var(--color-hairline);
+  }
+
+  .dp-blocks {
+    position: absolute;
+    top: 0;
+    left: 46px;
+    right: 6px;
+    bottom: 0;
+  }
+
+  /* ---------- block (scheduled task on timeline) ---------- */
+
+  .dp-block {
+    position: absolute;
+    background: color-mix(in srgb, var(--color-accent) 92%, white);
+    color: var(--color-on-accent);
+    border-radius: var(--radius-tab);
+    padding: 3px 7px 3px 8px;
+    overflow: hidden;
+    cursor: grab;
+    box-sizing: border-box;
+    box-shadow:
+      inset 2px 0 0 0 color-mix(in srgb, var(--color-on-accent) 35%, transparent),
+      0 1px 1px rgba(0, 0, 0, 0.06);
+    transition: filter 120ms ease, transform 120ms ease;
+  }
+
+  .dp-block:hover {
+    filter: brightness(1.04) saturate(1.05);
+  }
+
+  .dp-block.is-done {
+    opacity: 0.5;
+    text-decoration: line-through;
+  }
+
+  .dp-block.is-implicit-duration {
+    background: color-mix(in srgb, var(--color-accent) 55%, transparent);
+    box-shadow:
+      inset 2px 0 0 0 color-mix(in srgb, var(--color-on-accent) 25%, transparent);
+  }
+
+  .dp-block-row {
+    @apply flex items-baseline;
+    gap: 6px;
+    min-width: 0;
+    width: 100%;
+    line-height: 1.35;
+  }
+
+  .dp-block-time {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    color: color-mix(in srgb, var(--color-on-accent) 92%, transparent);
+    white-space: nowrap;
+  }
+
+  .dp-block-sep {
+    flex: 0 0 auto;
+    font-family: var(--font-display);
+    font-size: 10px;
+    color: color-mix(in srgb, var(--color-on-accent) 50%, transparent);
+    user-select: none;
+  }
+
+  .dp-block-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--color-on-accent);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    letter-spacing: -0.005em;
+  }
+
+  /* warning icon inside block (no explicit duration) */
+  .dp-block .dp-warn {
+    flex: 0 0 auto;
+    margin-right: 1px;
+    color: var(--color-warn);
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .dp-block .dp-warn .svg-icon {
+    width: 11px;
+    height: 11px;
+  }
+
+  /* ---------- resize handle ---------- */
+
+  .dp-resize-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 6px;
+    cursor: ns-resize;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in srgb, var(--color-on-accent) 30%, transparent)
+    );
+    border-bottom-left-radius: var(--radius-tab);
+    border-bottom-right-radius: var(--radius-tab);
+  }
+
+  .dp-resize-handle:hover {
+    background: color-mix(in srgb, var(--color-on-accent) 40%, transparent);
+  }
+
+  .dp-block.is-resizing {
+    outline: 1.5px solid var(--color-on-accent);
+    cursor: ns-resize;
+  }
+
+  .dp-block.is-dragging,
+  .dp-card.is-dragging {
+    opacity: 0.18;
+    filter: grayscale(0.7);
+  }
+
+  /* ---------- drop indicator ---------- */
+
+  .dp-drop-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    border: 1.5px dashed var(--color-accent);
+    border-radius: var(--radius-tab);
+    pointer-events: none;
+    padding: 3px 7px;
+    overflow: hidden;
+    z-index: 5;
+    color: var(--color-ink);
+  }
+
+  .dp-drop-indicator-time {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 10px;
+    color: var(--color-accent);
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dp-drop-indicator-text {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---------- unscheduled list ---------- */
+
+  .dp-unscheduled {
+    @apply flex flex-col;
+    gap: 5px;
+  }
+
+  .dp-unscheduled-head {
+    @apply flex items-center justify-between;
+    margin: 4px 2px 2px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--color-hairline);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+    color: var(--color-ink-muted);
+  }
+
+  .dp-unscheduled-head .dp-icon {
+    color: var(--color-ink-faint);
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .dp-unscheduled-head .dp-icon .svg-icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .dp-empty {
+    color: var(--color-ink-faint);
+    font-style: italic;
+    padding: 6px 4px;
+    font-size: 11.5px;
+  }
+
+  .dp-card {
+    @apply flex items-center cursor-grab transition;
+    gap: 10px;
+    padding: 7px 10px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    background: var(--color-paper);
+    transition-property: background-color, border-color, transform;
+    transition-duration: 120ms;
+  }
+
+  .dp-card:hover {
+    background: var(--color-surface-hover);
+    border-color: var(--color-ink-faint);
+  }
+
+  .dp-card.is-done {
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+
+  .dp-card.is-implicit-duration {
+    border-style: dashed;
+  }
+
+  .dp-card-meta {
+    flex: 0 0 auto;
+    min-width: 46px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    color: var(--color-accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .dp-card-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-ink);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  /* ---------- warning glyph (shared) ---------- */
+
+  .dp-warn {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-warn);
+  }
+
+  .dp-warn .svg-icon {
+    width: 11px;
+    height: 11px;
+  }
+
+  .dp-card .dp-warn .svg-icon {
+    width: 12px;
+    height: 12px;
+  }
+}
