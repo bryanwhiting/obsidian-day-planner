@@ -50,6 +50,7 @@ export class DayPlannerView extends ItemView {
   private dropIndicator: HTMLElement | null = null;
   private selectedDate: Date = startOfDay(new Date());
   private calendarMonth: Date = startOfMonth(new Date());
+  private calendarOpen: boolean = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: DayPlannerPlugin) {
     super(leaf);
@@ -146,8 +147,6 @@ export class DayPlannerView extends ItemView {
       );
     }
 
-    this.renderCalendar(root);
-
     root.scrollTop = prevRootScroll;
     const newTimelines = root.querySelectorAll<HTMLElement>(".dp-timeline-wrap");
     newTimelines.forEach((el, i) => {
@@ -158,11 +157,30 @@ export class DayPlannerView extends ItemView {
 
   private renderDateNav(parent: HTMLElement): void {
     const nav = parent.createDiv({ cls: "dp-datenav" });
-    const prev = nav.createEl("button", { cls: "dp-nav-btn", text: "◀" });
+
+    const prev = nav.createEl("button", {
+      cls: "dp-nav-btn dp-nav-arrow",
+      attr: { "aria-label": "Previous day" },
+    });
+    setIcon(prev, "chevron-left");
+
     const label = nav.createDiv({ cls: "dp-datenav-label" });
     label.textContent = this.formatDateLabel(this.selectedDate);
-    const next = nav.createEl("button", { cls: "dp-nav-btn", text: "▶" });
+
     const today = nav.createEl("button", { cls: "dp-today-btn", text: "Today" });
+
+    const calBtn = nav.createEl("button", {
+      cls: "dp-cal-btn",
+      attr: { "aria-label": "Toggle calendar" },
+    });
+    setIcon(calBtn, "calendar");
+    if (this.calendarOpen) calBtn.addClass("is-active");
+
+    const next = nav.createEl("button", {
+      cls: "dp-nav-btn dp-nav-arrow",
+      attr: { "aria-label": "Next day" },
+    });
+    setIcon(next, "chevron-right");
 
     prev.addEventListener("click", () =>
       void this.navigateTo(addDays(this.selectedDate, -1)),
@@ -171,6 +189,13 @@ export class DayPlannerView extends ItemView {
       void this.navigateTo(addDays(this.selectedDate, 1)),
     );
     today.addEventListener("click", () => void this.navigateTo(new Date()));
+    calBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this.calendarOpen = !this.calendarOpen;
+      this.scheduleRender();
+    });
+
+    if (this.calendarOpen) this.renderCalendar(nav);
   }
 
   private async navigateTo(date: Date): Promise<void> {
@@ -252,7 +277,10 @@ export class DayPlannerView extends ItemView {
     if (isOtherMonth) cell.addClass("is-other-month");
     if (sameDay(d, today)) cell.addClass("is-today");
     if (sameDay(d, this.selectedDate)) cell.addClass("is-selected");
-    cell.addEventListener("click", () => void this.navigateTo(d));
+    cell.addEventListener("click", () => {
+      this.calendarOpen = false;
+      void this.navigateTo(d);
+    });
   }
 
   private formatDateLabel(d: Date): string {

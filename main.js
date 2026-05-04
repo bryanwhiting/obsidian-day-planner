@@ -354,6 +354,7 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     this.dropIndicator = null;
     this.selectedDate = startOfDay(new Date());
     this.calendarMonth = startOfMonth(new Date());
+    this.calendarOpen = false;
     this.plugin = plugin;
   }
   getViewType() {
@@ -434,7 +435,6 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
         false
       );
     }
-    this.renderCalendar(root);
     root.scrollTop = prevRootScroll;
     const newTimelines = root.querySelectorAll(".dp-timeline-wrap");
     newTimelines.forEach((el, i) => {
@@ -445,11 +445,26 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
   }
   renderDateNav(parent) {
     const nav = parent.createDiv({ cls: "dp-datenav" });
-    const prev = nav.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
+    const prev = nav.createEl("button", {
+      cls: "dp-nav-btn dp-nav-arrow",
+      attr: { "aria-label": "Previous day" }
+    });
+    (0, import_obsidian2.setIcon)(prev, "chevron-left");
     const label = nav.createDiv({ cls: "dp-datenav-label" });
     label.textContent = this.formatDateLabel(this.selectedDate);
-    const next = nav.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
     const today = nav.createEl("button", { cls: "dp-today-btn", text: "Today" });
+    const calBtn = nav.createEl("button", {
+      cls: "dp-cal-btn",
+      attr: { "aria-label": "Toggle calendar" }
+    });
+    (0, import_obsidian2.setIcon)(calBtn, "calendar");
+    if (this.calendarOpen)
+      calBtn.addClass("is-active");
+    const next = nav.createEl("button", {
+      cls: "dp-nav-btn dp-nav-arrow",
+      attr: { "aria-label": "Next day" }
+    });
+    (0, import_obsidian2.setIcon)(next, "chevron-right");
     prev.addEventListener(
       "click",
       () => void this.navigateTo(addDays(this.selectedDate, -1))
@@ -459,6 +474,13 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       () => void this.navigateTo(addDays(this.selectedDate, 1))
     );
     today.addEventListener("click", () => void this.navigateTo(new Date()));
+    calBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this.calendarOpen = !this.calendarOpen;
+      this.scheduleRender();
+    });
+    if (this.calendarOpen)
+      this.renderCalendar(nav);
   }
   async navigateTo(date) {
     const target = startOfDay(date);
@@ -531,7 +553,10 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       cell.addClass("is-today");
     if (sameDay(d, this.selectedDate))
       cell.addClass("is-selected");
-    cell.addEventListener("click", () => void this.navigateTo(d));
+    cell.addEventListener("click", () => {
+      this.calendarOpen = false;
+      void this.navigateTo(d);
+    });
   }
   formatDateLabel(d) {
     return d.toLocaleDateString(void 0, {
