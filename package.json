@@ -1,7 +1,7 @@
 {
-  "name": "day-planner",
+  "name": "daily-notes-planner",
   "version": "0.1.0",
-  "description": "Obsidian Day Planner plugin",
+  "description": "Obsidian Daily Notes Planner plugin",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

@@ -65,7 +65,7 @@ async function readTemplateContent(
   const path = normalizePath(withExt);
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) {
-    new Notice(`Day Planner: template not found at ${path}`);
+    new Notice(`Daily Notes Planner: template not found at ${path}`);
     return "";
   }
   return app.vault.read(file);

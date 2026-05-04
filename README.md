@@ -1,6 +1,6 @@
-# Day Planner
+# Daily Notes Planner
 
-An Obsidian sidebar plugin that turns hashtag-annotated tasks into a draggable day-planner timeline. The note is the single source of truth — drag operations only modify hashtags on existing lines, never reorder lines in the file.
+An Obsidian sidebar plugin that turns hashtag-annotated tasks in your daily notes into a draggable timeline. The note is the single source of truth — drag operations only modify hashtags on existing lines, never reorder lines in the file.
 
 Compatible with the Tasks plugin: works on standard markdown checklist lines (`- [ ] ...`), only the new `#d/`, `#t/`, and `#o/` hashtags are added.
 
@@ -33,17 +33,17 @@ Clone the repo into your vault's plugins folder:
 
 ```bash
 cd /path/to/your-vault/.obsidian/plugins
-git clone https://github.com/bryanwhiting/obsidian-day-planner day-planner
+git clone https://github.com/bryanwhiting/obsidian-daily-notes-planner daily-notes-planner
 ```
 
-Then in Obsidian: **Settings → Community plugins**, turn off Restricted Mode if needed, click the reload button next to "Installed plugins", and enable **Day Planner**.
+Then in Obsidian: **Settings → Community plugins**, turn off Restricted Mode if needed, click the reload button next to "Installed plugins", and enable **Daily Notes Planner**.
 
 The committed `main.js` is the prebuilt bundle, so no build step is needed for installation.
 
 ## Updating
 
 ```bash
-cd /path/to/your-vault/.obsidian/plugins/day-planner
+cd /path/to/your-vault/.obsidian/plugins/daily-notes-planner
 git pull
 ```
 

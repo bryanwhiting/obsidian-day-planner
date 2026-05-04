@@ -19,7 +19,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/main.ts
 var main_exports = {};
 __export(main_exports, {
-  default: () => DayPlannerPlugin
+  default: () => DailyNotesPlannerPlugin
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian4 = require("obsidian");
@@ -434,7 +434,7 @@ async function readTemplateContent(app, templatePath) {
   const path = (0, import_obsidian.normalizePath)(withExt);
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof import_obsidian.TFile)) {
-    new import_obsidian.Notice(`Day Planner: template not found at ${path}`);
+    new import_obsidian.Notice(`Daily Notes Planner: template not found at ${path}`);
     return "";
   }
   return app.vault.read(file);
@@ -485,9 +485,9 @@ function startOfDay(d) {
 }
 
 // src/view.ts
-var VIEW_TYPE_DAY_PLANNER = "day-planner-view";
+var VIEW_TYPE_DAILY_NOTES_PLANNER = "daily-notes-planner-view";
 var TRANSPARENT_PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
-var DayPlannerView = class extends import_obsidian2.ItemView {
+var DailyNotesPlannerView = class extends import_obsidian2.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -500,10 +500,10 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     this.plugin = plugin;
   }
   getViewType() {
-    return VIEW_TYPE_DAY_PLANNER;
+    return VIEW_TYPE_DAILY_NOTES_PLANNER;
   }
   getDisplayText() {
-    return "Day Planner";
+    return "Daily Notes Planner";
   }
   getIcon() {
     return "calendar-clock";
@@ -552,6 +552,10 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       void this.render();
     }, 100);
   }
+  openCalendar() {
+    this.calendarOpen = true;
+    this.scheduleRender();
+  }
   async render() {
     const root = this.containerEl.children[1];
     const prevRootScroll = root.scrollTop;
@@ -559,7 +563,7 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       root.querySelectorAll(".dp-timeline-wrap")
     ).map((el) => el.scrollTop);
     root.empty();
-    root.addClass("day-planner-root");
+    root.addClass("daily-notes-planner-root");
     if (!root.hasAttribute("tabindex"))
       root.setAttribute("tabindex", "-1");
     const fallback = {
@@ -669,7 +673,7 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       try {
         await ensureDailyNote(this.app, target, fallback);
       } catch (e) {
-        new import_obsidian2.Notice(`Day Planner: failed to create note (${e.message})`);
+        new import_obsidian2.Notice(`Daily Notes Planner: failed to create note (${e.message})`);
       }
     }
     this.scheduleRender();
@@ -1373,7 +1377,7 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
   async editLine(payload, transform) {
     const file = this.app.vault.getAbstractFileByPath(payload.filePath);
     if (!(file instanceof import_obsidian2.TFile)) {
-      new import_obsidian2.Notice("Day Planner: source file no longer exists.");
+      new import_obsidian2.Notice("Daily Notes Planner: source file no longer exists.");
       this.scheduleRender();
       return;
     }
@@ -1381,7 +1385,7 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     const lines = content.split("\n");
     const idx = payload.lineNumber;
     if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
-      new import_obsidian2.Notice("Day Planner: file changed since last render \u2014 refreshing.");
+      new import_obsidian2.Notice("Daily Notes Planner: file changed since last render \u2014 refreshing.");
       this.scheduleRender();
       return;
     }
@@ -1571,7 +1575,7 @@ var DEFAULT_SETTINGS = {
   defaultDurationMin: 15,
   projectColors: []
 };
-var DayPlannerSettingTab = class extends import_obsidian3.PluginSettingTab {
+var DailyNotesPlannerSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1960,22 +1964,27 @@ var FileSuggest = class extends import_obsidian3.AbstractInputSuggest {
 };
 
 // src/main.ts
-var DayPlannerPlugin = class extends import_obsidian4.Plugin {
+var DailyNotesPlannerPlugin = class extends import_obsidian4.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(
-      VIEW_TYPE_DAY_PLANNER,
-      (leaf) => new DayPlannerView(leaf, this)
+      VIEW_TYPE_DAILY_NOTES_PLANNER,
+      (leaf) => new DailyNotesPlannerView(leaf, this)
     );
-    this.addRibbonIcon("calendar-clock", "Open Day Planner", () => {
+    this.addRibbonIcon("calendar-clock", "Open Daily Notes Planner", () => {
       void this.activateView();
     });
     this.addCommand({
-      id: "open-day-planner",
-      name: "Open Day Planner",
+      id: "open-daily-notes-planner",
+      name: "Open Daily Notes Planner",
       callback: () => void this.activateView()
     });
-    this.addSettingTab(new DayPlannerSettingTab(this.app, this));
+    this.addCommand({
+      id: "open-calendar",
+      name: "Open Calendar",
+      callback: () => void this.activateView({ openCalendar: true })
+    });
+    this.addSettingTab(new DailyNotesPlannerSettingTab(this.app, this));
   }
   async onunload() {
   }
@@ -1994,25 +2003,30 @@ var DayPlannerPlugin = class extends import_obsidian4.Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     for (const leaf of this.app.workspace.getLeavesOfType(
-      VIEW_TYPE_DAY_PLANNER
+      VIEW_TYPE_DAILY_NOTES_PLANNER
     )) {
       const view = leaf.view;
       view.scheduleRender();
     }
   }
-  async activateView() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DAY_PLANNER);
+  async activateView(opts = {}) {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DAILY_NOTES_PLANNER);
+    let leaf;
     if (existing.length > 0) {
-      this.app.workspace.revealLeaf(existing[0]);
-      return;
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+    } else {
+      leaf = this.app.workspace.getRightLeaf(false);
+      if (!leaf)
+        return;
+      await leaf.setViewState({
+        type: VIEW_TYPE_DAILY_NOTES_PLANNER,
+        active: true
+      });
+      this.app.workspace.revealLeaf(leaf);
     }
-    const leaf = this.app.workspace.getRightLeaf(false);
-    if (!leaf)
-      return;
-    await leaf.setViewState({
-      type: VIEW_TYPE_DAY_PLANNER,
-      active: true
-    });
-    this.app.workspace.revealLeaf(leaf);
+    if (opts.openCalendar && leaf.view instanceof DailyNotesPlannerView) {
+      leaf.view.openCalendar();
+    }
   }
 };

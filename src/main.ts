@@ -1,40 +1,46 @@
 import { Plugin, WorkspaceLeaf } from "obsidian";
-import { DayPlannerView, VIEW_TYPE_DAY_PLANNER } from "./view";
+import { DailyNotesPlannerView, VIEW_TYPE_DAILY_NOTES_PLANNER } from "./view";
 import {
-  DayPlannerSettings,
-  DayPlannerSettingTab,
+  DailyNotesPlannerSettings,
+  DailyNotesPlannerSettingTab,
   DEFAULT_SETTINGS,
 } from "./settings";
 import { DEFAULT_PREFIXES } from "./parser";
 
-export default class DayPlannerPlugin extends Plugin {
-  settings!: DayPlannerSettings;
+export default class DailyNotesPlannerPlugin extends Plugin {
+  settings!: DailyNotesPlannerSettings;
 
   async onload(): Promise<void> {
     await this.loadSettings();
 
     this.registerView(
-      VIEW_TYPE_DAY_PLANNER,
-      (leaf) => new DayPlannerView(leaf, this),
+      VIEW_TYPE_DAILY_NOTES_PLANNER,
+      (leaf) => new DailyNotesPlannerView(leaf, this),
     );
 
-    this.addRibbonIcon("calendar-clock", "Open Day Planner", () => {
+    this.addRibbonIcon("calendar-clock", "Open Daily Notes Planner", () => {
       void this.activateView();
     });
 
     this.addCommand({
-      id: "open-day-planner",
-      name: "Open Day Planner",
+      id: "open-daily-notes-planner",
+      name: "Open Daily Notes Planner",
       callback: () => void this.activateView(),
     });
 
-    this.addSettingTab(new DayPlannerSettingTab(this.app, this));
+    this.addCommand({
+      id: "open-calendar",
+      name: "Open Calendar",
+      callback: () => void this.activateView({ openCalendar: true }),
+    });
+
+    this.addSettingTab(new DailyNotesPlannerSettingTab(this.app, this));
   }
 
   async onunload(): Promise<void> {}
 
   async loadSettings(): Promise<void> {
-    const data = (await this.loadData()) as Partial<DayPlannerSettings> | null;
+    const data = (await this.loadData()) as Partial<DailyNotesPlannerSettings> | null;
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...(data ?? {}),
@@ -50,25 +56,30 @@ export default class DayPlannerPlugin extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     for (const leaf of this.app.workspace.getLeavesOfType(
-      VIEW_TYPE_DAY_PLANNER,
+      VIEW_TYPE_DAILY_NOTES_PLANNER,
     )) {
-      const view = leaf.view as DayPlannerView;
+      const view = leaf.view as DailyNotesPlannerView;
       view.scheduleRender();
     }
   }
 
-  async activateView(): Promise<void> {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DAY_PLANNER);
+  async activateView(opts: { openCalendar?: boolean } = {}): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DAILY_NOTES_PLANNER);
+    let leaf: WorkspaceLeaf | null;
     if (existing.length > 0) {
-      this.app.workspace.revealLeaf(existing[0]);
-      return;
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+    } else {
+      leaf = this.app.workspace.getRightLeaf(false);
+      if (!leaf) return;
+      await leaf.setViewState({
+        type: VIEW_TYPE_DAILY_NOTES_PLANNER,
+        active: true,
+      });
+      this.app.workspace.revealLeaf(leaf);
     }
-    const leaf: WorkspaceLeaf | null = this.app.workspace.getRightLeaf(false);
-    if (!leaf) return;
-    await leaf.setViewState({
-      type: VIEW_TYPE_DAY_PLANNER,
-      active: true,
-    });
-    this.app.workspace.revealLeaf(leaf);
+    if (opts.openCalendar && leaf.view instanceof DailyNotesPlannerView) {
+      leaf.view.openCalendar();
+    }
   }
 }

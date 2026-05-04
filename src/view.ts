@@ -7,7 +7,7 @@ import {
   App,
   setIcon,
 } from "obsidian";
-import type DayPlannerPlugin from "./main";
+import type DailyNotesPlannerPlugin from "./main";
 import {
   ParsedTask,
   parseFileTasks,
@@ -40,7 +40,7 @@ import {
   startOfDay,
 } from "./dailyNote";
 
-export const VIEW_TYPE_DAY_PLANNER = "day-planner-view";
+export const VIEW_TYPE_DAILY_NOTES_PLANNER = "daily-notes-planner-view";
 
 interface DragPayload {
   filePath: string;
@@ -55,8 +55,8 @@ interface DragPayload {
 const TRANSPARENT_PIXEL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
 
-export class DayPlannerView extends ItemView {
-  plugin: DayPlannerPlugin;
+export class DailyNotesPlannerView extends ItemView {
+  plugin: DailyNotesPlannerPlugin;
   private rerenderTimer: number | null = null;
   private dragPayload: DragPayload | null = null;
   private dropIndicator: HTMLElement | null = null;
@@ -65,17 +65,17 @@ export class DayPlannerView extends ItemView {
   private calendarOpen: boolean = false;
   private overrideFilePath: string | null = null;
 
-  constructor(leaf: WorkspaceLeaf, plugin: DayPlannerPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: DailyNotesPlannerPlugin) {
     super(leaf);
     this.plugin = plugin;
   }
 
   getViewType(): string {
-    return VIEW_TYPE_DAY_PLANNER;
+    return VIEW_TYPE_DAILY_NOTES_PLANNER;
   }
 
   getDisplayText(): string {
-    return "Day Planner";
+    return "Daily Notes Planner";
   }
 
   getIcon(): string {
@@ -128,6 +128,11 @@ export class DayPlannerView extends ItemView {
     }, 100);
   }
 
+  openCalendar(): void {
+    this.calendarOpen = true;
+    this.scheduleRender();
+  }
+
   async render(): Promise<void> {
     const root = this.containerEl.children[1] as HTMLElement;
     const prevRootScroll = root.scrollTop;
@@ -135,7 +140,7 @@ export class DayPlannerView extends ItemView {
       root.querySelectorAll<HTMLElement>(".dp-timeline-wrap"),
     ).map((el) => el.scrollTop);
     root.empty();
-    root.addClass("day-planner-root");
+    root.addClass("daily-notes-planner-root");
     // Make the pane focusable so left/right arrow keys can be captured.
     // tabindex=-1 keeps it out of normal Tab order but accepts focus on click.
     if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
@@ -264,7 +269,7 @@ export class DayPlannerView extends ItemView {
       try {
         await ensureDailyNote(this.app, target, fallback);
       } catch (e) {
-        new Notice(`Day Planner: failed to create note (${(e as Error).message})`);
+        new Notice(`Daily Notes Planner: failed to create note (${(e as Error).message})`);
       }
     }
     this.scheduleRender();
@@ -687,7 +692,7 @@ export class DayPlannerView extends ItemView {
     // Single-click handler: runs after pointerup when the pointer barely moved.
     // Using `click` (rather than committing in pointerup) sidesteps Obsidian's
     // sidebar-leaf activation, which can swallow the first pointerdown when the
-    // day-planner pane isn't yet the active leaf.
+    // daily-notes-planner pane isn't yet the active leaf.
     gutter.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (suppressNextClick) {
@@ -1079,7 +1084,7 @@ export class DayPlannerView extends ItemView {
   ): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(payload.filePath);
     if (!(file instanceof TFile)) {
-      new Notice("Day Planner: source file no longer exists.");
+      new Notice("Daily Notes Planner: source file no longer exists.");
       this.scheduleRender();
       return;
     }
@@ -1087,7 +1092,7 @@ export class DayPlannerView extends ItemView {
     const lines = content.split("\n");
     const idx = payload.lineNumber;
     if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
-      new Notice("Day Planner: file changed since last render — refreshing.");
+      new Notice("Daily Notes Planner: file changed since last render — refreshing.");
       this.scheduleRender();
       return;
     }

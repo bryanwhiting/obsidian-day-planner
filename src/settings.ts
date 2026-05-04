@@ -5,11 +5,11 @@ import {
   Setting,
   TFile,
 } from "obsidian";
-import type DayPlannerPlugin from "./main";
+import type DailyNotesPlannerPlugin from "./main";
 import { TagPrefixes, DEFAULT_PREFIXES } from "./parser";
 import { ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
 
-export interface DayPlannerSettings {
+export interface DailyNotesPlannerSettings {
   visibleStartHour: number;
   visibleEndHour: number;
   workStartHour: number;
@@ -26,7 +26,7 @@ export interface DayPlannerSettings {
   projectColors: ProjectColor[];
 }
 
-export const DEFAULT_SETTINGS: DayPlannerSettings = {
+export const DEFAULT_SETTINGS: DailyNotesPlannerSettings = {
   visibleStartHour: 6,
   visibleEndHour: 23,
   workStartHour: 8,
@@ -43,10 +43,10 @@ export const DEFAULT_SETTINGS: DayPlannerSettings = {
   projectColors: [],
 };
 
-export class DayPlannerSettingTab extends PluginSettingTab {
-  plugin: DayPlannerPlugin;
+export class DailyNotesPlannerSettingTab extends PluginSettingTab {
+  plugin: DailyNotesPlannerPlugin;
 
-  constructor(app: App, plugin: DayPlannerPlugin) {
+  constructor(app: App, plugin: DailyNotesPlannerPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
