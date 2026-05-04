@@ -1,4 +1,4 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, TFile, normalizePath, Notice } from "obsidian";
 
 interface DailyNotesOptions {
   format?: string;
@@ -11,14 +11,20 @@ export interface ResolvedDailyNote {
   file: TFile | null;
 }
 
-export async function resolveTodayDailyNote(
+export interface DailyNoteFallback {
+  folder: string;
+  format: string;
+}
+
+export async function resolveDailyNote(
   app: App,
-  fallbackFormat = "YYYY-MM-DD",
+  date: Date,
+  fallback: DailyNoteFallback,
 ): Promise<ResolvedDailyNote> {
   const opts = readDailyNotesOptions(app);
-  const format = opts.format || fallbackFormat;
-  const folder = (opts.folder || "").trim();
-  const fileName = formatDate(new Date(), format) + ".md";
+  const format = (opts.format || fallback.format).trim();
+  const folder = (opts.folder ?? fallback.folder).trim();
+  const fileName = formatDate(date, format) + ".md";
   const path = normalizePath(folder ? `${folder}/${fileName}` : fileName);
   const file = app.vault.getAbstractFileByPath(path);
   return {
@@ -27,8 +33,13 @@ export async function resolveTodayDailyNote(
   };
 }
 
-export async function ensureTodayDailyNote(app: App): Promise<TFile> {
-  const resolved = await resolveTodayDailyNote(app);
+export async function ensureDailyNote(
+  app: App,
+  date: Date,
+  fallback: DailyNoteFallback,
+  notify = true,
+): Promise<TFile> {
+  const resolved = await resolveDailyNote(app, date, fallback);
   if (resolved.file) return resolved.file;
   const folder = resolved.path.includes("/")
     ? resolved.path.slice(0, resolved.path.lastIndexOf("/"))
@@ -37,7 +48,9 @@ export async function ensureTodayDailyNote(app: App): Promise<TFile> {
     const existing = app.vault.getAbstractFileByPath(folder);
     if (!existing) await app.vault.createFolder(folder);
   }
-  return app.vault.create(resolved.path, "");
+  const file = await app.vault.create(resolved.path, "");
+  if (notify) new Notice(`Created ${resolved.path}`);
+  return file;
 }
 
 function readDailyNotesOptions(app: App): DailyNotesOptions {
@@ -53,7 +66,7 @@ function readDailyNotesOptions(app: App): DailyNotesOptions {
   return plugin?.instance?.options ?? {};
 }
 
-function formatDate(d: Date, format: string): string {
+export function formatDate(d: Date, format: string): string {
   const pad = (n: number, w = 2) => n.toString().padStart(w, "0");
   const replacements: Record<string, string> = {
     YYYY: d.getFullYear().toString(),
@@ -64,4 +77,37 @@ function formatDate(d: Date, format: string): string {
     ss: pad(d.getSeconds()),
   };
   return format.replace(/YYYY|MM|DD|HH|mm|ss/g, (m) => replacements[m] ?? m);
+}
+
+export function addDays(d: Date, n: number): Date {
+  const next = new Date(d);
+  next.setDate(next.getDate() + n);
+  return next;
+}
+
+export function addMonths(d: Date, n: number): Date {
+  const next = new Date(d);
+  next.setDate(1);
+  next.setMonth(next.getMonth() + n);
+  return next;
+}
+
+export function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+export function endOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
+export function sameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+export function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }

@@ -270,11 +270,12 @@ function groupOverlaps(scheduled) {
 
 // src/dailyNote.ts
 var import_obsidian = require("obsidian");
-async function resolveTodayDailyNote(app, fallbackFormat = "YYYY-MM-DD") {
+async function resolveDailyNote(app, date, fallback) {
+  var _a;
   const opts = readDailyNotesOptions(app);
-  const format = opts.format || fallbackFormat;
-  const folder = (opts.folder || "").trim();
-  const fileName = formatDate(new Date(), format) + ".md";
+  const format = (opts.format || fallback.format).trim();
+  const folder = ((_a = opts.folder) != null ? _a : fallback.folder).trim();
+  const fileName = formatDate(date, format) + ".md";
   const path = (0, import_obsidian.normalizePath)(folder ? `${folder}/${fileName}` : fileName);
   const file = app.vault.getAbstractFileByPath(path);
   return {
@@ -282,8 +283,8 @@ async function resolveTodayDailyNote(app, fallbackFormat = "YYYY-MM-DD") {
     file: file instanceof import_obsidian.TFile ? file : null
   };
 }
-async function ensureTodayDailyNote(app) {
-  const resolved = await resolveTodayDailyNote(app);
+async function ensureDailyNote(app, date, fallback, notify = true) {
+  const resolved = await resolveDailyNote(app, date, fallback);
   if (resolved.file)
     return resolved.file;
   const folder = resolved.path.includes("/") ? resolved.path.slice(0, resolved.path.lastIndexOf("/")) : "";
@@ -292,7 +293,10 @@ async function ensureTodayDailyNote(app) {
     if (!existing)
       await app.vault.createFolder(folder);
   }
-  return app.vault.create(resolved.path, "");
+  const file = await app.vault.create(resolved.path, "");
+  if (notify)
+    new import_obsidian.Notice(`Created ${resolved.path}`);
+  return file;
 }
 function readDailyNotesOptions(app) {
   var _a, _b, _c;
@@ -315,6 +319,29 @@ function formatDate(d, format) {
     return (_a = replacements[m]) != null ? _a : m;
   });
 }
+function addDays(d, n) {
+  const next = new Date(d);
+  next.setDate(next.getDate() + n);
+  return next;
+}
+function addMonths(d, n) {
+  const next = new Date(d);
+  next.setDate(1);
+  next.setMonth(next.getMonth() + n);
+  return next;
+}
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function endOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function startOfDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
 
 // src/view.ts
 var VIEW_TYPE_DAY_PLANNER = "day-planner-view";
@@ -323,6 +350,8 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     super(leaf);
     this.rerenderTimer = null;
     this.dragPayload = null;
+    this.selectedDate = startOfDay(new Date());
+    this.calendarMonth = startOfMonth(new Date());
     this.plugin = plugin;
   }
   getViewType() {
@@ -365,18 +394,24 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     const root = this.containerEl.children[1];
     root.empty();
     root.addClass("day-planner-root");
-    const dailyResolved = await resolveTodayDailyNote(
+    const fallback = {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback
+    };
+    const dailyResolved = await resolveDailyNote(
       this.app,
-      this.plugin.settings.dailyNoteFormatFallback
+      this.selectedDate,
+      fallback
     );
     const dailyTasks = await this.readTasks(dailyResolved.file);
     const activeFile = this.app.workspace.getActiveFile();
     const activeIsDaily = activeFile && dailyResolved.file && activeFile.path === dailyResolved.file.path;
     const activeTasks = activeFile && !activeIsDaily ? await this.readTasks(activeFile) : [];
+    this.renderDateNav(root);
     this.renderSection(
       root,
-      "Today",
-      this.formatToday(),
+      this.formatDateLabel(this.selectedDate),
+      dailyResolved.path,
       dailyResolved.file,
       dailyResolved.path,
       dailyTasks,
@@ -393,15 +428,99 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
         false
       );
     }
+    this.renderCalendar(root);
   }
-  async readTasks(file) {
-    if (!file)
-      return [];
-    const content = await this.app.vault.read(file);
-    return parseFileTasks(file.path, content, this.plugin.settings.prefixes);
+  renderDateNav(parent) {
+    const nav = parent.createDiv({ cls: "dp-datenav" });
+    const prev = nav.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
+    const label = nav.createDiv({ cls: "dp-datenav-label" });
+    label.textContent = this.formatDateLabel(this.selectedDate);
+    const next = nav.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
+    const today = nav.createEl("button", { cls: "dp-today-btn", text: "Today" });
+    prev.addEventListener(
+      "click",
+      () => void this.navigateTo(addDays(this.selectedDate, -1))
+    );
+    next.addEventListener(
+      "click",
+      () => void this.navigateTo(addDays(this.selectedDate, 1))
+    );
+    today.addEventListener("click", () => void this.navigateTo(new Date()));
   }
-  formatToday() {
-    const d = new Date();
+  async navigateTo(date) {
+    const target = startOfDay(date);
+    this.selectedDate = target;
+    this.calendarMonth = startOfMonth(target);
+    const fallback = {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback
+    };
+    const resolved = await resolveDailyNote(this.app, target, fallback);
+    if (!resolved.file) {
+      try {
+        await ensureDailyNote(this.app, target, fallback);
+      } catch (e) {
+        new import_obsidian2.Notice(`Day Planner: failed to create note (${e.message})`);
+      }
+    }
+    this.scheduleRender();
+  }
+  renderCalendar(parent) {
+    const cal = parent.createDiv({ cls: "dp-calendar" });
+    const head = cal.createDiv({ cls: "dp-cal-head" });
+    const prev = head.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
+    const monthLabel = head.createDiv({ cls: "dp-cal-month" });
+    monthLabel.textContent = this.calendarMonth.toLocaleDateString(void 0, {
+      month: "long",
+      year: "numeric"
+    });
+    const next = head.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
+    prev.addEventListener("click", () => {
+      this.calendarMonth = addMonths(this.calendarMonth, -1);
+      this.scheduleRender();
+    });
+    next.addEventListener("click", () => {
+      this.calendarMonth = addMonths(this.calendarMonth, 1);
+      this.scheduleRender();
+    });
+    const grid = cal.createDiv({ cls: "dp-cal-grid" });
+    for (const dow of ["S", "M", "T", "W", "T", "F", "S"]) {
+      grid.createDiv({ cls: "dp-cal-dow", text: dow });
+    }
+    const monthStart = startOfMonth(this.calendarMonth);
+    const startDow = monthStart.getDay();
+    const monthEnd = endOfMonth(this.calendarMonth);
+    const today = new Date();
+    for (let i = startDow - 1; i >= 0; i--) {
+      const d = addDays(monthStart, -i - 1);
+      this.renderCalDay(grid, d, today, true);
+    }
+    for (let i = 1; i <= monthEnd.getDate(); i++) {
+      const d = new Date(
+        this.calendarMonth.getFullYear(),
+        this.calendarMonth.getMonth(),
+        i
+      );
+      this.renderCalDay(grid, d, today, false);
+    }
+    const totalCells = startDow + monthEnd.getDate();
+    const trailing = (7 - totalCells % 7) % 7;
+    for (let i = 1; i <= trailing; i++) {
+      const d = addDays(monthEnd, i);
+      this.renderCalDay(grid, d, today, true);
+    }
+  }
+  renderCalDay(grid, d, today, isOtherMonth) {
+    const cell = grid.createDiv({ cls: "dp-cal-day", text: d.getDate().toString() });
+    if (isOtherMonth)
+      cell.addClass("is-other-month");
+    if (sameDay(d, today))
+      cell.addClass("is-today");
+    if (sameDay(d, this.selectedDate))
+      cell.addClass("is-selected");
+    cell.addEventListener("click", () => void this.navigateTo(d));
+  }
+  formatDateLabel(d) {
     return d.toLocaleDateString(void 0, {
       weekday: "short",
       year: "numeric",
@@ -409,10 +528,17 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       day: "numeric"
     });
   }
+  async readTasks(file) {
+    if (!file)
+      return [];
+    const content = await this.app.vault.read(file);
+    return parseFileTasks(file.path, content, this.plugin.settings.prefixes);
+  }
   renderSection(parent, title, subtitle, file, path, tasks, isPrimary) {
     const section = parent.createDiv({ cls: "dp-section" });
     const header = section.createDiv({ cls: "dp-header" });
-    header.createDiv({ cls: "dp-title", text: title });
+    if (!isPrimary && title)
+      header.createDiv({ cls: "dp-title", text: title });
     if (subtitle)
       header.createDiv({ cls: "dp-subtitle", text: subtitle });
     const totals = computeTotals(tasks);
@@ -426,10 +552,14 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     if (!file && isPrimary) {
       const create = section.createEl("button", {
         cls: "dp-create",
-        text: `Create today's daily note (${path})`
+        text: `Create ${path}`
       });
       create.addEventListener("click", async () => {
-        await ensureTodayDailyNote(this.app);
+        const fallback = {
+          folder: this.plugin.settings.dailyNoteFolderFallback,
+          format: this.plugin.settings.dailyNoteFormatFallback
+        };
+        await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
       });
       return;
@@ -752,7 +882,8 @@ var DEFAULT_SETTINGS = {
   snapMin: 15,
   pxPerMin: 1,
   prefixes: { ...DEFAULT_PREFIXES },
-  dailyNoteFormatFallback: "YYYY-MM-DD"
+  dailyNoteFormatFallback: "YYYY-MM-DD",
+  dailyNoteFolderFallback: "daily"
 };
 var DayPlannerSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
@@ -828,6 +959,14 @@ var DayPlannerSettingTab = class extends import_obsidian3.PluginSettingTab {
           this.plugin.settings.dailyNoteFormatFallback = v.trim();
           await this.plugin.saveSettings();
         }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("Daily note folder fallback").setDesc(
+      "Folder for newly created daily notes when navigating dates. Used if the core Daily Notes plugin isn't enabled."
+    ).addText(
+      (t) => t.setValue(this.plugin.settings.dailyNoteFolderFallback).onChange(async (v) => {
+        this.plugin.settings.dailyNoteFolderFallback = v.trim();
+        await this.plugin.saveSettings();
       })
     );
   }

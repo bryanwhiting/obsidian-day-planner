@@ -9,6 +9,7 @@ export interface DayPlannerSettings {
   pxPerMin: number;
   prefixes: TagPrefixes;
   dailyNoteFormatFallback: string;
+  dailyNoteFolderFallback: string;
 }
 
 export const DEFAULT_SETTINGS: DayPlannerSettings = {
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: DayPlannerSettings = {
   pxPerMin: 1,
   prefixes: { ...DEFAULT_PREFIXES },
   dailyNoteFormatFallback: "YYYY-MM-DD",
+  dailyNoteFolderFallback: "daily",
 };
 
 export class DayPlannerSettingTab extends PluginSettingTab {
@@ -141,6 +143,20 @@ export class DayPlannerSettingTab extends PluginSettingTab {
               this.plugin.settings.dailyNoteFormatFallback = v.trim();
               await this.plugin.saveSettings();
             }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Daily note folder fallback")
+      .setDesc(
+        "Folder for newly created daily notes when navigating dates. Used if the core Daily Notes plugin isn't enabled.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.dailyNoteFolderFallback)
+          .onChange(async (v) => {
+            this.plugin.settings.dailyNoteFolderFallback = v.trim();
+            await this.plugin.saveSettings();
           }),
       );
   }

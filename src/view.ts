@@ -17,7 +17,16 @@ import {
   layoutTimeline,
   LayoutBlock,
 } from "./scheduler";
-import { resolveTodayDailyNote, ensureTodayDailyNote } from "./dailyNote";
+import {
+  resolveDailyNote,
+  ensureDailyNote,
+  addDays,
+  addMonths,
+  startOfMonth,
+  endOfMonth,
+  sameDay,
+  startOfDay,
+} from "./dailyNote";
 
 export const VIEW_TYPE_DAY_PLANNER = "day-planner-view";
 
@@ -32,6 +41,8 @@ export class DayPlannerView extends ItemView {
   plugin: DayPlannerPlugin;
   private rerenderTimer: number | null = null;
   private dragPayload: DragPayload | null = null;
+  private selectedDate: Date = startOfDay(new Date());
+  private calendarMonth: Date = startOfMonth(new Date());
 
   constructor(leaf: WorkspaceLeaf, plugin: DayPlannerPlugin) {
     super(leaf);
@@ -82,9 +93,15 @@ export class DayPlannerView extends ItemView {
     root.empty();
     root.addClass("day-planner-root");
 
-    const dailyResolved = await resolveTodayDailyNote(
+    const fallback = {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback,
+    };
+
+    const dailyResolved = await resolveDailyNote(
       this.app,
-      this.plugin.settings.dailyNoteFormatFallback,
+      this.selectedDate,
+      fallback,
     );
     const dailyTasks = await this.readTasks(dailyResolved.file);
 
@@ -94,10 +111,12 @@ export class DayPlannerView extends ItemView {
     const activeTasks =
       activeFile && !activeIsDaily ? await this.readTasks(activeFile) : [];
 
+    this.renderDateNav(root);
+
     this.renderSection(
       root,
-      "Today",
-      this.formatToday(),
+      this.formatDateLabel(this.selectedDate),
+      dailyResolved.path,
       dailyResolved.file,
       dailyResolved.path,
       dailyTasks,
@@ -115,22 +134,122 @@ export class DayPlannerView extends ItemView {
         false,
       );
     }
+
+    this.renderCalendar(root);
   }
 
-  private async readTasks(file: TFile | null): Promise<ParsedTask[]> {
-    if (!file) return [];
-    const content = await this.app.vault.read(file);
-    return parseFileTasks(file.path, content, this.plugin.settings.prefixes);
+  private renderDateNav(parent: HTMLElement): void {
+    const nav = parent.createDiv({ cls: "dp-datenav" });
+    const prev = nav.createEl("button", { cls: "dp-nav-btn", text: "◀" });
+    const label = nav.createDiv({ cls: "dp-datenav-label" });
+    label.textContent = this.formatDateLabel(this.selectedDate);
+    const next = nav.createEl("button", { cls: "dp-nav-btn", text: "▶" });
+    const today = nav.createEl("button", { cls: "dp-today-btn", text: "Today" });
+
+    prev.addEventListener("click", () =>
+      void this.navigateTo(addDays(this.selectedDate, -1)),
+    );
+    next.addEventListener("click", () =>
+      void this.navigateTo(addDays(this.selectedDate, 1)),
+    );
+    today.addEventListener("click", () => void this.navigateTo(new Date()));
   }
 
-  private formatToday(): string {
-    const d = new Date();
+  private async navigateTo(date: Date): Promise<void> {
+    const target = startOfDay(date);
+    this.selectedDate = target;
+    this.calendarMonth = startOfMonth(target);
+    const fallback = {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback,
+    };
+    const resolved = await resolveDailyNote(this.app, target, fallback);
+    if (!resolved.file) {
+      try {
+        await ensureDailyNote(this.app, target, fallback);
+      } catch (e) {
+        new Notice(`Day Planner: failed to create note (${(e as Error).message})`);
+      }
+    }
+    this.scheduleRender();
+  }
+
+  private renderCalendar(parent: HTMLElement): void {
+    const cal = parent.createDiv({ cls: "dp-calendar" });
+    const head = cal.createDiv({ cls: "dp-cal-head" });
+    const prev = head.createEl("button", { cls: "dp-nav-btn", text: "◀" });
+    const monthLabel = head.createDiv({ cls: "dp-cal-month" });
+    monthLabel.textContent = this.calendarMonth.toLocaleDateString(undefined, {
+      month: "long",
+      year: "numeric",
+    });
+    const next = head.createEl("button", { cls: "dp-nav-btn", text: "▶" });
+
+    prev.addEventListener("click", () => {
+      this.calendarMonth = addMonths(this.calendarMonth, -1);
+      this.scheduleRender();
+    });
+    next.addEventListener("click", () => {
+      this.calendarMonth = addMonths(this.calendarMonth, 1);
+      this.scheduleRender();
+    });
+
+    const grid = cal.createDiv({ cls: "dp-cal-grid" });
+    for (const dow of ["S", "M", "T", "W", "T", "F", "S"]) {
+      grid.createDiv({ cls: "dp-cal-dow", text: dow });
+    }
+
+    const monthStart = startOfMonth(this.calendarMonth);
+    const startDow = monthStart.getDay();
+    const monthEnd = endOfMonth(this.calendarMonth);
+    const today = new Date();
+
+    for (let i = startDow - 1; i >= 0; i--) {
+      const d = addDays(monthStart, -i - 1);
+      this.renderCalDay(grid, d, today, true);
+    }
+    for (let i = 1; i <= monthEnd.getDate(); i++) {
+      const d = new Date(
+        this.calendarMonth.getFullYear(),
+        this.calendarMonth.getMonth(),
+        i,
+      );
+      this.renderCalDay(grid, d, today, false);
+    }
+    const totalCells = startDow + monthEnd.getDate();
+    const trailing = (7 - (totalCells % 7)) % 7;
+    for (let i = 1; i <= trailing; i++) {
+      const d = addDays(monthEnd, i);
+      this.renderCalDay(grid, d, today, true);
+    }
+  }
+
+  private renderCalDay(
+    grid: HTMLElement,
+    d: Date,
+    today: Date,
+    isOtherMonth: boolean,
+  ): void {
+    const cell = grid.createDiv({ cls: "dp-cal-day", text: d.getDate().toString() });
+    if (isOtherMonth) cell.addClass("is-other-month");
+    if (sameDay(d, today)) cell.addClass("is-today");
+    if (sameDay(d, this.selectedDate)) cell.addClass("is-selected");
+    cell.addEventListener("click", () => void this.navigateTo(d));
+  }
+
+  private formatDateLabel(d: Date): string {
     return d.toLocaleDateString(undefined, {
       weekday: "short",
       year: "numeric",
       month: "short",
       day: "numeric",
     });
+  }
+
+  private async readTasks(file: TFile | null): Promise<ParsedTask[]> {
+    if (!file) return [];
+    const content = await this.app.vault.read(file);
+    return parseFileTasks(file.path, content, this.plugin.settings.prefixes);
   }
 
   private renderSection(
@@ -145,7 +264,7 @@ export class DayPlannerView extends ItemView {
     const section = parent.createDiv({ cls: "dp-section" });
 
     const header = section.createDiv({ cls: "dp-header" });
-    header.createDiv({ cls: "dp-title", text: title });
+    if (!isPrimary && title) header.createDiv({ cls: "dp-title", text: title });
     if (subtitle) header.createDiv({ cls: "dp-subtitle", text: subtitle });
 
     const totals = computeTotals(tasks);
@@ -160,10 +279,14 @@ export class DayPlannerView extends ItemView {
     if (!file && isPrimary) {
       const create = section.createEl("button", {
         cls: "dp-create",
-        text: `Create today's daily note (${path})`,
+        text: `Create ${path}`,
       });
       create.addEventListener("click", async () => {
-        await ensureTodayDailyNote(this.app);
+        const fallback = {
+          folder: this.plugin.settings.dailyNoteFolderFallback,
+          format: this.plugin.settings.dailyNoteFormatFallback,
+        };
+        await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
       });
       return;
