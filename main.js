@@ -1070,12 +1070,14 @@ var TodayView = class extends import_obsidian2.ItemView {
     }).open();
   }
   async appendTaskAfterLast(file, newLine) {
-    const content = await this.app.vault.read(file);
-    const lines = content.split("\n");
-    const lastIdx = findLastTaskLine(content);
-    const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
-    lines.splice(insertAt, 0, newLine);
-    await this.app.vault.modify(file, lines.join("\n"));
+    let insertAt = 0;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const lastIdx = findLastTaskLine(content);
+      insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      lines.splice(insertAt, 0, newLine);
+      return lines.join("\n");
+    });
     void this.openLine(file, insertAt, newLine.length);
   }
   renderBlock(layer, file, block, colorMap) {
@@ -1355,24 +1357,23 @@ var TodayView = class extends import_obsidian2.ItemView {
     const reordered = [...unscheduled];
     const [moved] = reordered.splice(sourceIdx, 1);
     reordered.splice(targetIdx, 0, moved);
-    const content = await this.app.vault.read(file);
-    const lines = content.split("\n");
-    let dirty = false;
-    reordered.forEach((task, i) => {
-      const desiredOrder = i + 1;
-      if (task.order === desiredOrder)
-        return;
-      const idx = task.lineNumber;
-      if (idx < 0 || idx >= lines.length)
-        return;
-      if (lines[idx] !== task.rawLine)
-        return;
-      lines[idx] = setOrderTag(lines[idx], desiredOrder, prefixes);
-      dirty = true;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      let dirty = false;
+      reordered.forEach((task, i) => {
+        const desiredOrder = i + 1;
+        if (task.order === desiredOrder)
+          return;
+        const idx = task.lineNumber;
+        if (idx < 0 || idx >= lines.length)
+          return;
+        if (lines[idx] !== task.rawLine)
+          return;
+        lines[idx] = setOrderTag(lines[idx], desiredOrder, prefixes);
+        dirty = true;
+      });
+      return dirty ? lines.join("\n") : content;
     });
-    if (!dirty)
-      return;
-    await this.app.vault.modify(file, lines.join("\n"));
   }
   async editLine(payload, transform) {
     const file = this.app.vault.getAbstractFileByPath(payload.filePath);
@@ -1381,19 +1382,24 @@ var TodayView = class extends import_obsidian2.ItemView {
       this.scheduleRender();
       return;
     }
-    const content = await this.app.vault.read(file);
-    const lines = content.split("\n");
-    const idx = payload.lineNumber;
-    if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
+    let stale = false;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const idx = payload.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
+        stale = true;
+        return content;
+      }
+      const next = transform(lines[idx]);
+      if (next === lines[idx])
+        return content;
+      lines[idx] = next;
+      return lines.join("\n");
+    });
+    if (stale) {
       new import_obsidian2.Notice("Today: file changed since last render \u2014 refreshing.");
       this.scheduleRender();
-      return;
     }
-    const next = transform(lines[idx]);
-    if (next === lines[idx])
-      return;
-    lines[idx] = next;
-    await this.app.vault.modify(file, lines.join("\n"));
   }
   formatHourLabel(h) {
     const ampm = h < 12 || h === 24 ? "a" : "p";
@@ -1981,7 +1987,7 @@ var TodayPlugin = class extends import_obsidian4.Plugin {
     });
     this.addCommand({
       id: "open-calendar",
-      name: "Open Calendar",
+      name: "Open calendar",
       callback: () => void this.activateView({ openCalendar: true })
     });
     this.addSettingTab(new TodaySettingTab(this.app, this));

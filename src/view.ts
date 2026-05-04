@@ -746,13 +746,14 @@ export class TodayView extends ItemView {
     file: TFile,
     newLine: string,
   ): Promise<void> {
-    const content = await this.app.vault.read(file);
-    const lines = content.split("\n");
-    const lastIdx = findLastTaskLine(content);
-    const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
-    lines.splice(insertAt, 0, newLine);
-    await this.app.vault.modify(file, lines.join("\n"));
-    // Land cursor at end of the new line so the user can keep editing.
+    let insertAt = 0;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const lastIdx = findLastTaskLine(content);
+      insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      lines.splice(insertAt, 0, newLine);
+      return lines.join("\n");
+    });
     void this.openLine(file, insertAt, newLine.length);
   }
 
@@ -1062,20 +1063,20 @@ export class TodayView extends ItemView {
     const [moved] = reordered.splice(sourceIdx, 1);
     reordered.splice(targetIdx, 0, moved);
 
-    const content = await this.app.vault.read(file);
-    const lines = content.split("\n");
-    let dirty = false;
-    reordered.forEach((task, i) => {
-      const desiredOrder = i + 1;
-      if (task.order === desiredOrder) return;
-      const idx = task.lineNumber;
-      if (idx < 0 || idx >= lines.length) return;
-      if (lines[idx] !== task.rawLine) return;
-      lines[idx] = setOrderTag(lines[idx], desiredOrder, prefixes);
-      dirty = true;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      let dirty = false;
+      reordered.forEach((task, i) => {
+        const desiredOrder = i + 1;
+        if (task.order === desiredOrder) return;
+        const idx = task.lineNumber;
+        if (idx < 0 || idx >= lines.length) return;
+        if (lines[idx] !== task.rawLine) return;
+        lines[idx] = setOrderTag(lines[idx], desiredOrder, prefixes);
+        dirty = true;
+      });
+      return dirty ? lines.join("\n") : content;
     });
-    if (!dirty) return;
-    await this.app.vault.modify(file, lines.join("\n"));
   }
 
   private async editLine(
@@ -1088,18 +1089,23 @@ export class TodayView extends ItemView {
       this.scheduleRender();
       return;
     }
-    const content = await this.app.vault.read(file);
-    const lines = content.split("\n");
-    const idx = payload.lineNumber;
-    if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
+    let stale = false;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const idx = payload.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
+        stale = true;
+        return content;
+      }
+      const next = transform(lines[idx]);
+      if (next === lines[idx]) return content;
+      lines[idx] = next;
+      return lines.join("\n");
+    });
+    if (stale) {
       new Notice("Today: file changed since last render — refreshing.");
       this.scheduleRender();
-      return;
     }
-    const next = transform(lines[idx]);
-    if (next === lines[idx]) return;
-    lines[idx] = next;
-    await this.app.vault.modify(file, lines.join("\n"));
   }
 
   private formatHourLabel(h: number): string {

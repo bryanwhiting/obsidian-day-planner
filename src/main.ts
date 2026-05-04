@@ -30,7 +30,7 @@ export default class TodayPlugin extends Plugin {
 
     this.addCommand({
       id: "open-calendar",
-      name: "Open Calendar",
+      name: "Open calendar",
       callback: () => void this.activateView({ openCalendar: true }),
     });
 
