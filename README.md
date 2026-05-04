@@ -56,13 +56,13 @@ In Obsidian: **Settings → Community plugins**, turn off Restricted Mode if nee
 
 ### Manual install
 
-Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/bryanwhiting/obsidian-today/releases) and drop them into `<your-vault>/.obsidian/plugins/today/`. Then in Obsidian: **Settings → Community plugins → Reload**, and enable **Today**.
+Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/silvermineai/obsidian-today/releases) and drop them into `<your-vault>/.obsidian/plugins/today/`. Then in Obsidian: **Settings → Community plugins → Reload**, and enable **Today**.
 
 Or clone the repo directly:
 
 ```bash
 cd /path/to/your-vault/.obsidian/plugins
-git clone https://github.com/bryanwhiting/obsidian-today today
+git clone https://github.com/silvermineai/obsidian-today today
 ```
 
 The committed `main.js` is the prebuilt bundle — no build step needed.

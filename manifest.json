@@ -3,7 +3,7 @@
   "name": "Today",
   "version": "1.0.0",
   "minAppVersion": "1.4.0",
-  "description": "Sidebar daily-note planner that reads #d/ duration and #t/ start-time tags from task lines and renders a draggable timeline. Drag updates the tags in the source note; line order is never changed.",
-  "author": "bryanwhiting",
+  "description": "Plan your days from simple, templated daily notes. Time blocking. Timeline visualization. Calendar view.",
+  "author": "Silvermine AI LLC",
   "isDesktopOnly": false
 }
