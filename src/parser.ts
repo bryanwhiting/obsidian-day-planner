@@ -8,18 +8,21 @@ export interface ParsedTask {
   startMin: number | null;
   order: number | null;
   checked: boolean;
+  project: string | null;
 }
 
 export interface TagPrefixes {
   duration: string;
   time: string;
   order: string;
+  project: string;
 }
 
 export const DEFAULT_PREFIXES: TagPrefixes = {
   duration: "d",
-  time: "h",
+  time: "t",
   order: "o",
+  project: "p",
 };
 
 const TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
@@ -35,6 +38,7 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
       "i",
     ),
     order: new RegExp(`#${esc(prefixes.order)}\\/(\\d+)\\b`),
+    project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`),
   };
 }
 
@@ -71,6 +75,14 @@ export function parseOrder(
 ): number | null {
   const m = buildTagRegexes(prefixes).order.exec(body);
   return m ? parseInt(m[1], 10) : null;
+}
+
+export function parseProject(
+  body: string,
+  prefixes: TagPrefixes,
+): string | null {
+  const m = buildTagRegexes(prefixes).project.exec(body);
+  return m ? m[1] : null;
 }
 
 export function formatDuration(totalMin: number, prefixes: TagPrefixes): string {
@@ -119,6 +131,7 @@ export function parseTaskLine(
   const startMin = parseTime(body, prefixes);
   const durationMin = explicitDuration ?? defaultDurationMin;
   const order = parseOrder(body, prefixes);
+  const project = parseProject(body, prefixes);
   const checked = m[2] !== " ";
   return {
     filePath,
@@ -130,6 +143,7 @@ export function parseTaskLine(
     startMin,
     order,
     checked,
+    project,
   };
 }
 
@@ -192,6 +206,27 @@ function appendTag(rawLine: string, tag: string): string {
 
 export function snapToInterval(min: number, intervalMin: number): number {
   return Math.round(min / intervalMin) * intervalMin;
+}
+
+export function findLastTaskLine(content: string): number {
+  const lines = content.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (TASK_LINE.test(lines[i])) return i;
+  }
+  return -1;
+}
+
+export function buildTaskLine(
+  body: string,
+  prefixes: TagPrefixes,
+  opts: { startMin?: number; durationMin: number },
+): string {
+  const tags: string[] = [];
+  if (opts.startMin !== undefined) {
+    tags.push(formatTime(opts.startMin, prefixes));
+  }
+  tags.push(formatDuration(opts.durationMin, prefixes));
+  return `- [ ] ${body} ${tags.join(" ")}`;
 }
 
 export function formatTotal(totalMin: number): string {

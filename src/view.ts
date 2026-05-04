@@ -1,4 +1,12 @@
-import { ItemView, WorkspaceLeaf, TFile, Notice, setIcon } from "obsidian";
+import {
+  ItemView,
+  WorkspaceLeaf,
+  TFile,
+  Notice,
+  Modal,
+  App,
+  setIcon,
+} from "obsidian";
 import type DayPlannerPlugin from "./main";
 import {
   ParsedTask,
@@ -10,13 +18,17 @@ import {
   setDurationTag,
   snapToInterval,
   formatTotal,
+  findLastTaskLine,
+  buildTaskLine,
 } from "./parser";
 import {
   partition,
   computeTotals,
+  computeFreeMin,
   layoutTimeline,
   LayoutBlock,
 } from "./scheduler";
+import { resolveProjectColors, contrastingTextColor } from "./colors";
 import {
   resolveDailyNote,
   ensureDailyNote,
@@ -51,6 +63,7 @@ export class DayPlannerView extends ItemView {
   private selectedDate: Date = startOfDay(new Date());
   private calendarMonth: Date = startOfMonth(new Date());
   private calendarOpen: boolean = false;
+  private overrideFilePath: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: DayPlannerPlugin) {
     super(leaf);
@@ -81,7 +94,26 @@ export class DayPlannerView extends ItemView {
     this.registerEvent(
       this.app.vault.on("modify", () => this.scheduleRender()),
     );
+    this.registerDomEvent(this.containerEl, "keydown", (ev) =>
+      this.handleKeydown(ev),
+    );
     await this.render();
+  }
+
+  private handleKeydown(ev: KeyboardEvent): void {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    const t = ev.target as HTMLElement | null;
+    if (
+      t &&
+      (t.tagName === "INPUT" ||
+        t.tagName === "TEXTAREA" ||
+        t.isContentEditable)
+    )
+      return;
+    ev.preventDefault();
+    const delta = ev.key === "ArrowLeft" ? -1 : 1;
+    void this.navigateTo(addDays(this.selectedDate, delta));
   }
 
   async onClose(): Promise<void> {
@@ -104,10 +136,14 @@ export class DayPlannerView extends ItemView {
     ).map((el) => el.scrollTop);
     root.empty();
     root.addClass("day-planner-root");
+    // Make the pane focusable so left/right arrow keys can be captured.
+    // tabindex=-1 keeps it out of normal Tab order but accepts focus on click.
+    if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
 
     const fallback = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
+      template: this.plugin.settings.dailyNoteTemplate,
     };
 
     const dailyResolved = await resolveDailyNote(
@@ -115,37 +151,48 @@ export class DayPlannerView extends ItemView {
       this.selectedDate,
       fallback,
     );
-    const dailyTasks = await this.readTasks(dailyResolved.file);
+
+    let displayFile: TFile | null = dailyResolved.file;
+    let displayPath: string = dailyResolved.path;
+
+    if (this.overrideFilePath) {
+      const f = this.app.vault.getAbstractFileByPath(this.overrideFilePath);
+      if (f instanceof TFile) {
+        displayFile = f;
+        displayPath = f.path;
+      } else {
+        this.overrideFilePath = null;
+      }
+    }
+
+    const tasks = await this.readTasks(displayFile);
 
     const activeFile = this.app.workspace.getActiveFile();
-    const activeIsDaily =
-      activeFile && dailyResolved.file && activeFile.path === dailyResolved.file.path;
-    const activeTasks =
-      activeFile && !activeIsDaily ? await this.readTasks(activeFile) : [];
+    const showOpenActiveLink =
+      activeFile !== null &&
+      (!displayFile || activeFile.path !== displayFile.path);
 
     this.renderDateNav(root);
+
+    const projects = tasks
+      .map((t) => t.project)
+      .filter((p): p is string => p !== null);
+    const colorMap = resolveProjectColors(
+      projects,
+      this.plugin.settings.projectColors,
+    );
 
     this.renderSection(
       root,
       this.formatDateLabel(this.selectedDate),
-      dailyResolved.path,
-      dailyResolved.file,
-      dailyResolved.path,
-      dailyTasks,
+      displayPath,
+      displayFile,
+      displayPath,
+      tasks,
       true,
+      colorMap,
+      showOpenActiveLink ? activeFile : null,
     );
-
-    if (activeFile && !activeIsDaily) {
-      this.renderSection(
-        root,
-        `Active note: ${activeFile.basename}`,
-        "",
-        activeFile,
-        activeFile.path,
-        activeTasks,
-        false,
-      );
-    }
 
     root.scrollTop = prevRootScroll;
     const newTimelines = root.querySelectorAll<HTMLElement>(".dp-timeline-wrap");
@@ -164,10 +211,14 @@ export class DayPlannerView extends ItemView {
     });
     setIcon(prev, "chevron-left");
 
+    const today = nav.createEl("button", {
+      cls: "dp-today-btn",
+      attr: { "aria-label": "Jump to today" },
+    });
+    setIcon(today, "sun");
+
     const label = nav.createDiv({ cls: "dp-datenav-label" });
     label.textContent = this.formatDateLabel(this.selectedDate);
-
-    const today = nav.createEl("button", { cls: "dp-today-btn", text: "Today" });
 
     const calBtn = nav.createEl("button", {
       cls: "dp-cal-btn",
@@ -202,9 +253,11 @@ export class DayPlannerView extends ItemView {
     const target = startOfDay(date);
     this.selectedDate = target;
     this.calendarMonth = startOfMonth(target);
+    this.overrideFilePath = null;
     const fallback = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
+      template: this.plugin.settings.dailyNoteTemplate,
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -311,21 +364,53 @@ export class DayPlannerView extends ItemView {
     path: string,
     tasks: ParsedTask[],
     isPrimary: boolean,
+    colorMap: Map<string, string>,
+    openActiveTarget: TFile | null = null,
   ): void {
     const section = parent.createDiv({ cls: "dp-section" });
 
     const header = section.createDiv({ cls: "dp-header" });
     if (!isPrimary && title) header.createDiv({ cls: "dp-title", text: title });
-    if (subtitle) header.createDiv({ cls: "dp-subtitle", text: subtitle });
+    if (subtitle || openActiveTarget) {
+      const sub = header.createDiv({ cls: "dp-subtitle" });
+      if (subtitle) {
+        if (file) {
+          const pathLink = sub.createEl("a", {
+            cls: "dp-subtitle-link dp-subtitle-path",
+            text: subtitle,
+            attr: { href: "#", title: `Open ${file.path}` },
+          });
+          pathLink.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            void this.openFile(file);
+          });
+        } else {
+          sub.createSpan({ text: subtitle });
+        }
+      }
+      if (openActiveTarget) {
+        if (subtitle) sub.createSpan({ cls: "dp-subtitle-sep", text: "•" });
+        const link = sub.createEl("a", {
+          cls: "dp-subtitle-link",
+          text: "Open Active Note",
+          attr: {
+            href: "#",
+            "aria-label": `Open active note: ${openActiveTarget.path}`,
+            title: openActiveTarget.path,
+          },
+        });
+        link.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          this.overrideFilePath = openActiveTarget.path;
+          this.scheduleRender();
+        });
+      }
+    }
 
-    const totals = computeTotals(tasks);
-    const totalsRow = header.createDiv({ cls: "dp-totals" });
-    totalsRow.createSpan({
-      text: `Scheduled: ${formatTotal(totals.scheduledMin)}`,
-    });
-    totalsRow.createSpan({
-      text: `Unscheduled: ${formatTotal(totals.unscheduledMin)}`,
-    });
+    const statsRow = header.createDiv({ cls: "dp-stats-row" });
+    this.renderPlannedTable(statsRow, tasks);
+    if (isPrimary) this.renderFreeTable(statsRow, tasks);
+    this.renderProjectTable(statsRow, tasks, colorMap);
 
     if (!file && isPrimary) {
       const create = section.createEl("button", {
@@ -336,6 +421,7 @@ export class DayPlannerView extends ItemView {
         const fallback = {
           folder: this.plugin.settings.dailyNoteFolderFallback,
           format: this.plugin.settings.dailyNoteFormatFallback,
+          template: this.plugin.settings.dailyNoteTemplate,
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -348,14 +434,15 @@ export class DayPlannerView extends ItemView {
     const body = section.createDiv({ cls: "dp-body" });
     const { scheduled, unscheduled } = partition(tasks);
 
-    this.renderTimeline(body, file, scheduled);
-    this.renderUnscheduled(body, file, unscheduled);
+    this.renderTimeline(body, file, scheduled, colorMap);
+    this.renderUnscheduled(body, file, unscheduled, colorMap);
   }
 
   private renderTimeline(
     parent: HTMLElement,
     file: TFile,
     scheduled: ParsedTask[],
+    colorMap: Map<string, string>,
   ): void {
     const settings = this.plugin.settings;
     const startMin = settings.visibleStartHour * 60;
@@ -377,7 +464,10 @@ export class DayPlannerView extends ItemView {
 
     const blocksLayer = timeline.createDiv({ cls: "dp-blocks" });
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
-    for (const block of layout) this.renderBlock(blocksLayer, file, block);
+    for (const block of layout)
+      this.renderBlock(blocksLayer, file, block, colorMap);
+
+    this.renderGutter(timeline, blocksLayer, file, startMin, endMin);
 
     const computeSnap = (clientY: number): number | null => {
       if (!this.dragPayload) return null;
@@ -451,10 +541,221 @@ export class DayPlannerView extends ItemView {
     this.dropIndicator = null;
   }
 
+  private renderGutter(
+    timeline: HTMLElement,
+    blocksLayer: HTMLElement,
+    file: TFile,
+    startMin: number,
+    endMin: number,
+  ): void {
+    const settings = this.plugin.settings;
+    const gutter = timeline.createDiv({ cls: "dp-gutter" });
+    const eyebrow = gutter.createDiv({ cls: "dp-gutter-eyebrow" });
+    eyebrow.createSpan({ cls: "dp-gutter-eyebrow-mark", text: "+" });
+    eyebrow.createSpan({ cls: "dp-gutter-eyebrow-text", text: "new" });
+
+    const reveal = () => timeline.addClass("is-gutter-revealed");
+    const hide = () => {
+      if (gutter.dataset.dragging) return;
+      timeline.removeClass("is-gutter-revealed");
+    };
+
+    timeline.addEventListener("pointerenter", reveal);
+    timeline.addEventListener("pointerleave", hide);
+
+    const minuteFromY = (clientY: number): number => {
+      const rect = timeline.getBoundingClientRect();
+      const y = clientY - rect.top + timeline.scrollTop;
+      const raw = y / settings.pxPerMin + startMin;
+      return snapToInterval(raw, settings.snapMin);
+    };
+
+    const DRAG_THRESHOLD_PX = 4;
+    let pending: { startClientY: number; anchorMin: number } | null = null;
+    let dragState: {
+      pointerId: number;
+      anchorMin: number;
+      indicator: HTMLElement;
+    } | null = null;
+    // After a drag commits in `pointerup`, the browser still synthesizes a
+    // `click` event from the same pointerdown/up pair. Without this guard the
+    // click handler would fire a second createTaskAtTime() at the cursor's
+    // release-Y, racing the drag write on disk and clobbering it.
+    let suppressNextClick = false;
+
+    const updateIndicator = (
+      indicator: HTMLElement,
+      topMin: number,
+      durationMin: number,
+    ): void => {
+      indicator.style.top = `${(topMin - startMin) * settings.pxPerMin}px`;
+      indicator.style.height = `${Math.max(18, durationMin * settings.pxPerMin)}px`;
+      let timeEl = indicator.querySelector<HTMLElement>(".dp-drop-indicator-time");
+      if (!timeEl) {
+        timeEl = indicator.createDiv({ cls: "dp-drop-indicator-time" });
+      }
+      timeEl.textContent = `${this.fmtClock(topMin)}–${this.fmtClock(
+        topMin + durationMin,
+      )}`;
+      let textEl = indicator.querySelector<HTMLElement>(".dp-drop-indicator-text");
+      if (!textEl) {
+        textEl = indicator.createDiv({
+          cls: "dp-drop-indicator-text",
+          text: "New task",
+        });
+      }
+    };
+
+    const beginDrag = (ev: PointerEvent, anchor: number): void => {
+      const indicator = blocksLayer.createDiv({
+        cls: "dp-drop-indicator dp-create-indicator",
+      });
+      updateIndicator(indicator, anchor, settings.defaultDurationMin);
+      dragState = { pointerId: ev.pointerId, anchorMin: anchor, indicator };
+      try {
+        gutter.setPointerCapture(ev.pointerId);
+      } catch {}
+      gutter.dataset.dragging = "1";
+    };
+
+    const cancelDrag = (): void => {
+      if (!dragState) return;
+      dragState.indicator.detach();
+      try {
+        gutter.releasePointerCapture(dragState.pointerId);
+      } catch {}
+      delete gutter.dataset.dragging;
+      dragState = null;
+    };
+
+    gutter.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      reveal();
+      const anchor = Math.max(
+        startMin,
+        Math.min(endMin - settings.snapMin, minuteFromY(ev.clientY)),
+      );
+      pending = { startClientY: ev.clientY, anchorMin: anchor };
+    });
+
+    gutter.addEventListener("pointermove", (ev) => {
+      if (dragState) {
+        const m = Math.max(
+          startMin,
+          Math.min(endMin, minuteFromY(ev.clientY)),
+        );
+        const top = Math.min(dragState.anchorMin, m);
+        const bottom = Math.max(dragState.anchorMin + settings.snapMin, m);
+        updateIndicator(dragState.indicator, top, bottom - top);
+        return;
+      }
+      if (
+        pending &&
+        Math.abs(ev.clientY - pending.startClientY) > DRAG_THRESHOLD_PX
+      ) {
+        beginDrag(ev, pending.anchorMin);
+      }
+    });
+
+    gutter.addEventListener("pointerup", (ev) => {
+      if (!dragState) return;
+      // Drag committed: handle here so the trailing synthetic click is suppressed.
+      ev.preventDefault();
+      ev.stopPropagation();
+      const state = dragState;
+      const m = Math.max(
+        startMin,
+        Math.min(endMin, minuteFromY(ev.clientY)),
+      );
+      const top = Math.min(state.anchorMin, m);
+      const bottom = Math.max(state.anchorMin + settings.snapMin, m);
+      const duration = bottom - top;
+      const clampedTop = Math.min(top, endMin - duration);
+      cancelDrag();
+      pending = null;
+      suppressNextClick = true;
+      void this.createTaskAtTime(file, clampedTop, duration);
+      if (!timeline.matches(":hover"))
+        timeline.removeClass("is-gutter-revealed");
+    });
+
+    gutter.addEventListener("pointercancel", () => {
+      cancelDrag();
+      pending = null;
+    });
+
+    // Single-click handler: runs after pointerup when the pointer barely moved.
+    // Using `click` (rather than committing in pointerup) sidesteps Obsidian's
+    // sidebar-leaf activation, which can swallow the first pointerdown when the
+    // day-planner pane isn't yet the active leaf.
+    gutter.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
+      const anchor = pending
+        ? pending.anchorMin
+        : Math.max(
+            startMin,
+            Math.min(endMin - settings.snapMin, minuteFromY(ev.clientY)),
+          );
+      pending = null;
+      void this.createTaskAtTime(file, anchor, settings.defaultDurationMin);
+      if (!timeline.matches(":hover"))
+        timeline.removeClass("is-gutter-revealed");
+    });
+  }
+
+  private createTaskAtTime(
+    file: TFile,
+    startMin: number,
+    durationMin: number,
+  ): void {
+    const prefixes = this.plugin.settings.prefixes;
+    new TitlePromptModal(this.app, {
+      heading: `New task at ${this.fmtClock(startMin)}`,
+      placeholder: "Task title…",
+      onSubmit: (title) => {
+        const newLine = buildTaskLine(title, prefixes, { startMin, durationMin });
+        void this.appendTaskAfterLast(file, newLine);
+      },
+    }).open();
+  }
+
+  private createUnscheduledTask(file: TFile): void {
+    const prefixes = this.plugin.settings.prefixes;
+    new TitlePromptModal(this.app, {
+      heading: "New unscheduled task",
+      placeholder: "Task title…",
+      onSubmit: (title) => {
+        const newLine = buildTaskLine(title, prefixes, {
+          durationMin: this.plugin.settings.defaultDurationMin,
+        });
+        void this.appendTaskAfterLast(file, newLine);
+      },
+    }).open();
+  }
+
+  private async appendTaskAfterLast(
+    file: TFile,
+    newLine: string,
+  ): Promise<void> {
+    const content = await this.app.vault.read(file);
+    const lines = content.split("\n");
+    const lastIdx = findLastTaskLine(content);
+    const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+    lines.splice(insertAt, 0, newLine);
+    await this.app.vault.modify(file, lines.join("\n"));
+    // Land cursor at end of the new line so the user can keep editing.
+    void this.openLine(file, insertAt, newLine.length);
+  }
+
   private renderBlock(
     layer: HTMLElement,
     file: TFile,
     block: LayoutBlock,
+    colorMap: Map<string, string>,
   ): void {
     const el = layer.createDiv({ cls: "dp-block" });
     el.style.top = `${block.topPx}px`;
@@ -464,6 +765,12 @@ export class DayPlannerView extends ItemView {
     if (block.task.checked) el.addClass("is-done");
     if (!block.task.hasExplicitDuration) el.addClass("is-implicit-duration");
     if (block.task.durationMin < 25) el.addClass("is-compact");
+    const color = block.task.project ? colorMap.get(block.task.project) : null;
+    if (color) {
+      el.style.setProperty("--dp-color", color);
+      el.style.setProperty("--dp-on-color", contrastingTextColor(color));
+      el.addClass("has-project-color");
+    }
     el.draggable = true;
 
     const row = el.createDiv({ cls: "dp-block-row" });
@@ -477,6 +784,10 @@ export class DayPlannerView extends ItemView {
       text: this.formatBlockTime(block.task),
     });
     row.createSpan({ cls: "dp-block-sep", text: "·" });
+    if (block.task.project) {
+      row.createSpan({ cls: "dp-block-project", text: block.task.project });
+      row.createSpan({ cls: "dp-block-sep", text: "·" });
+    }
     row.createSpan({
       cls: "dp-block-text",
       text: this.cleanBody(block.task.body),
@@ -503,7 +814,9 @@ export class DayPlannerView extends ItemView {
       this.dragPayload = null;
       this.hideDropIndicator();
     });
-    el.addEventListener("click", () => this.openLine(file, block.task.lineNumber));
+    el.addEventListener("click", () =>
+      this.openLine(file, block.task.lineNumber, this.endOfTitleCh(block.task.rawLine)),
+    );
 
     const handle = el.createDiv({ cls: "dp-resize-handle" });
     handle.addEventListener("pointerdown", (ev) =>
@@ -606,12 +919,20 @@ export class DayPlannerView extends ItemView {
     parent: HTMLElement,
     file: TFile,
     unscheduled: ParsedTask[],
+    colorMap: Map<string, string>,
   ): void {
     const list = parent.createDiv({ cls: "dp-unscheduled" });
     const head = list.createDiv({ cls: "dp-unscheduled-head" });
     head.createSpan({ text: "Unscheduled" });
-    const icon = head.createSpan({ cls: "dp-icon" });
-    setIcon(icon, "list");
+    const addBtn = head.createEl("button", {
+      cls: "dp-unscheduled-add",
+      attr: { "aria-label": "Add unscheduled task" },
+    });
+    setIcon(addBtn, "plus");
+    addBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      void this.createUnscheduledTask(file);
+    });
 
     if (unscheduled.length === 0) {
       list.createDiv({ cls: "dp-empty", text: "No unscheduled tasks." });
@@ -621,6 +942,11 @@ export class DayPlannerView extends ItemView {
       const card = list.createDiv({ cls: "dp-card" });
       if (task.checked) card.addClass("is-done");
       if (!task.hasExplicitDuration) card.addClass("is-implicit-duration");
+      const color = task.project ? colorMap.get(task.project) : null;
+      if (color) {
+        card.style.setProperty("--dp-color", color);
+        card.addClass("has-project-color");
+      }
       card.draggable = true;
       const meta = card.createDiv({ cls: "dp-card-meta" });
       if (!task.hasExplicitDuration) {
@@ -629,6 +955,9 @@ export class DayPlannerView extends ItemView {
         warn.setAttribute("aria-label", "No #d/ tag — using default duration");
       }
       meta.createSpan({ text: formatTotal(task.durationMin) });
+      if (task.project) {
+        card.createSpan({ cls: "dp-card-project", text: task.project });
+      }
       const text = card.createDiv({ cls: "dp-card-text" });
       text.textContent = this.cleanBody(task.body);
 
@@ -669,7 +998,9 @@ export class DayPlannerView extends ItemView {
         );
         this.dragPayload = null;
       });
-      card.addEventListener("click", () => this.openLine(file, task.lineNumber));
+      card.addEventListener("click", () =>
+        this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine)),
+      );
     });
 
     list.addEventListener("dragover", (ev) => {
@@ -773,6 +1104,107 @@ export class DayPlannerView extends ItemView {
     return `${h12}${ampm}`;
   }
 
+  private renderPlannedTable(
+    parent: HTMLElement,
+    tasks: ParsedTask[],
+  ): void {
+    const totals = computeTotals(tasks);
+    const total = totals.scheduledMin + totals.unscheduledMin;
+
+    const table = parent.createDiv({ cls: "dp-stat-table" });
+    table.createSpan({ cls: "dp-st-h", text: "Type" });
+    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
+    this.renderStatRow(table, "Scheduled", totals.scheduledMin);
+    this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
+    this.renderStatRow(table, "Total", total, true);
+  }
+
+  private renderFreeTable(
+    parent: HTMLElement,
+    tasks: ParsedTask[],
+  ): void {
+    const settings = this.plugin.settings;
+    const scheduled = tasks.filter((t) => t.startMin !== null);
+    const wakeMin = settings.wakeHour * 60;
+    const sleepMin = settings.sleepHour * 60;
+    const workStartMin = settings.workStartHour * 60;
+    const workEndMin = settings.workEndHour * 60;
+
+    const workOpen = computeFreeMin(scheduled, workStartMin, workEndMin);
+    const beforeWork = computeFreeMin(
+      scheduled,
+      wakeMin,
+      Math.min(workStartMin, sleepMin),
+    );
+    const afterWork = computeFreeMin(
+      scheduled,
+      Math.max(workEndMin, wakeMin),
+      sleepMin,
+    );
+    const nonWorkOpen = beforeWork + afterWork;
+    const totalDay = workOpen + nonWorkOpen;
+
+    const table = parent.createDiv({ cls: "dp-stat-table" });
+    table.createSpan({ cls: "dp-st-h", text: "Free Time" });
+    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Available" });
+    this.renderStatRow(table, "Working Hours", workOpen);
+    this.renderStatRow(table, "Non-Work Hours", nonWorkOpen);
+    this.renderStatRow(table, "Total Day", totalDay, true);
+  }
+
+  private renderStatRow(
+    table: HTMLElement,
+    label: string,
+    mins: number,
+    strong: boolean = false,
+  ): void {
+    const nameCls = strong ? "dp-st-name dp-st-strong" : "dp-st-name";
+    const valueCls = strong ? "dp-st-value dp-st-strong" : "dp-st-value";
+    table.createSpan({ cls: nameCls, text: label });
+    table.createSpan({ cls: valueCls, text: formatTotal(mins) });
+  }
+
+  private renderProjectTable(
+    parent: HTMLElement,
+    tasks: ParsedTask[],
+    colorMap: Map<string, string>,
+  ): void {
+    const totals = new Map<string, number>();
+    let unassignedMin = 0;
+    for (const t of tasks) {
+      if (t.project) {
+        totals.set(t.project, (totals.get(t.project) ?? 0) + t.durationMin);
+      } else {
+        unassignedMin += t.durationMin;
+      }
+    }
+    if (totals.size === 0 && unassignedMin === 0) return;
+    const sorted = [...totals.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+
+    const table = parent.createDiv({ cls: "dp-stat-table" });
+    table.createSpan({ cls: "dp-st-h", text: "Project" });
+    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
+    for (const [name, mins] of sorted) {
+      const nameCell = table.createDiv({ cls: "dp-st-name" });
+      const swatch = nameCell.createSpan({ cls: "dp-st-swatch" });
+      const color = colorMap.get(name);
+      if (color) swatch.style.backgroundColor = color;
+      nameCell.createSpan({ text: name });
+      table.createSpan({ cls: "dp-st-value", text: formatTotal(mins) });
+    }
+    if (unassignedMin > 0) {
+      const nameCell = table.createDiv({ cls: "dp-st-name dp-st-unassigned" });
+      nameCell.createSpan({ cls: "dp-st-swatch dp-st-swatch-unassigned" });
+      nameCell.createSpan({ text: "Unassigned" });
+      table.createSpan({
+        cls: "dp-st-value dp-st-unassigned",
+        text: formatTotal(unassignedMin),
+      });
+    }
+  }
+
   private formatBlockTime(task: ParsedTask): string {
     if (task.startMin === null) return "";
     const start = task.startMin;
@@ -797,14 +1229,85 @@ export class DayPlannerView extends ItemView {
       .replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "")
+      .replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "")
       .replace(/\s+/g, " ")
       .trim();
   }
 
-  private async openLine(file: TFile, line: number): Promise<void> {
+  private endOfTitleCh(rawLine: string): number {
+    const p = this.plugin.settings.prefixes;
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(
+      `#(?:${esc(p.duration)}|${esc(p.time)}|${esc(p.order)}|${esc(p.project)})\\/`,
+    );
+    const m = re.exec(rawLine);
+    const cutoff = m ? m.index : rawLine.length;
+    let end = cutoff;
+    while (end > 0 && /\s/.test(rawLine[end - 1])) end--;
+    return end;
+  }
+
+  private async openLine(file: TFile, line: number, ch: number = 0): Promise<void> {
     const leaf = this.app.workspace.getLeaf(false);
     await leaf.openFile(file);
-    const view = leaf.view as { editor?: { setCursor: (p: { line: number; ch: number }) => void } };
-    view.editor?.setCursor({ line, ch: 0 });
+    const view = leaf.view as {
+      editor?: {
+        setCursor: (p: { line: number; ch: number }) => void;
+        focus?: () => void;
+      };
+    };
+    view.editor?.setCursor({ line, ch });
+    view.editor?.focus?.();
+  }
+
+  private async openFile(file: TFile): Promise<void> {
+    const leaf = this.app.workspace.getLeaf(false);
+    await leaf.openFile(file);
+  }
+}
+
+class TitlePromptModal extends Modal {
+  private opts: {
+    heading: string;
+    placeholder: string;
+    onSubmit: (title: string) => void;
+  };
+
+  constructor(
+    app: App,
+    opts: {
+      heading: string;
+      placeholder: string;
+      onSubmit: (title: string) => void;
+    },
+  ) {
+    super(app);
+    this.opts = opts;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-title-modal");
+    this.titleEl.setText(this.opts.heading);
+
+    const input = this.contentEl.createEl("input", {
+      type: "text",
+      cls: "dp-title-input",
+      attr: { placeholder: this.opts.placeholder },
+    });
+    input.focus();
+
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const title = input.value.trim();
+        this.opts.onSubmit(title);
+        this.close();
+      }
+      // Escape is handled by Modal's default close behavior — no task created.
+    });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
   }
 }

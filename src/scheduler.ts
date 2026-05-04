@@ -42,6 +42,40 @@ export function computeTotals(tasks: ParsedTask[]): Totals {
   return { scheduledMin, unscheduledMin };
 }
 
+export function computeFreeMin(
+  scheduled: ParsedTask[],
+  windowStartMin: number,
+  windowEndMin: number,
+): number {
+  const windowLen = Math.max(0, windowEndMin - windowStartMin);
+  if (windowLen === 0) return 0;
+
+  const intervals: Array<[number, number]> = [];
+  for (const t of scheduled) {
+    if (t.startMin === null) continue;
+    const start = Math.max(windowStartMin, t.startMin);
+    const end = Math.min(windowEndMin, t.startMin + t.durationMin);
+    if (end > start) intervals.push([start, end]);
+  }
+  intervals.sort((a, b) => a[0] - b[0]);
+
+  let occupied = 0;
+  let curStart = -1;
+  let curEnd = -1;
+  for (const [s, e] of intervals) {
+    if (curEnd === -1 || s > curEnd) {
+      if (curEnd !== -1) occupied += curEnd - curStart;
+      curStart = s;
+      curEnd = e;
+    } else if (e > curEnd) {
+      curEnd = e;
+    }
+  }
+  if (curEnd !== -1) occupied += curEnd - curStart;
+
+  return Math.max(0, windowLen - occupied);
+}
+
 export function layoutTimeline(
   scheduled: ParsedTask[],
   rangeStartMin: number,

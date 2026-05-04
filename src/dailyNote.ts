@@ -14,6 +14,7 @@ export interface ResolvedDailyNote {
 export interface DailyNoteFallback {
   folder: string;
   format: string;
+  template?: string;
 }
 
 export async function resolveDailyNote(
@@ -48,9 +49,26 @@ export async function ensureDailyNote(
     const existing = app.vault.getAbstractFileByPath(folder);
     if (!existing) await app.vault.createFolder(folder);
   }
-  const file = await app.vault.create(resolved.path, "");
+  const initialContent = await readTemplateContent(app, fallback.template);
+  const file = await app.vault.create(resolved.path, initialContent);
   if (notify) new Notice(`Created ${resolved.path}`);
   return file;
+}
+
+async function readTemplateContent(
+  app: App,
+  templatePath: string | undefined,
+): Promise<string> {
+  const raw = (templatePath ?? "").trim();
+  if (!raw) return "";
+  const withExt = raw.toLowerCase().endsWith(".md") ? raw : `${raw}.md`;
+  const path = normalizePath(withExt);
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof TFile)) {
+    new Notice(`Day Planner: template not found at ${path}`);
+    return "";
+  }
+  return app.vault.read(file);
 }
 
 function readDailyNotesOptions(app: App): DailyNotesOptions {

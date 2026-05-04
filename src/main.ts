@@ -39,6 +39,11 @@ export default class DayPlannerPlugin extends Plugin {
       ...DEFAULT_SETTINGS,
       ...(data ?? {}),
       prefixes: { ...DEFAULT_PREFIXES, ...(data?.prefixes ?? {}) },
+      projectColors: Array.isArray(data?.projectColors)
+        ? data!.projectColors!.filter(
+            (c) => c && typeof c.project === "string" && typeof c.color === "string",
+          )
+        : [],
     };
   }
 

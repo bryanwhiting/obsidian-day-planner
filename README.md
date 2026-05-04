@@ -2,25 +2,25 @@
 
 An Obsidian sidebar plugin that turns hashtag-annotated tasks into a draggable day-planner timeline. The note is the single source of truth — drag operations only modify hashtags on existing lines, never reorder lines in the file.
 
-Compatible with the Tasks plugin: works on standard markdown checklist lines (`- [ ] ...`), only the new `#d/`, `#h/`, and `#o/` hashtags are added.
+Compatible with the Tasks plugin: works on standard markdown checklist lines (`- [ ] ...`), only the new `#d/`, `#t/`, and `#o/` hashtags are added.
 
 ## Tag grammar
 
 | Tag | Meaning | Examples |
 |---|---|---|
 | `#d/<dur>` | Duration | `#d/90m`, `#d/2h`, `#d/1h30m` |
-| `#h/<time>` | Start time (am/pm) | `#h/10a`, `#h/2p`, `#h/1030a`, `#h/2pm` |
+| `#t/<time>` | Start time (am/pm) | `#t/10a`, `#t/2p`, `#t/1030a`, `#t/2pm` |
 | `#o/<n>` | Sort order in the unscheduled list (managed by the plugin) | `#o/3` |
 
-A task line needs at least `#d/` to appear in the planner. Add `#h/` to schedule it; without `#h/` it shows in the unscheduled list.
+A task line needs at least `#d/` to appear in the planner. Add `#t/` to schedule it; without `#t/` it shows in the unscheduled list.
 
-Decimals (`#d/1.5h`) and colons (`#h/10:30a`) are not supported — use `#d/1h30m` and `#h/1030a`.
+Decimals (`#d/1.5h`) and colons (`#t/10:30a`) are not supported — use `#d/1h30m` and `#t/1030a`.
 
 ## Usage
 
 - The sidebar shows two sections: today's daily note (always) and the currently active note when it differs from today's daily note. Each section has its own scheduled/unscheduled totals.
-- Drag a block in the timeline to a new time slot → rewrites `#h/`.
-- Drag a block out to the unscheduled list → strips `#h/`, appends `#o/<next>`.
+- Drag a block in the timeline to a new time slot → rewrites `#t/`.
+- Drag a block out to the unscheduled list → strips `#t/`, appends `#o/<next>`.
 - Drag a card in the unscheduled list above/below another → renumbers `#o/` for affected cards.
 - Drag the bottom edge of a block up/down to resize → rewrites `#d/`.
 - Click a block or card to open the source line in the editor.
@@ -65,7 +65,7 @@ Reload the plugin in Obsidian after each rebuild ("Reload app without saving" co
 - Visible start hour / end hour (default 6–23)
 - Snap interval (default 15 min)
 - Pixels per minute (default 1)
-- Tag prefixes (`d`, `h`, `o`) — change if they conflict with other tags you use
+- Tag prefixes (`d`, `t`, `o`) — change if they conflict with other tags you use
 - Daily-note format fallback (used if the core Daily Notes plugin isn't enabled)
 
 ## Files
