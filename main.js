@@ -345,6 +345,7 @@ function startOfDay(d) {
 
 // src/view.ts
 var VIEW_TYPE_DAY_PLANNER = "day-planner-view";
+var TRANSPARENT_PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
 var DayPlannerView = class extends import_obsidian2.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -634,17 +635,27 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     });
   }
   showDropIndicator(layer, snappedStartMin, durationMin, rangeStartMin, pxPerMin) {
-    var _a;
+    var _a, _b;
     if (!this.dropIndicator || this.dropIndicator.parentElement !== layer) {
       (_a = this.dropIndicator) == null ? void 0 : _a.detach();
       this.dropIndicator = layer.createDiv({ cls: "dp-drop-indicator" });
     }
     const ind = this.dropIndicator;
+    ind.empty();
     ind.style.top = `${(snappedStartMin - rangeStartMin) * pxPerMin}px`;
     ind.style.height = `${Math.max(18, durationMin * pxPerMin)}px`;
-    ind.textContent = `${this.fmtClock(snappedStartMin)}\u2013${this.fmtClock(
-      snappedStartMin + durationMin
-    )}`;
+    ind.createDiv({
+      cls: "dp-drop-indicator-time",
+      text: `${this.fmtClock(snappedStartMin)}\u2013${this.fmtClock(
+        snappedStartMin + durationMin
+      )}`
+    });
+    if ((_b = this.dragPayload) == null ? void 0 : _b.bodyText) {
+      ind.createDiv({
+        cls: "dp-drop-indicator-text",
+        text: this.dragPayload.bodyText
+      });
+    }
   }
   hideDropIndicator() {
     var _a;
@@ -673,9 +684,11 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
         rawLine: block.task.rawLine,
         source: "timeline",
         grabOffsetY: ev.clientY - rect.top,
-        durationMin: block.task.durationMin
+        durationMin: block.task.durationMin,
+        bodyText: this.cleanBody(block.task.body)
       };
       el.addClass("is-dragging");
+      this.suppressNativeDragImage(ev);
       (_a = ev.dataTransfer) == null ? void 0 : _a.setData("text/plain", block.task.rawLine);
       if (ev.dataTransfer)
         ev.dataTransfer.effectAllowed = "move";
@@ -753,10 +766,21 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
         rawLine: task.rawLine,
         source: "timeline",
         grabOffsetY: 0,
-        durationMin: task.durationMin
+        durationMin: task.durationMin,
+        bodyText: ""
       },
       (line) => setDurationTag(line, newDurationMin, prefixes)
     );
+  }
+  suppressNativeDragImage(ev) {
+    if (!ev.dataTransfer)
+      return;
+    const img = new Image();
+    img.src = TRANSPARENT_PIXEL;
+    try {
+      ev.dataTransfer.setDragImage(img, 0, 0);
+    } catch (e) {
+    }
   }
   renderUnscheduled(parent, file, unscheduled) {
     const list = parent.createDiv({ cls: "dp-unscheduled" });
@@ -785,9 +809,11 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
           rawLine: task.rawLine,
           source: "unscheduled",
           grabOffsetY: ev.clientY - rect.top,
-          durationMin: task.durationMin
+          durationMin: task.durationMin,
+          bodyText: this.cleanBody(task.body)
         };
         card.addClass("is-dragging");
+        this.suppressNativeDragImage(ev);
         (_a = ev.dataTransfer) == null ? void 0 : _a.setData("text/plain", task.rawLine);
         if (ev.dataTransfer)
           ev.dataTransfer.effectAllowed = "move";

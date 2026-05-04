@@ -37,7 +37,11 @@ interface DragPayload {
   source: "timeline" | "unscheduled";
   grabOffsetY: number;
   durationMin: number;
+  bodyText: string;
 }
+
+const TRANSPARENT_PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
 
 export class DayPlannerView extends ItemView {
   plugin: DayPlannerPlugin;
@@ -381,11 +385,21 @@ export class DayPlannerView extends ItemView {
       this.dropIndicator = layer.createDiv({ cls: "dp-drop-indicator" });
     }
     const ind = this.dropIndicator;
+    ind.empty();
     ind.style.top = `${(snappedStartMin - rangeStartMin) * pxPerMin}px`;
     ind.style.height = `${Math.max(18, durationMin * pxPerMin)}px`;
-    ind.textContent = `${this.fmtClock(snappedStartMin)}–${this.fmtClock(
-      snappedStartMin + durationMin,
-    )}`;
+    ind.createDiv({
+      cls: "dp-drop-indicator-time",
+      text: `${this.fmtClock(snappedStartMin)}–${this.fmtClock(
+        snappedStartMin + durationMin,
+      )}`,
+    });
+    if (this.dragPayload?.bodyText) {
+      ind.createDiv({
+        cls: "dp-drop-indicator-text",
+        text: this.dragPayload.bodyText,
+      });
+    }
   }
 
   private hideDropIndicator(): void {
@@ -421,8 +435,10 @@ export class DayPlannerView extends ItemView {
         source: "timeline",
         grabOffsetY: ev.clientY - rect.top,
         durationMin: block.task.durationMin,
+        bodyText: this.cleanBody(block.task.body),
       };
       el.addClass("is-dragging");
+      this.suppressNativeDragImage(ev);
       ev.dataTransfer?.setData("text/plain", block.task.rawLine);
       if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
     });
@@ -515,9 +531,19 @@ export class DayPlannerView extends ItemView {
         source: "timeline",
         grabOffsetY: 0,
         durationMin: task.durationMin,
+        bodyText: "",
       },
       (line) => setDurationTag(line, newDurationMin, prefixes),
     );
+  }
+
+  private suppressNativeDragImage(ev: DragEvent): void {
+    if (!ev.dataTransfer) return;
+    const img = new Image();
+    img.src = TRANSPARENT_PIXEL;
+    try {
+      ev.dataTransfer.setDragImage(img, 0, 0);
+    } catch {}
   }
 
   private renderUnscheduled(
@@ -553,8 +579,10 @@ export class DayPlannerView extends ItemView {
           source: "unscheduled",
           grabOffsetY: ev.clientY - rect.top,
           durationMin: task.durationMin,
+          bodyText: this.cleanBody(task.body),
         };
         card.addClass("is-dragging");
+        this.suppressNativeDragImage(ev);
         ev.dataTransfer?.setData("text/plain", task.rawLine);
         if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
       });

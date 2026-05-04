@@ -259,25 +259,37 @@
 
 .dp-block.is-dragging,
 .dp-card.is-dragging {
-  opacity: 0.35;
+  opacity: 0.2;
+  filter: grayscale(0.5);
 }
 
 .dp-drop-indicator {
   position: absolute;
   left: 0;
   right: 0;
-  background: color-mix(in srgb, var(--interactive-accent) 22%, transparent);
-  border: 2px dashed var(--interactive-accent);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: 2px dashed color-mix(in srgb, var(--text-on-accent) 60%, transparent);
   border-radius: 3px;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-normal);
+  padding: 2px 4px;
+  overflow: hidden;
   z-index: 5;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
   font-variant-numeric: tabular-nums;
+}
+
+.dp-drop-indicator-time {
+  font-weight: 700;
+  font-size: 10px;
+  opacity: 0.95;
+}
+
+.dp-drop-indicator-text {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dp-block-text {
