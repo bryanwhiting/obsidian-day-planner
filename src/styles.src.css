@@ -59,6 +59,17 @@
   .day-planner-root *::selection {
     background: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
+
+  /* Lucide icons inside the plugin: rein in Obsidian's default --icon-size,
+   * which can ship at 18-24px depending on the theme and ride out our local
+   * width/height rules. Force a sane base size and let component selectors
+   * override per-context. */
+  .day-planner-root .svg-icon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    color: currentColor;
+  }
 }
 
 /* ============================================================
@@ -93,10 +104,14 @@
     @apply inline-flex items-center justify-center cursor-pointer transition;
     width: 24px;
     height: 24px;
+    /* reset Obsidian's default button padding so the 15px icon fits the 24px box */
+    padding: 0;
+    box-sizing: border-box;
     background: transparent;
     border: 1px solid transparent;
     border-radius: var(--radius-tab);
     color: var(--color-ink-muted);
+    line-height: 1;
     transition-property: color, background-color, border-color, transform;
     transition-duration: 120ms;
   }
@@ -119,6 +134,7 @@
   .dp-today-btn {
     @apply inline-flex items-center cursor-pointer transition;
     padding: 3px 9px 2px;
+    box-sizing: border-box;
     background: transparent;
     border: 1px solid var(--color-hairline);
     border-radius: var(--radius-pill);
@@ -127,6 +143,7 @@
     font-weight: 600;
     letter-spacing: var(--tracking-eyebrow);
     text-transform: uppercase;
+    line-height: 1.2;
     transition-property: color, background-color, border-color;
     transition-duration: 120ms;
   }
@@ -141,10 +158,13 @@
     @apply inline-flex items-center justify-center cursor-pointer transition;
     width: 24px;
     height: 24px;
+    padding: 0;
+    box-sizing: border-box;
     background: transparent;
     border: 1px solid transparent;
     border-radius: var(--radius-tab);
     color: var(--color-ink-muted);
+    line-height: 1;
     transition-property: color, background-color, border-color;
     transition-duration: 120ms;
   }
