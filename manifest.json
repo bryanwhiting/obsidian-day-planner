@@ -1,0 +1,9 @@
+{
+  "id": "day-planner",
+  "name": "Day Planner",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Sidebar day planner that reads #d/ duration and #h/ start-time tags from task lines and renders a draggable timeline. Drag updates the tags in the source note; line order is never changed.",
+  "author": "bryanwhiting",
+  "isDesktopOnly": false
+}
