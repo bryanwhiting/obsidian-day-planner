@@ -256,7 +256,12 @@ export class DayPlannerView extends ItemView {
   private async readTasks(file: TFile | null): Promise<ParsedTask[]> {
     if (!file) return [];
     const content = await this.app.vault.read(file);
-    return parseFileTasks(file.path, content, this.plugin.settings.prefixes);
+    return parseFileTasks(
+      file.path,
+      content,
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin,
+    );
   }
 
   private renderSection(

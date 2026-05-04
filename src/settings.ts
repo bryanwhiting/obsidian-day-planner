@@ -10,6 +10,7 @@ export interface DayPlannerSettings {
   prefixes: TagPrefixes;
   dailyNoteFormatFallback: string;
   dailyNoteFolderFallback: string;
+  defaultDurationMin: number;
 }
 
 export const DEFAULT_SETTINGS: DayPlannerSettings = {
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS: DayPlannerSettings = {
   prefixes: { ...DEFAULT_PREFIXES },
   dailyNoteFormatFallback: "YYYY-MM-DD",
   dailyNoteFolderFallback: "daily",
+  defaultDurationMin: 15,
 };
 
 export class DayPlannerSettingTab extends PluginSettingTab {
@@ -56,6 +58,25 @@ export class DayPlannerSettingTab extends PluginSettingTab {
           .onChange(async (v) => {
             const n = clampInt(v, 1, 24, this.plugin.settings.visibleEndHour);
             this.plugin.settings.visibleEndHour = n;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Default duration (minutes)")
+      .setDesc(
+        "Used for tasks that have a #h/ start time but no #d/ tag. Drag the bottom edge of the block to commit a real duration.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.defaultDurationMin.toString())
+          .onChange(async (v) => {
+            this.plugin.settings.defaultDurationMin = clampInt(
+              v,
+              1,
+              480,
+              this.plugin.settings.defaultDurationMin,
+            );
             await this.plugin.saveSettings();
           }),
       );

@@ -109,13 +109,15 @@ export function parseTaskLine(
   lineNumber: number,
   rawLine: string,
   prefixes: TagPrefixes,
+  defaultDurationMin: number,
 ): ParsedTask | null {
   const m = TASK_LINE.exec(rawLine);
   if (!m) return null;
   const body = m[3];
-  const durationMin = parseDuration(body, prefixes);
-  if (durationMin === null) return null;
+  const explicitDuration = parseDuration(body, prefixes);
   const startMin = parseTime(body, prefixes);
+  if (explicitDuration === null && startMin === null) return null;
+  const durationMin = explicitDuration ?? defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const checked = m[2] !== " ";
   return {
@@ -134,11 +136,12 @@ export function parseFileTasks(
   filePath: string,
   fileContent: string,
   prefixes: TagPrefixes,
+  defaultDurationMin: number,
 ): ParsedTask[] {
   const lines = fileContent.split("\n");
   const tasks: ParsedTask[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const t = parseTaskLine(filePath, i, lines[i], prefixes);
+    const t = parseTaskLine(filePath, i, lines[i], prefixes, defaultDurationMin);
     if (t) tasks.push(t);
   }
   return tasks;

@@ -104,15 +104,16 @@ function formatTime(totalMin, prefixes) {
   const minPart = min === 0 ? "" : min.toString().padStart(2, "0");
   return `#${prefixes.time}/${h12}${minPart}${ampm}`;
 }
-function parseTaskLine(filePath, lineNumber, rawLine, prefixes) {
+function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationMin) {
   const m = TASK_LINE.exec(rawLine);
   if (!m)
     return null;
   const body = m[3];
-  const durationMin = parseDuration(body, prefixes);
-  if (durationMin === null)
-    return null;
+  const explicitDuration = parseDuration(body, prefixes);
   const startMin = parseTime(body, prefixes);
+  if (explicitDuration === null && startMin === null)
+    return null;
+  const durationMin = explicitDuration != null ? explicitDuration : defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const checked = m[2] !== " ";
   return {
@@ -126,11 +127,11 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes) {
     checked
   };
 }
-function parseFileTasks(filePath, fileContent, prefixes) {
+function parseFileTasks(filePath, fileContent, prefixes, defaultDurationMin) {
   const lines = fileContent.split("\n");
   const tasks = [];
   for (let i = 0; i < lines.length; i++) {
-    const t = parseTaskLine(filePath, i, lines[i], prefixes);
+    const t = parseTaskLine(filePath, i, lines[i], prefixes, defaultDurationMin);
     if (t)
       tasks.push(t);
   }
@@ -534,7 +535,12 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
     if (!file)
       return [];
     const content = await this.app.vault.read(file);
-    return parseFileTasks(file.path, content, this.plugin.settings.prefixes);
+    return parseFileTasks(
+      file.path,
+      content,
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin
+    );
   }
   renderSection(parent, title, subtitle, file, path, tasks, isPrimary) {
     const section = parent.createDiv({ cls: "dp-section" });
@@ -971,7 +977,8 @@ var DEFAULT_SETTINGS = {
   pxPerMin: 1,
   prefixes: { ...DEFAULT_PREFIXES },
   dailyNoteFormatFallback: "YYYY-MM-DD",
-  dailyNoteFolderFallback: "daily"
+  dailyNoteFolderFallback: "daily",
+  defaultDurationMin: 15
 };
 var DayPlannerSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
@@ -992,6 +999,19 @@ var DayPlannerSettingTab = class extends import_obsidian3.PluginSettingTab {
       (t) => t.setValue(this.plugin.settings.visibleEndHour.toString()).onChange(async (v) => {
         const n = clampInt(v, 1, 24, this.plugin.settings.visibleEndHour);
         this.plugin.settings.visibleEndHour = n;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("Default duration (minutes)").setDesc(
+      "Used for tasks that have a #h/ start time but no #d/ tag. Drag the bottom edge of the block to commit a real duration."
+    ).addText(
+      (t) => t.setValue(this.plugin.settings.defaultDurationMin.toString()).onChange(async (v) => {
+        this.plugin.settings.defaultDurationMin = clampInt(
+          v,
+          1,
+          480,
+          this.plugin.settings.defaultDurationMin
+        );
         await this.plugin.saveSettings();
       })
     );
