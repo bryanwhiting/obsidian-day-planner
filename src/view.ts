@@ -7,7 +7,7 @@ import {
   App,
   setIcon,
 } from "obsidian";
-import type DailyNotesPlannerPlugin from "./main";
+import type TodayPlugin from "./main";
 import {
   ParsedTask,
   parseFileTasks,
@@ -40,7 +40,7 @@ import {
   startOfDay,
 } from "./dailyNote";
 
-export const VIEW_TYPE_DAILY_NOTES_PLANNER = "daily-notes-planner-view";
+export const VIEW_TYPE_TODAY = "today-view";
 
 interface DragPayload {
   filePath: string;
@@ -55,8 +55,8 @@ interface DragPayload {
 const TRANSPARENT_PIXEL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
 
-export class DailyNotesPlannerView extends ItemView {
-  plugin: DailyNotesPlannerPlugin;
+export class TodayView extends ItemView {
+  plugin: TodayPlugin;
   private rerenderTimer: number | null = null;
   private dragPayload: DragPayload | null = null;
   private dropIndicator: HTMLElement | null = null;
@@ -65,17 +65,17 @@ export class DailyNotesPlannerView extends ItemView {
   private calendarOpen: boolean = false;
   private overrideFilePath: string | null = null;
 
-  constructor(leaf: WorkspaceLeaf, plugin: DailyNotesPlannerPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: TodayPlugin) {
     super(leaf);
     this.plugin = plugin;
   }
 
   getViewType(): string {
-    return VIEW_TYPE_DAILY_NOTES_PLANNER;
+    return VIEW_TYPE_TODAY;
   }
 
   getDisplayText(): string {
-    return "Daily Notes Planner";
+    return "Today";
   }
 
   getIcon(): string {
@@ -140,7 +140,7 @@ export class DailyNotesPlannerView extends ItemView {
       root.querySelectorAll<HTMLElement>(".dp-timeline-wrap"),
     ).map((el) => el.scrollTop);
     root.empty();
-    root.addClass("daily-notes-planner-root");
+    root.addClass("today-root");
     // Make the pane focusable so left/right arrow keys can be captured.
     // tabindex=-1 keeps it out of normal Tab order but accepts focus on click.
     if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
@@ -269,7 +269,7 @@ export class DailyNotesPlannerView extends ItemView {
       try {
         await ensureDailyNote(this.app, target, fallback);
       } catch (e) {
-        new Notice(`Daily Notes Planner: failed to create note (${(e as Error).message})`);
+        new Notice(`Today: failed to create note (${(e as Error).message})`);
       }
     }
     this.scheduleRender();
@@ -692,7 +692,7 @@ export class DailyNotesPlannerView extends ItemView {
     // Single-click handler: runs after pointerup when the pointer barely moved.
     // Using `click` (rather than committing in pointerup) sidesteps Obsidian's
     // sidebar-leaf activation, which can swallow the first pointerdown when the
-    // daily-notes-planner pane isn't yet the active leaf.
+    // today pane isn't yet the active leaf.
     gutter.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (suppressNextClick) {
@@ -1084,7 +1084,7 @@ export class DailyNotesPlannerView extends ItemView {
   ): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(payload.filePath);
     if (!(file instanceof TFile)) {
-      new Notice("Daily Notes Planner: source file no longer exists.");
+      new Notice("Today: source file no longer exists.");
       this.scheduleRender();
       return;
     }
@@ -1092,7 +1092,7 @@ export class DailyNotesPlannerView extends ItemView {
     const lines = content.split("\n");
     const idx = payload.lineNumber;
     if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
-      new Notice("Daily Notes Planner: file changed since last render — refreshing.");
+      new Notice("Today: file changed since last render — refreshing.");
       this.scheduleRender();
       return;
     }

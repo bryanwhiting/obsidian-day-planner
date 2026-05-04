@@ -19,7 +19,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/main.ts
 var main_exports = {};
 __export(main_exports, {
-  default: () => DailyNotesPlannerPlugin
+  default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian4 = require("obsidian");
@@ -434,7 +434,7 @@ async function readTemplateContent(app, templatePath) {
   const path = (0, import_obsidian.normalizePath)(withExt);
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof import_obsidian.TFile)) {
-    new import_obsidian.Notice(`Daily Notes Planner: template not found at ${path}`);
+    new import_obsidian.Notice(`Today: template not found at ${path}`);
     return "";
   }
   return app.vault.read(file);
@@ -485,9 +485,9 @@ function startOfDay(d) {
 }
 
 // src/view.ts
-var VIEW_TYPE_DAILY_NOTES_PLANNER = "daily-notes-planner-view";
+var VIEW_TYPE_TODAY = "today-view";
 var TRANSPARENT_PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
-var DailyNotesPlannerView = class extends import_obsidian2.ItemView {
+var TodayView = class extends import_obsidian2.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -500,10 +500,10 @@ var DailyNotesPlannerView = class extends import_obsidian2.ItemView {
     this.plugin = plugin;
   }
   getViewType() {
-    return VIEW_TYPE_DAILY_NOTES_PLANNER;
+    return VIEW_TYPE_TODAY;
   }
   getDisplayText() {
-    return "Daily Notes Planner";
+    return "Today";
   }
   getIcon() {
     return "calendar-clock";
@@ -563,7 +563,7 @@ var DailyNotesPlannerView = class extends import_obsidian2.ItemView {
       root.querySelectorAll(".dp-timeline-wrap")
     ).map((el) => el.scrollTop);
     root.empty();
-    root.addClass("daily-notes-planner-root");
+    root.addClass("today-root");
     if (!root.hasAttribute("tabindex"))
       root.setAttribute("tabindex", "-1");
     const fallback = {
@@ -673,7 +673,7 @@ var DailyNotesPlannerView = class extends import_obsidian2.ItemView {
       try {
         await ensureDailyNote(this.app, target, fallback);
       } catch (e) {
-        new import_obsidian2.Notice(`Daily Notes Planner: failed to create note (${e.message})`);
+        new import_obsidian2.Notice(`Today: failed to create note (${e.message})`);
       }
     }
     this.scheduleRender();
@@ -1377,7 +1377,7 @@ var DailyNotesPlannerView = class extends import_obsidian2.ItemView {
   async editLine(payload, transform) {
     const file = this.app.vault.getAbstractFileByPath(payload.filePath);
     if (!(file instanceof import_obsidian2.TFile)) {
-      new import_obsidian2.Notice("Daily Notes Planner: source file no longer exists.");
+      new import_obsidian2.Notice("Today: source file no longer exists.");
       this.scheduleRender();
       return;
     }
@@ -1385,7 +1385,7 @@ var DailyNotesPlannerView = class extends import_obsidian2.ItemView {
     const lines = content.split("\n");
     const idx = payload.lineNumber;
     if (idx < 0 || idx >= lines.length || lines[idx] !== payload.rawLine) {
-      new import_obsidian2.Notice("Daily Notes Planner: file changed since last render \u2014 refreshing.");
+      new import_obsidian2.Notice("Today: file changed since last render \u2014 refreshing.");
       this.scheduleRender();
       return;
     }
@@ -1575,7 +1575,7 @@ var DEFAULT_SETTINGS = {
   defaultDurationMin: 15,
   projectColors: []
 };
-var DailyNotesPlannerSettingTab = class extends import_obsidian3.PluginSettingTab {
+var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1964,19 +1964,19 @@ var FileSuggest = class extends import_obsidian3.AbstractInputSuggest {
 };
 
 // src/main.ts
-var DailyNotesPlannerPlugin = class extends import_obsidian4.Plugin {
+var TodayPlugin = class extends import_obsidian4.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(
-      VIEW_TYPE_DAILY_NOTES_PLANNER,
-      (leaf) => new DailyNotesPlannerView(leaf, this)
+      VIEW_TYPE_TODAY,
+      (leaf) => new TodayView(leaf, this)
     );
-    this.addRibbonIcon("calendar-clock", "Open Daily Notes Planner", () => {
+    this.addRibbonIcon("calendar-clock", "Open Today", () => {
       void this.activateView();
     });
     this.addCommand({
-      id: "open-daily-notes-planner",
-      name: "Open Daily Notes Planner",
+      id: "open-today",
+      name: "Open Today",
       callback: () => void this.activateView()
     });
     this.addCommand({
@@ -1984,7 +1984,7 @@ var DailyNotesPlannerPlugin = class extends import_obsidian4.Plugin {
       name: "Open Calendar",
       callback: () => void this.activateView({ openCalendar: true })
     });
-    this.addSettingTab(new DailyNotesPlannerSettingTab(this.app, this));
+    this.addSettingTab(new TodaySettingTab(this.app, this));
   }
   async onunload() {
   }
@@ -2003,14 +2003,14 @@ var DailyNotesPlannerPlugin = class extends import_obsidian4.Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     for (const leaf of this.app.workspace.getLeavesOfType(
-      VIEW_TYPE_DAILY_NOTES_PLANNER
+      VIEW_TYPE_TODAY
     )) {
       const view = leaf.view;
       view.scheduleRender();
     }
   }
   async activateView(opts = {}) {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DAILY_NOTES_PLANNER);
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY);
     let leaf;
     if (existing.length > 0) {
       leaf = existing[0];
@@ -2020,12 +2020,12 @@ var DailyNotesPlannerPlugin = class extends import_obsidian4.Plugin {
       if (!leaf)
         return;
       await leaf.setViewState({
-        type: VIEW_TYPE_DAILY_NOTES_PLANNER,
+        type: VIEW_TYPE_TODAY,
         active: true
       });
       this.app.workspace.revealLeaf(leaf);
     }
-    if (opts.openCalendar && leaf.view instanceof DailyNotesPlannerView) {
+    if (opts.openCalendar && leaf.view instanceof TodayView) {
       leaf.view.openCalendar();
     }
   }

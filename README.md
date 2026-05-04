@@ -1,4 +1,4 @@
-# Daily Notes Planner
+# Today
 
 An Obsidian sidebar plugin that turns hashtag-annotated tasks in your daily notes into a draggable timeline. The note is the single source of truth — drag operations only modify hashtags on existing lines, never reorder lines in the file.
 
@@ -33,17 +33,17 @@ Clone the repo into your vault's plugins folder:
 
 ```bash
 cd /path/to/your-vault/.obsidian/plugins
-git clone https://github.com/bryanwhiting/obsidian-daily-notes-planner daily-notes-planner
+git clone https://github.com/bryanwhiting/obsidian-today today
 ```
 
-Then in Obsidian: **Settings → Community plugins**, turn off Restricted Mode if needed, click the reload button next to "Installed plugins", and enable **Daily Notes Planner**.
+Then in Obsidian: **Settings → Community plugins**, turn off Restricted Mode if needed, click the reload button next to "Installed plugins", and enable **Today**.
 
 The committed `main.js` is the prebuilt bundle, so no build step is needed for installation.
 
 ## Updating
 
 ```bash
-cd /path/to/your-vault/.obsidian/plugins/daily-notes-planner
+cd /path/to/your-vault/.obsidian/plugins/today
 git pull
 ```
 

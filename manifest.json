@@ -1,9 +1,9 @@
 {
-  "id": "daily-notes-planner",
-  "name": "Daily Notes Planner",
+  "id": "today",
+  "name": "Today",
   "version": "0.1.0",
   "minAppVersion": "1.4.0",
-  "description": "Sidebar daily-notes planner that reads #d/ duration and #h/ start-time tags from task lines and renders a draggable timeline. Drag updates the tags in the source note; line order is never changed.",
+  "description": "Sidebar daily-note planner that reads #d/ duration and #t/ start-time tags from task lines and renders a draggable timeline. Drag updates the tags in the source note; line order is never changed.",
   "author": "bryanwhiting",
   "isDesktopOnly": false
 }
