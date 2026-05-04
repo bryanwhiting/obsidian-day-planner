@@ -394,6 +394,10 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
   }
   async render() {
     const root = this.containerEl.children[1];
+    const prevRootScroll = root.scrollTop;
+    const prevTimelineScrolls = Array.from(
+      root.querySelectorAll(".dp-timeline-wrap")
+    ).map((el) => el.scrollTop);
     root.empty();
     root.addClass("day-planner-root");
     const fallback = {
@@ -431,6 +435,13 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       );
     }
     this.renderCalendar(root);
+    root.scrollTop = prevRootScroll;
+    const newTimelines = root.querySelectorAll(".dp-timeline-wrap");
+    newTimelines.forEach((el, i) => {
+      const prev = prevTimelineScrolls[i];
+      if (prev !== void 0)
+        el.scrollTop = prev;
+    });
   }
   renderDateNav(parent) {
     const nav = parent.createDiv({ cls: "dp-datenav" });

@@ -97,6 +97,10 @@ export class DayPlannerView extends ItemView {
 
   async render(): Promise<void> {
     const root = this.containerEl.children[1] as HTMLElement;
+    const prevRootScroll = root.scrollTop;
+    const prevTimelineScrolls = Array.from(
+      root.querySelectorAll<HTMLElement>(".dp-timeline-wrap"),
+    ).map((el) => el.scrollTop);
     root.empty();
     root.addClass("day-planner-root");
 
@@ -143,6 +147,13 @@ export class DayPlannerView extends ItemView {
     }
 
     this.renderCalendar(root);
+
+    root.scrollTop = prevRootScroll;
+    const newTimelines = root.querySelectorAll<HTMLElement>(".dp-timeline-wrap");
+    newTimelines.forEach((el, i) => {
+      const prev = prevTimelineScrolls[i];
+      if (prev !== undefined) el.scrollTop = prev;
+    });
   }
 
   private renderDateNav(parent: HTMLElement): void {
