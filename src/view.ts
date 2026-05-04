@@ -35,12 +35,15 @@ interface DragPayload {
   lineNumber: number;
   rawLine: string;
   source: "timeline" | "unscheduled";
+  grabOffsetY: number;
+  durationMin: number;
 }
 
 export class DayPlannerView extends ItemView {
   plugin: DayPlannerPlugin;
   private rerenderTimer: number | null = null;
   private dragPayload: DragPayload | null = null;
+  private dropIndicator: HTMLElement | null = null;
   private selectedDate: Date = startOfDay(new Date());
   private calendarMonth: Date = startOfMonth(new Date());
 
@@ -328,21 +331,66 @@ export class DayPlannerView extends ItemView {
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
     for (const block of layout) this.renderBlock(blocksLayer, file, block);
 
+    const computeSnap = (clientY: number): number | null => {
+      if (!this.dragPayload) return null;
+      const rect = timeline.getBoundingClientRect();
+      const yPx =
+        clientY - rect.top + timeline.scrollTop - this.dragPayload.grabOffsetY;
+      const rawMin = yPx / settings.pxPerMin + startMin;
+      const snapped = snapToInterval(rawMin, settings.snapMin);
+      const maxStart = endMin - this.dragPayload.durationMin;
+      return Math.max(startMin, Math.min(maxStart, snapped));
+    };
+
     timeline.addEventListener("dragover", (ev) => {
       if (!this.dragPayload) return;
       ev.preventDefault();
+      const snapped = computeSnap(ev.clientY);
+      if (snapped === null) return;
+      this.showDropIndicator(
+        blocksLayer,
+        snapped,
+        this.dragPayload.durationMin,
+        startMin,
+        settings.pxPerMin,
+      );
     });
     timeline.addEventListener("drop", (ev) => {
       if (!this.dragPayload) return;
       ev.preventDefault();
-      const rect = timeline.getBoundingClientRect();
-      const yPx = ev.clientY - rect.top + timeline.scrollTop;
-      const rawMin = yPx / settings.pxPerMin + startMin;
-      const snapped = snapToInterval(rawMin, settings.snapMin);
-      const clamped = Math.max(startMin, Math.min(endMin - 15, snapped));
-      void this.handleDropOnTimeline(this.dragPayload, clamped);
+      const snapped = computeSnap(ev.clientY);
+      if (snapped !== null) void this.handleDropOnTimeline(this.dragPayload, snapped);
       this.dragPayload = null;
+      this.hideDropIndicator();
     });
+    timeline.addEventListener("dragleave", (ev) => {
+      const related = ev.relatedTarget as Node | null;
+      if (!related || !timeline.contains(related)) this.hideDropIndicator();
+    });
+  }
+
+  private showDropIndicator(
+    layer: HTMLElement,
+    snappedStartMin: number,
+    durationMin: number,
+    rangeStartMin: number,
+    pxPerMin: number,
+  ): void {
+    if (!this.dropIndicator || this.dropIndicator.parentElement !== layer) {
+      this.dropIndicator?.detach();
+      this.dropIndicator = layer.createDiv({ cls: "dp-drop-indicator" });
+    }
+    const ind = this.dropIndicator;
+    ind.style.top = `${(snappedStartMin - rangeStartMin) * pxPerMin}px`;
+    ind.style.height = `${Math.max(18, durationMin * pxPerMin)}px`;
+    ind.textContent = `${this.fmtClock(snappedStartMin)}–${this.fmtClock(
+      snappedStartMin + durationMin,
+    )}`;
+  }
+
+  private hideDropIndicator(): void {
+    this.dropIndicator?.detach();
+    this.dropIndicator = null;
   }
 
   private renderBlock(
@@ -365,14 +413,23 @@ export class DayPlannerView extends ItemView {
     text.textContent = this.cleanBody(block.task.body);
 
     el.addEventListener("dragstart", (ev) => {
+      const rect = el.getBoundingClientRect();
       this.dragPayload = {
         filePath: file.path,
         lineNumber: block.task.lineNumber,
         rawLine: block.task.rawLine,
         source: "timeline",
+        grabOffsetY: ev.clientY - rect.top,
+        durationMin: block.task.durationMin,
       };
+      el.addClass("is-dragging");
       ev.dataTransfer?.setData("text/plain", block.task.rawLine);
       if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
+    });
+    el.addEventListener("dragend", () => {
+      el.removeClass("is-dragging");
+      this.dragPayload = null;
+      this.hideDropIndicator();
     });
     el.addEventListener("click", () => this.openLine(file, block.task.lineNumber));
 
@@ -456,6 +513,8 @@ export class DayPlannerView extends ItemView {
         lineNumber: task.lineNumber,
         rawLine: task.rawLine,
         source: "timeline",
+        grabOffsetY: 0,
+        durationMin: task.durationMin,
       },
       (line) => setDurationTag(line, newDurationMin, prefixes),
     );
@@ -486,14 +545,23 @@ export class DayPlannerView extends ItemView {
       text.textContent = this.cleanBody(task.body);
 
       card.addEventListener("dragstart", (ev) => {
+        const rect = card.getBoundingClientRect();
         this.dragPayload = {
           filePath: file.path,
           lineNumber: task.lineNumber,
           rawLine: task.rawLine,
           source: "unscheduled",
+          grabOffsetY: ev.clientY - rect.top,
+          durationMin: task.durationMin,
         };
+        card.addClass("is-dragging");
         ev.dataTransfer?.setData("text/plain", task.rawLine);
         if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
+      });
+      card.addEventListener("dragend", () => {
+        card.removeClass("is-dragging");
+        this.dragPayload = null;
+        this.hideDropIndicator();
       });
       card.addEventListener("dragover", (ev) => {
         if (this.dragPayload?.source === "unscheduled") ev.preventDefault();
