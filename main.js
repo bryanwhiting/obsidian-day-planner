@@ -713,6 +713,8 @@ var DayPlannerView = class extends import_obsidian2.ItemView {
       el.addClass("is-done");
     if (!block.task.hasExplicitDuration)
       el.addClass("is-implicit-duration");
+    if (block.task.durationMin < 25)
+      el.addClass("is-compact");
     el.draggable = true;
     const row = el.createDiv({ cls: "dp-block-row" });
     if (!block.task.hasExplicitDuration) {

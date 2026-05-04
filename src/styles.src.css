@@ -456,6 +456,21 @@
       inset 2px 0 0 0 color-mix(in srgb, var(--color-on-accent) 25%, transparent);
   }
 
+  /* Short blocks (≤ ~20m) don't have vertical room for normal top-anchored
+   * padding + line-height. Drop the vertical padding and center the single
+   * content row so "8p–8:15p · Title" sits in the visual middle. */
+  .dp-block.is-compact {
+    display: flex;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .dp-block.is-compact .dp-block-row {
+    align-items: center;
+    line-height: 1.15;
+  }
+
   .dp-block-row {
     @apply flex items-baseline;
     gap: 6px;

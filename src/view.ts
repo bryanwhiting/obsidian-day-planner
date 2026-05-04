@@ -463,6 +463,7 @@ export class DayPlannerView extends ItemView {
     el.style.width = `${block.widthPct}%`;
     if (block.task.checked) el.addClass("is-done");
     if (!block.task.hasExplicitDuration) el.addClass("is-implicit-duration");
+    if (block.task.durationMin < 25) el.addClass("is-compact");
     el.draggable = true;
 
     const row = el.createDiv({ cls: "dp-block-row" });
