@@ -1589,8 +1589,8 @@ var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    this.renderProjectsSection(containerEl);
     this.renderDefaultsSection(containerEl);
+    this.renderProjectsSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
