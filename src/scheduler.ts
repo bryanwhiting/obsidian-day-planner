@@ -33,12 +33,33 @@ export function partition(
 }
 
 export function computeTotals(tasks: ParsedTask[]): Totals {
-  let scheduledMin = 0;
+  // Scheduled total measures the union of occupied time, not the sum of
+  // durations — two overlapping 1h tasks count as 1h on the calendar, not 2h.
+  const intervals: Array<[number, number]> = [];
   let unscheduledMin = 0;
   for (const t of tasks) {
-    if (t.startMin !== null) scheduledMin += t.durationMin;
-    else unscheduledMin += t.durationMin;
+    if (t.startMin !== null) {
+      intervals.push([t.startMin, t.startMin + t.durationMin]);
+    } else {
+      unscheduledMin += t.durationMin;
+    }
   }
+  intervals.sort((a, b) => a[0] - b[0]);
+
+  let scheduledMin = 0;
+  let curStart = -1;
+  let curEnd = -1;
+  for (const [s, e] of intervals) {
+    if (curEnd === -1 || s > curEnd) {
+      if (curEnd !== -1) scheduledMin += curEnd - curStart;
+      curStart = s;
+      curEnd = e;
+    } else if (e > curEnd) {
+      curEnd = e;
+    }
+  }
+  if (curEnd !== -1) scheduledMin += curEnd - curStart;
+
   return { scheduledMin, unscheduledMin };
 }
 
