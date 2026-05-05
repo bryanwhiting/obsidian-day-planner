@@ -831,6 +831,14 @@ export class TodayView extends ItemView {
       try {
         handle.releasePointerCapture(e.pointerId);
       } catch {}
+      // Swallow the click the browser fires after pointerup so it doesn't
+      // bubble to the block and open the editor modal.
+      const suppressClick = (ev: MouseEvent) => ev.stopPropagation();
+      blockEl.addEventListener("click", suppressClick, { capture: true });
+      window.setTimeout(
+        () => blockEl.removeEventListener("click", suppressClick, true),
+        0,
+      );
       const finalDuration = pendingDuration;
       if (finalDuration === block.task.durationMin) {
         blockEl.draggable = true;

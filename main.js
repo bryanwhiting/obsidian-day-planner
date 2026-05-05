@@ -2131,6 +2131,12 @@ var TodayView = class extends import_obsidian4.ItemView {
         handle.releasePointerCapture(e.pointerId);
       } catch (e2) {
       }
+      const suppressClick = (ev2) => ev2.stopPropagation();
+      blockEl.addEventListener("click", suppressClick, { capture: true });
+      window.setTimeout(
+        () => blockEl.removeEventListener("click", suppressClick, true),
+        0
+      );
       const finalDuration = pendingDuration;
       if (finalDuration === block.task.durationMin) {
         blockEl.draggable = true;
