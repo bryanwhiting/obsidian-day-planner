@@ -2630,7 +2630,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (totals.size === 0 && unassignedMin === 0)
       return;
     const sorted = [...totals.entries()].sort(
-      (a, b) => a[0].localeCompare(b[0])
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
     );
     const table = parent.createDiv({ cls: "dp-stat-table" });
     table.createSpan({ cls: "dp-st-h", text: "Project" });

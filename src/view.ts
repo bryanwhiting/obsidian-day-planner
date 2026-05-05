@@ -1251,8 +1251,8 @@ export class TodayView extends ItemView {
       }
     }
     if (totals.size === 0 && unassignedMin === 0) return;
-    const sorted = [...totals.entries()].sort((a, b) =>
-      a[0].localeCompare(b[0]),
+    const sorted = [...totals.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
     );
 
     const table = parent.createDiv({ cls: "dp-stat-table" });
