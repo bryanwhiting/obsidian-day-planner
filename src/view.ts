@@ -60,6 +60,11 @@ interface DragPayload {
 const TRANSPARENT_PIXEL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
 
+function nowMinutes(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+
 const QUICK_DURATIONS: { label: string; min: number }[] = [
   { label: "15m", min: 15 },
   { label: "30m", min: 30 },
@@ -81,6 +86,7 @@ export class TodayView extends ItemView {
   private summariesCollapsed: boolean = false;
   private unscheduledCollapsed: boolean = Platform.isMobile;
   private overrideFilePath: string | null = null;
+  private hasRendered: boolean = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: TodayPlugin) {
     super(leaf);
@@ -113,6 +119,9 @@ export class TodayView extends ItemView {
     );
     this.registerDomEvent(this.containerEl, "keydown", (ev) =>
       this.handleKeydown(ev),
+    );
+    this.registerInterval(
+      window.setInterval(() => this.refreshNowLines(), 60000),
     );
     await this.render();
   }
@@ -222,6 +231,7 @@ export class TodayView extends ItemView {
       const prev = prevTimelineScrolls[i];
       if (prev !== undefined) el.scrollTop = prev;
     });
+    this.hasRendered = true;
   }
 
   private renderDateNav(parent: HTMLElement): void {
@@ -557,6 +567,30 @@ export class TodayView extends ItemView {
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
     for (const block of layout)
       this.renderBlock(blocksLayer, file, block, colorMap);
+
+    // Now-line: only when viewing today and the current time falls inside the
+    // visible window. Stored on the wrap so refreshNowLines() can update it
+    // every minute without a full re-render.
+    if (sameDay(this.selectedDate, new Date())) {
+      const nowLine = timeline.createDiv({ cls: "dp-now-line" });
+      nowLine.dataset.startMin = String(startMin);
+      nowLine.dataset.endMin = String(endMin);
+      nowLine.dataset.pxPerMin = String(settings.pxPerMin);
+      this.positionNowLine(nowLine);
+      // First render: scroll the wrap so the now-line sits ~30% from the top.
+      // The caller restores prevTimelineScrolls AFTER this method returns,
+      // so we register a one-shot to override that.
+      if (!this.hasRendered) {
+        const visibleNowMin = nowMinutes();
+        if (visibleNowMin >= startMin && visibleNowMin <= endMin) {
+          const topPx = (visibleNowMin - startMin) * settings.pxPerMin;
+          window.requestAnimationFrame(() => {
+            const offset = wrap.clientHeight * 0.3;
+            wrap.scrollTop = Math.max(0, topPx - offset);
+          });
+        }
+      }
+    }
 
     const computeSnap = (clientY: number): number | null => {
       if (!this.dragPayload) return null;
@@ -1169,6 +1203,24 @@ export class TodayView extends ItemView {
     const start = task.startMin;
     const end = start + task.durationMin;
     return `${this.fmtClock(start)}–${this.fmtClock(end)}`;
+  }
+
+  private positionNowLine(el: HTMLElement): void {
+    const startMin = Number(el.dataset.startMin);
+    const endMin = Number(el.dataset.endMin);
+    const pxPerMin = Number(el.dataset.pxPerMin);
+    const now = nowMinutes();
+    if (now < startMin || now > endMin) {
+      el.style.display = "none";
+      return;
+    }
+    el.style.display = "";
+    el.style.top = `${(now - startMin) * pxPerMin}px`;
+  }
+
+  private refreshNowLines(): void {
+    const lines = this.containerEl.querySelectorAll<HTMLElement>(".dp-now-line");
+    lines.forEach((el) => this.positionNowLine(el));
   }
 
   private fmtClock(totalMin: number): string {

@@ -1456,6 +1456,10 @@ function startOfDay(d) {
 // src/view.ts
 var VIEW_TYPE_TODAY = "today-view";
 var TRANSPARENT_PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
+function nowMinutes() {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
 var QUICK_DURATIONS = [
   { label: "15m", min: 15 },
   { label: "30m", min: 30 },
@@ -1477,6 +1481,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.summariesCollapsed = false;
     this.unscheduledCollapsed = import_obsidian4.Platform.isMobile;
     this.overrideFilePath = null;
+    this.hasRendered = false;
     this.plugin = plugin;
   }
   getViewType() {
@@ -1505,6 +1510,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       this.containerEl,
       "keydown",
       (ev) => this.handleKeydown(ev)
+    );
+    this.registerInterval(
+      window.setInterval(() => this.refreshNowLines(), 6e4)
     );
     await this.render();
   }
@@ -1594,6 +1602,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (prev !== void 0)
         el.scrollTop = prev;
     });
+    this.hasRendered = true;
   }
   renderDateNav(parent) {
     const nav = parent.createDiv({ cls: "dp-datenav" });
@@ -1887,6 +1896,23 @@ var TodayView = class extends import_obsidian4.ItemView {
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
     for (const block of layout)
       this.renderBlock(blocksLayer, file, block, colorMap);
+    if (sameDay(this.selectedDate, new Date())) {
+      const nowLine = timeline.createDiv({ cls: "dp-now-line" });
+      nowLine.dataset.startMin = String(startMin);
+      nowLine.dataset.endMin = String(endMin);
+      nowLine.dataset.pxPerMin = String(settings.pxPerMin);
+      this.positionNowLine(nowLine);
+      if (!this.hasRendered) {
+        const visibleNowMin = nowMinutes();
+        if (visibleNowMin >= startMin && visibleNowMin <= endMin) {
+          const topPx = (visibleNowMin - startMin) * settings.pxPerMin;
+          window.requestAnimationFrame(() => {
+            const offset = wrap.clientHeight * 0.3;
+            wrap.scrollTop = Math.max(0, topPx - offset);
+          });
+        }
+      }
+    }
     const computeSnap = (clientY) => {
       if (!this.dragPayload)
         return null;
@@ -2431,6 +2457,22 @@ var TodayView = class extends import_obsidian4.ItemView {
     const start = task.startMin;
     const end = start + task.durationMin;
     return `${this.fmtClock(start)}\u2013${this.fmtClock(end)}`;
+  }
+  positionNowLine(el) {
+    const startMin = Number(el.dataset.startMin);
+    const endMin = Number(el.dataset.endMin);
+    const pxPerMin = Number(el.dataset.pxPerMin);
+    const now = nowMinutes();
+    if (now < startMin || now > endMin) {
+      el.style.display = "none";
+      return;
+    }
+    el.style.display = "";
+    el.style.top = `${(now - startMin) * pxPerMin}px`;
+  }
+  refreshNowLines() {
+    const lines = this.containerEl.querySelectorAll(".dp-now-line");
+    lines.forEach((el) => this.positionNowLine(el));
   }
   fmtClock(totalMin) {
     const h24 = Math.floor(totalMin / 60) % 24;
