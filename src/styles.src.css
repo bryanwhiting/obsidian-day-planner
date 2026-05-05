@@ -452,6 +452,10 @@
     color: var(--color-ink-faint);
     padding-bottom: 3px;
     border-bottom: 1px solid var(--color-hairline);
+    /* Allow "\n" in the rendered text to break onto a second line so headers
+     * like "Workday\n(8a-5p)" stack the parens beneath the label. */
+    white-space: pre-line;
+    line-height: 1.35;
   }
 
   .dp-st-h-right {

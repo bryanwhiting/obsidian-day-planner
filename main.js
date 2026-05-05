@@ -2575,10 +2575,17 @@ var TodayView = class extends import_obsidian4.ItemView {
       (settings.workEndHour - settings.workStartHour) * 60
     );
     const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
-    const headerLabel = `Workday (${workRange}; ${formatTotal(workdayMin)})`;
     const table = parent.createDiv({ cls: "dp-stat-table" });
-    table.createSpan({ cls: "dp-st-h", text: headerLabel });
-    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
+    table.createSpan({
+      cls: "dp-st-h",
+      text: `Workday
+(${workRange})`
+    });
+    table.createSpan({
+      cls: "dp-st-h dp-st-h-right",
+      text: `Planned
+(${formatTotal(total)})`
+    });
     this.renderStatRow(table, "Scheduled", totals.scheduledMin);
     this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
     this.renderStatRow(table, "Total", total, true);

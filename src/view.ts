@@ -1182,11 +1182,16 @@ export class TodayView extends ItemView {
       (settings.workEndHour - settings.workStartHour) * 60,
     );
     const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
-    const headerLabel = `Workday (${workRange}; ${formatTotal(workdayMin)})`;
 
     const table = parent.createDiv({ cls: "dp-stat-table" });
-    table.createSpan({ cls: "dp-st-h", text: headerLabel });
-    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
+    table.createSpan({
+      cls: "dp-st-h",
+      text: `Workday\n(${workRange})`,
+    });
+    table.createSpan({
+      cls: "dp-st-h dp-st-h-right",
+      text: `Planned\n(${formatTotal(total)})`,
+    });
     this.renderStatRow(table, "Scheduled", totals.scheduledMin);
     this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
     this.renderStatRow(table, "Total", total, true);
