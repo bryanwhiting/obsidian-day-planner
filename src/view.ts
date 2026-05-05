@@ -754,20 +754,26 @@ export class TodayView extends ItemView {
       row.createSpan({ cls: "dp-block-project", text: block.task.project });
       row.createSpan({ cls: "dp-block-sep", text: "·" });
     }
-    row.createSpan({
+    const titleText = row.createSpan({
       cls: "dp-block-text",
       text: this.cleanBody(block.task.body),
     });
-    // Click the header row (time + project + title) to toggle the parent
-    // task, mirroring the subtask click behavior. We don't stop pointerdown
-    // here so the block's native drag still initiates from this region.
-    row.addEventListener("click", (ev) => {
+    // Only the title text toggles the parent task. Clicks elsewhere in the
+    // header row (time, project, empty space) fall through to the block's
+    // own click handler, which opens the edit modal.
+    titleText.addEventListener("click", (ev) => {
       ev.stopPropagation();
       void this.applyLineChecked(
         file,
         block.task.lineNumber,
         !block.task.checked,
       );
+    });
+    titleText.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+    titleText.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    titleText.addEventListener("dragstart", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
     });
 
     // Show sub-tasks inside the block if there's enough vertical room. The

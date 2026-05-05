@@ -2104,17 +2104,23 @@ var TodayView = class extends import_obsidian4.ItemView {
       row.createSpan({ cls: "dp-block-project", text: block.task.project });
       row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
     }
-    row.createSpan({
+    const titleText = row.createSpan({
       cls: "dp-block-text",
       text: this.cleanBody(block.task.body)
     });
-    row.addEventListener("click", (ev) => {
+    titleText.addEventListener("click", (ev) => {
       ev.stopPropagation();
       void this.applyLineChecked(
         file,
         block.task.lineNumber,
         !block.task.checked
       );
+    });
+    titleText.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+    titleText.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    titleText.addEventListener("dragstart", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
     });
     if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
       const subList = el.createDiv({ cls: "dp-block-subtasks" });
