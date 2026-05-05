@@ -216,6 +216,31 @@ export function findLastTaskLine(content: string): number {
   return -1;
 }
 
+export function setTaskTitle(
+  rawLine: string,
+  newTitle: string,
+  prefixes: TagPrefixes,
+): string {
+  const m = TASK_LINE.exec(rawLine);
+  if (!m) return rawLine;
+  const indent = m[1];
+  const checkbox = m[2];
+  const body = m[3];
+
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tagRe = new RegExp(
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)})\\/`,
+  );
+  const tagMatch = tagRe.exec(body);
+  const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
+
+  const trimmedTitle = newTitle.trim();
+  const newBody = tagsPart
+    ? `${trimmedTitle} ${tagsPart}`
+    : trimmedTitle;
+  return `${indent}- [${checkbox}] ${newBody}`;
+}
+
 export function buildTaskLine(
   body: string,
   prefixes: TagPrefixes,

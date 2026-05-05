@@ -18,6 +18,7 @@ import {
   setOrderTag,
   removeOrderTag,
   setDurationTag,
+  setTaskTitle,
   snapToInterval,
   formatTotal,
   findLastTaskLine,
@@ -735,9 +736,7 @@ export class TodayView extends ItemView {
       this.dragPayload = null;
       this.hideDropIndicator();
     });
-    el.addEventListener("click", () =>
-      this.openLine(file, block.task.lineNumber, this.endOfTitleCh(block.task.rawLine)),
-    );
+    el.addEventListener("click", () => this.openTaskEditor(file, block.task));
 
     const handle = el.createDiv({ cls: "dp-resize-handle" });
     handle.addEventListener("pointerdown", (ev) =>
@@ -953,9 +952,7 @@ export class TodayView extends ItemView {
         );
         this.dragPayload = null;
       });
-      card.addEventListener("click", () =>
-        this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine)),
-      );
+      card.addEventListener("click", () => this.openTaskEditor(file, task));
     });
 
     list.addEventListener("dragover", (ev) => {
@@ -1207,6 +1204,39 @@ export class TodayView extends ItemView {
     return end;
   }
 
+  private openTaskEditor(file: TFile, task: ParsedTask): void {
+    new TaskEditModal(this.app, {
+      initialTitle: this.cleanBody(task.body),
+      initialDurationMin: task.durationMin,
+      durations: QUICK_DURATIONS,
+      onSave: (title, durationMin) => {
+        void this.applyTaskEdit(file, task, title, durationMin);
+      },
+      onShowInNote: () => {
+        void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
+      },
+    }).open();
+  }
+
+  private async applyTaskEdit(
+    file: TFile,
+    task: ParsedTask,
+    newTitle: string,
+    newDurationMin: number | null,
+  ): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (task.lineNumber >= lines.length) return content;
+      let updated = setTaskTitle(lines[task.lineNumber], newTitle, prefixes);
+      if (newDurationMin !== null) {
+        updated = setDurationTag(updated, newDurationMin, prefixes);
+      }
+      lines[task.lineNumber] = updated;
+      return lines.join("\n");
+    });
+  }
+
   private async openLine(file: TFile, line: number, ch: number = 0): Promise<void> {
     const leaf = this.app.workspace.getLeaf(false);
     await leaf.openFile(file);
@@ -1318,6 +1348,105 @@ class TitlePromptModal extends Modal {
     });
     // Focus the first button so Enter activates it.
     buttons[0]?.focus();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+interface TaskEditOpts {
+  initialTitle: string;
+  initialDurationMin: number;
+  durations: { label: string; min: number }[];
+  // durationMin is null when the user did not pick a new duration — leave the
+  // existing #d/ tag (or its absence) alone.
+  onSave: (title: string, durationMin: number | null) => void;
+  onShowInNote: () => void;
+}
+
+class TaskEditModal extends Modal {
+  private opts: TaskEditOpts;
+  private selectedDurationMin: number;
+  private durationChanged = false;
+
+  constructor(app: App, opts: TaskEditOpts) {
+    super(app);
+    this.opts = opts;
+    this.selectedDurationMin = opts.initialDurationMin;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-title-modal");
+    this.titleEl.setText("Edit task");
+    this.contentEl.empty();
+
+    const input = this.contentEl.createEl("input", {
+      type: "text",
+      cls: "dp-title-input",
+      attr: { placeholder: "Task title…" },
+    });
+    input.value = this.opts.initialTitle;
+
+    const prompt = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Duration",
+    });
+    prompt.setAttribute("aria-hidden", "true");
+
+    const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
+    const buttons: HTMLButtonElement[] = [];
+    this.opts.durations.forEach((d) => {
+      const btn = row.createEl("button", {
+        cls: "dp-duration-btn",
+        text: d.label,
+      });
+      btn.type = "button";
+      if (d.min === this.selectedDurationMin) btn.addClass("is-selected");
+      btn.addEventListener("click", () => {
+        this.selectedDurationMin = d.min;
+        this.durationChanged = true;
+        buttons.forEach((b) => b.removeClass("is-selected"));
+        btn.addClass("is-selected");
+      });
+      buttons.push(btn);
+    });
+
+    const submit = (): void => {
+      this.opts.onSave(
+        input.value.trim(),
+        this.durationChanged ? this.selectedDurationMin : null,
+      );
+      this.close();
+    };
+
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        submit();
+      }
+    });
+
+    const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+    const showBtn = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Show in note",
+    });
+    showBtn.type = "button";
+    showBtn.addEventListener("click", () => {
+      this.close();
+      this.opts.onShowInNote();
+    });
+
+    const saveBtn = actions.createEl("button", {
+      cls: "dp-edit-save-btn mod-cta",
+      text: "Save",
+    });
+    saveBtn.type = "button";
+    saveBtn.addEventListener("click", submit);
+
+    input.focus();
+    input.select();
   }
 
   onClose(): void {
