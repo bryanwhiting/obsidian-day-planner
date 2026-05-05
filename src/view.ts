@@ -473,8 +473,7 @@ export class TodayView extends ItemView {
     }
 
     const statsRow = header.createDiv({ cls: "dp-stats-row" });
-    this.renderPlannedTable(statsRow, tasks);
-    if (isPrimary) this.renderFreeTable(statsRow, tasks);
+    this.renderTimeTable(statsRow, tasks);
     this.renderProjectTable(statsRow, tasks, colorMap);
 
     if (!file && isPrimary) {
@@ -1170,78 +1169,61 @@ export class TodayView extends ItemView {
     return `${h12}${ampm}`;
   }
 
-  private renderPlannedTable(
+  private renderTimeTable(
     parent: HTMLElement,
     tasks: ParsedTask[],
   ): void {
-    const totals = computeTotals(tasks);
-    const total = totals.scheduledMin + totals.unscheduledMin;
     const settings = this.plugin.settings;
+    const totals = computeTotals(tasks);
+    const planned = totals.scheduledMin + totals.unscheduledMin;
     const workdayMin = Math.max(
       0,
       (settings.workEndHour - settings.workStartHour) * 60,
     );
-    const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
 
-    const table = parent.createDiv({ cls: "dp-stat-table" });
-    table.createSpan({
-      cls: "dp-st-h",
-      text: `Workday\n(${workRange})`,
-    });
-    table.createSpan({
-      cls: "dp-st-h dp-st-h-right",
-      text: `Planned\n(${formatTotal(total)})`,
-    });
-    this.renderStatRow(table, "Scheduled", totals.scheduledMin);
-    this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
-    this.renderStatRow(table, "Total", total, true);
-    if (total > workdayMin) {
-      this.renderStatRow(table, "Overbooked", total - workdayMin);
-      const cells = Array.from(table.children) as HTMLElement[];
-      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
-    }
-  }
-
-  private renderFreeTable(
-    parent: HTMLElement,
-    tasks: ParsedTask[],
-  ): void {
-    const settings = this.plugin.settings;
-    const scheduled = tasks.filter((t) => t.startMin !== null);
+    const scheduledTasks = tasks.filter((t) => t.startMin !== null);
     const wakeMin = settings.wakeHour * 60;
     const sleepMin = settings.sleepHour * 60;
     const workStartMin = settings.workStartHour * 60;
     const workEndMin = settings.workEndHour * 60;
-
-    const workOpen = computeFreeMin(scheduled, workStartMin, workEndMin);
-    const beforeWork = computeFreeMin(
-      scheduled,
+    const workOpen = computeFreeMin(
+      scheduledTasks,
+      workStartMin,
+      workEndMin,
+    );
+    const morningOpen = computeFreeMin(
+      scheduledTasks,
       wakeMin,
       Math.min(workStartMin, sleepMin),
     );
-    const afterWork = computeFreeMin(
-      scheduled,
+    const eveningOpen = computeFreeMin(
+      scheduledTasks,
       Math.max(workEndMin, wakeMin),
       sleepMin,
     );
-    const totFree = workOpen + beforeWork + afterWork;
     // Sleep = the slice of the 24h day outside the configured wake window.
     const sleepDurationMin = 24 * 60 - (sleepMin - wakeMin);
 
-    const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
     const morningRange = `${this.formatHourLabel(settings.wakeHour)}-${this.formatHourLabel(settings.workStartHour)}`;
+    const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
     const eveningRange = `${this.formatHourLabel(settings.workEndHour)}-${this.formatHourLabel(settings.sleepHour)}`;
 
     const table = parent.createDiv({ cls: "dp-stat-table" });
-    table.createSpan({ cls: "dp-st-h", text: "Availability" });
-    table.createSpan({
-      cls: "dp-st-h dp-st-h-right",
-      text: `Free\n(${formatTotal(totFree)})`,
-    });
-    this.renderStatRow(table, `Morning (${morningRange})`, beforeWork);
+    this.renderStatRow(table, "Scheduled", totals.scheduledMin);
+    this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
+
+    table.createDiv({ cls: "dp-st-row-divider" });
+    this.renderStatRow(table, `Morning (${morningRange})`, morningOpen);
     this.renderStatRow(table, `Workday (${workRange})`, workOpen);
-    this.renderStatRow(table, `Evening (${eveningRange})`, afterWork);
+    this.renderStatRow(table, `Evening (${eveningRange})`, eveningOpen);
     this.renderStatRow(table, "Sleep", sleepDurationMin);
+
+    if (planned > workdayMin) {
+      table.createDiv({ cls: "dp-st-row-divider" });
+      this.renderStatRow(table, "Overbooked", planned - workdayMin);
+      const cells = Array.from(table.children) as HTMLElement[];
+      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
+    }
   }
 
   private renderStatRow(
