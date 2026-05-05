@@ -851,11 +851,12 @@
   }
 
   .dp-block-row {
-    @apply flex items-baseline;
+    display: flex;
+    align-items: flex-start;
     gap: 6px;
     min-width: 0;
     width: 100%;
-    line-height: 1.35;
+    line-height: 1.25;
   }
 
   .dp-block-time {
@@ -921,11 +922,12 @@
     align-items: center;
     color: var(--dp-on-color);
     margin-right: 1px;
+    flex: 0 0 auto;
   }
 
   .dp-block-context-icon .svg-icon {
-    width: 12px;
-    height: 12px;
+    width: 9px;
+    height: 9px;
   }
 
   .dp-block-text {
