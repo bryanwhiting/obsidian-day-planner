@@ -1588,23 +1588,24 @@
   }
 
   .dp-duration-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    gap: 4px;
   }
 
   .dp-duration-btn {
-    flex: 1 1 auto;
-    min-width: 56px;
-    padding: 8px 10px;
+    min-width: 0;
+    padding: 5px 6px;
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
+    line-height: 1.1;
     color: var(--color-ink);
     background: var(--color-paper);
     border: 1px solid var(--color-hairline);
     border-radius: var(--radius-card);
     cursor: pointer;
+    white-space: nowrap;
     transition: border-color 120ms ease, background-color 120ms ease,
       color 120ms ease, box-shadow 120ms ease;
   }
