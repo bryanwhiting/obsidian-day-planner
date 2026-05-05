@@ -518,6 +518,9 @@ function buildTaskLine(body, prefixes, opts) {
     tags.push(formatTime(opts.startMin, prefixes));
   }
   tags.push(formatDuration(opts.durationMin, prefixes));
+  if (opts.project) {
+    tags.push(`#${prefixes.project}/${opts.project}`);
+  }
   return `- [ ] ${body} ${tags.join(" ")}`;
 }
 function formatTotal(totalMin) {
@@ -1988,9 +1991,14 @@ var TodayView = class extends import_obsidian4.ItemView {
       heading: `New task at ${this.fmtClock(startMin)}`,
       placeholder: "Task title\u2026",
       durations: QUICK_DURATIONS,
+      projects: this.collectProjectNames(),
       defaultDurationMin,
-      onSubmit: (title, durationMin) => {
-        const newLine = buildTaskLine(title, prefixes, { startMin, durationMin });
+      onSubmit: (title, durationMin, project) => {
+        const newLine = buildTaskLine(title, prefixes, {
+          startMin,
+          durationMin,
+          project
+        });
         void this.appendTaskAfterLast(file, newLine);
       }
     }).open();
@@ -2001,9 +2009,10 @@ var TodayView = class extends import_obsidian4.ItemView {
       heading: "New unscheduled task",
       placeholder: "Task title\u2026",
       durations: QUICK_DURATIONS,
+      projects: this.collectProjectNames(),
       defaultDurationMin: this.plugin.settings.defaultDurationMin,
-      onSubmit: (title, durationMin) => {
-        const newLine = buildTaskLine(title, prefixes, { durationMin });
+      onSubmit: (title, durationMin, project) => {
+        const newLine = buildTaskLine(title, prefixes, { durationMin, project });
         void this.appendTaskAfterLast(file, newLine);
       }
     }).open();
@@ -2568,6 +2577,7 @@ var TitlePromptModal = class extends import_obsidian4.Modal {
   constructor(app, opts) {
     super(app);
     this.opts = opts;
+    this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
   }
   onOpen() {
     this.modalEl.addClass("dp-title-modal");
@@ -2589,7 +2599,7 @@ var TitlePromptModal = class extends import_obsidian4.Modal {
         if (this.opts.durations && this.opts.durations.length > 0) {
           this.renderDurationStep(title);
         } else {
-          this.opts.onSubmit(title, this.opts.defaultDurationMin);
+          this.opts.onSubmit(title, this.opts.defaultDurationMin, null);
           this.close();
         }
       }
@@ -2604,14 +2614,50 @@ var TitlePromptModal = class extends import_obsidian4.Modal {
       cls: "dp-prompt-summary-value",
       text: title || "(untitled)"
     });
-    const prompt = this.contentEl.createDiv({
+    const projLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Project"
+    });
+    projLabel.setAttribute("aria-hidden", "true");
+    const projRow = this.contentEl.createDiv({ cls: "dp-project-row" });
+    const projInput = projRow.createEl("input", {
+      type: "text",
+      cls: "dp-project-input",
+      attr: {
+        placeholder: "(none)",
+        list: this.datalistId,
+        autocomplete: "off"
+      }
+    });
+    const datalist = projRow.createEl("datalist");
+    datalist.id = this.datalistId;
+    ((_a = this.opts.projects) != null ? _a : []).forEach((name) => {
+      datalist.createEl("option", { attr: { value: name } });
+    });
+    const clearBtn = projRow.createEl("button", {
+      cls: "dp-project-clear",
+      attr: { "aria-label": "Clear project" }
+    });
+    clearBtn.type = "button";
+    clearBtn.setText("\xD7");
+    clearBtn.addEventListener("click", () => {
+      projInput.value = "";
+      projInput.focus();
+    });
+    const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "How long?"
     });
-    prompt.setAttribute("aria-hidden", "true");
+    durLabel.setAttribute("aria-hidden", "true");
     const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
-    const durations = (_a = this.opts.durations) != null ? _a : [];
+    const durations = (_b = this.opts.durations) != null ? _b : [];
     const buttons = [];
+    const resolveProject = () => {
+      const raw = projInput.value.trim();
+      if (!raw)
+        return null;
+      return sanitizeProjectName(raw) || null;
+    };
     durations.forEach((d, idx) => {
       const btn = row.createEl("button", {
         cls: "dp-duration-btn",
@@ -2620,20 +2666,30 @@ var TitlePromptModal = class extends import_obsidian4.Modal {
       btn.type = "button";
       btn.setAttribute("aria-label", `${d.label} (${idx + 1})`);
       btn.addEventListener("click", () => {
-        this.opts.onSubmit(title, d.min);
+        this.opts.onSubmit(title, d.min, resolveProject());
         this.close();
       });
       buttons.push(btn);
     });
+    projInput.addEventListener("keydown", (ev) => {
+      var _a2;
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        projInput.blur();
+        (_a2 = buttons[0]) == null ? void 0 : _a2.focus();
+      }
+    });
     durations.forEach((d, idx) => {
       this.scope.register([], `${idx + 1}`, (ev) => {
+        if (document.activeElement === projInput)
+          return;
         ev.preventDefault();
-        this.opts.onSubmit(title, d.min);
+        this.opts.onSubmit(title, d.min, resolveProject());
         this.close();
         return false;
       });
     });
-    (_b = buttons[0]) == null ? void 0 : _b.focus();
+    projInput.focus();
   }
   onClose() {
     this.contentEl.empty();

@@ -674,9 +674,14 @@ export class TodayView extends ItemView {
       heading: `New task at ${this.fmtClock(startMin)}`,
       placeholder: "Task title…",
       durations: QUICK_DURATIONS,
+      projects: this.collectProjectNames(),
       defaultDurationMin,
-      onSubmit: (title, durationMin) => {
-        const newLine = buildTaskLine(title, prefixes, { startMin, durationMin });
+      onSubmit: (title, durationMin, project) => {
+        const newLine = buildTaskLine(title, prefixes, {
+          startMin,
+          durationMin,
+          project,
+        });
         void this.appendTaskAfterLast(file, newLine);
       },
     }).open();
@@ -688,9 +693,10 @@ export class TodayView extends ItemView {
       heading: "New unscheduled task",
       placeholder: "Task title…",
       durations: QUICK_DURATIONS,
+      projects: this.collectProjectNames(),
       defaultDurationMin: this.plugin.settings.defaultDurationMin,
-      onSubmit: (title, durationMin) => {
-        const newLine = buildTaskLine(title, prefixes, { durationMin });
+      onSubmit: (title, durationMin, project) => {
+        const newLine = buildTaskLine(title, prefixes, { durationMin, project });
         void this.appendTaskAfterLast(file, newLine);
       },
     }).open();
@@ -1344,17 +1350,24 @@ interface TitlePromptOpts {
   defaultDurationMin: number;
   // If provided, the modal advances to a duration-picker step after the title
   // is entered. If omitted, the title submit fires onSubmit with
-  // defaultDurationMin immediately.
+  // defaultDurationMin immediately and no project.
   durations?: { label: string; min: number }[];
-  onSubmit: (title: string, durationMin: number) => void;
+  projects?: string[];
+  onSubmit: (
+    title: string,
+    durationMin: number,
+    project: string | null,
+  ) => void;
 }
 
 class TitlePromptModal extends Modal {
   private opts: TitlePromptOpts;
+  private datalistId: string;
 
   constructor(app: App, opts: TitlePromptOpts) {
     super(app);
     this.opts = opts;
+    this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
   }
 
   onOpen(): void {
@@ -1379,7 +1392,7 @@ class TitlePromptModal extends Modal {
         if (this.opts.durations && this.opts.durations.length > 0) {
           this.renderDurationStep(title);
         } else {
-          this.opts.onSubmit(title, this.opts.defaultDurationMin);
+          this.opts.onSubmit(title, this.opts.defaultDurationMin, null);
           this.close();
         }
       }
@@ -1396,15 +1409,54 @@ class TitlePromptModal extends Modal {
       text: title || "(untitled)",
     });
 
-    const prompt = this.contentEl.createDiv({
+    const projLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Project",
+    });
+    projLabel.setAttribute("aria-hidden", "true");
+
+    const projRow = this.contentEl.createDiv({ cls: "dp-project-row" });
+    const projInput = projRow.createEl("input", {
+      type: "text",
+      cls: "dp-project-input",
+      attr: {
+        placeholder: "(none)",
+        list: this.datalistId,
+        autocomplete: "off",
+      },
+    });
+    const datalist = projRow.createEl("datalist");
+    datalist.id = this.datalistId;
+    (this.opts.projects ?? []).forEach((name) => {
+      datalist.createEl("option", { attr: { value: name } });
+    });
+    const clearBtn = projRow.createEl("button", {
+      cls: "dp-project-clear",
+      attr: { "aria-label": "Clear project" },
+    });
+    clearBtn.type = "button";
+    clearBtn.setText("×");
+    clearBtn.addEventListener("click", () => {
+      projInput.value = "";
+      projInput.focus();
+    });
+
+    const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "How long?",
     });
-    prompt.setAttribute("aria-hidden", "true");
+    durLabel.setAttribute("aria-hidden", "true");
 
     const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
     const durations = this.opts.durations ?? [];
     const buttons: HTMLButtonElement[] = [];
+
+    const resolveProject = (): string | null => {
+      const raw = projInput.value.trim();
+      if (!raw) return null;
+      return sanitizeProjectName(raw) || null;
+    };
+
     durations.forEach((d, idx) => {
       const btn = row.createEl("button", {
         cls: "dp-duration-btn",
@@ -1413,23 +1465,36 @@ class TitlePromptModal extends Modal {
       btn.type = "button";
       btn.setAttribute("aria-label", `${d.label} (${idx + 1})`);
       btn.addEventListener("click", () => {
-        this.opts.onSubmit(title, d.min);
+        this.opts.onSubmit(title, d.min, resolveProject());
         this.close();
       });
       buttons.push(btn);
     });
 
+    // Enter on the project input commits the typed/selected project and
+    // moves focus to the duration row so the user can press 1/2/3 next.
+    projInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        projInput.blur();
+        buttons[0]?.focus();
+      }
+    });
+
     // Number-key shortcuts: 1 → first option, 2 → second, etc.
+    // Suppressed while the project input is focused so digits typed there
+    // (e.g. a project named "v2") aren't swallowed.
     durations.forEach((d, idx) => {
       this.scope.register([], `${idx + 1}`, (ev) => {
+        if (document.activeElement === projInput) return;
         ev.preventDefault();
-        this.opts.onSubmit(title, d.min);
+        this.opts.onSubmit(title, d.min, resolveProject());
         this.close();
         return false;
       });
     });
-    // Focus the first button so Enter activates it.
-    buttons[0]?.focus();
+
+    projInput.focus();
   }
 
   onClose(): void {

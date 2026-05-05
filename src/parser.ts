@@ -263,13 +263,16 @@ export function setTaskTitle(
 export function buildTaskLine(
   body: string,
   prefixes: TagPrefixes,
-  opts: { startMin?: number; durationMin: number },
+  opts: { startMin?: number; durationMin: number; project?: string | null },
 ): string {
   const tags: string[] = [];
   if (opts.startMin !== undefined) {
     tags.push(formatTime(opts.startMin, prefixes));
   }
   tags.push(formatDuration(opts.durationMin, prefixes));
+  if (opts.project) {
+    tags.push(`#${prefixes.project}/${opts.project}`);
+  }
   return `- [ ] ${body} ${tags.join(" ")}`;
 }
 
