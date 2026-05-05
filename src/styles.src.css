@@ -1530,17 +1530,28 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    /* appearance:none neutralises the native <button> chrome so the
+     * <button> in the title row and the <span> in subtask rows render
+     * with the same circle. */
+    appearance: none;
+    -webkit-appearance: none;
     background: var(--color-paper);
-    border: 1.5px solid color-mix(in srgb, var(--color-ink) 28%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--color-ink) 50%, transparent);
     border-radius: 50%;
     cursor: pointer;
     box-shadow: none;
+    outline: none;
     transition: background-color 120ms ease, border-color 120ms ease;
     position: relative;
   }
 
   .dp-edit-check:hover {
     border-color: var(--color-accent);
+  }
+
+  .dp-edit-check:focus-visible {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 
   .dp-edit-check.is-checked {
