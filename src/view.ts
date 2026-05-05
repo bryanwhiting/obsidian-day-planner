@@ -1181,14 +1181,17 @@ export class TodayView extends ItemView {
       sleepMin,
     );
     const nonWorkOpen = beforeWork + afterWork;
-    const totalDay = workOpen + nonWorkOpen;
+    const totFree = workOpen + nonWorkOpen;
+    // Sleep = the slice of the 24h day outside the configured wake window.
+    const sleepDurationMin = 24 * 60 - (sleepMin - wakeMin);
 
     const table = parent.createDiv({ cls: "dp-stat-table" });
-    table.createSpan({ cls: "dp-st-h", text: "Free Time" });
-    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Available" });
-    this.renderStatRow(table, "Working Hours", workOpen);
-    this.renderStatRow(table, "Non-Work Hours", nonWorkOpen);
-    this.renderStatRow(table, "Total Day", totalDay, true);
+    table.createSpan({ cls: "dp-st-h", text: "Unblocked" });
+    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Free" });
+    this.renderStatRow(table, "Workday", workOpen);
+    this.renderStatRow(table, "Other", nonWorkOpen);
+    this.renderStatRow(table, "Sleep", sleepDurationMin);
+    this.renderStatRow(table, "Tot Free", totFree, true);
   }
 
   private renderStatRow(
