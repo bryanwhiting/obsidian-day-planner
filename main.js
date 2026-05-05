@@ -336,6 +336,7 @@ var DEFAULT_PREFIXES = {
   exercise: "x"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
+var DESCRIPTION_RE = /\{([^{}]*)\}/;
 function buildTagRegexes(prefixes) {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return {
@@ -447,6 +448,13 @@ function parseProject(body, prefixes) {
   const m = buildTagRegexes(prefixes).project.exec(body);
   return m ? m[1] : null;
 }
+function parseDescription(body) {
+  const m = DESCRIPTION_RE.exec(body);
+  if (!m)
+    return null;
+  const text = m[1].trim();
+  return text.length > 0 ? text : null;
+}
 function formatDuration(totalMin, prefixes) {
   const safe = Math.max(1, Math.round(totalMin));
   const h = Math.floor(safe / 60);
@@ -488,6 +496,7 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
   const durationMin = explicitDuration != null ? explicitDuration : defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const project = parseProject(body, prefixes);
+  const description = parseDescription(body);
   const checked = m[2] !== " ";
   return {
     filePath,
@@ -500,6 +509,7 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
     order,
     checked,
     project,
+    description,
     indent,
     subtasks: []
   };
@@ -602,9 +612,43 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
+  const beforeTags = tagMatch ? body.slice(0, tagMatch.index) : body;
+  const descMatch = DESCRIPTION_RE.exec(beforeTags);
+  const descPart = descMatch ? `{${descMatch[1].trim()}}` : "";
   const trimmedTitle = newTitle.trim();
-  const newBody = tagsPart ? `${trimmedTitle} ${tagsPart}` : trimmedTitle;
-  return `${indent}- [${checkbox}] ${newBody}`;
+  const parts = [trimmedTitle];
+  if (descPart)
+    parts.push(descPart);
+  if (tagsPart)
+    parts.push(tagsPart);
+  return `${indent}- [${checkbox}] ${parts.join(" ")}`;
+}
+function setTaskDescription(rawLine, newDescription, prefixes) {
+  const m = TASK_LINE.exec(rawLine);
+  if (!m)
+    return rawLine;
+  const indent = m[1];
+  const checkbox = m[2];
+  const body = m[3];
+  const trimmed = newDescription.trim();
+  const hasDesc = DESCRIPTION_RE.test(body);
+  if (hasDesc) {
+    const next = trimmed ? body.replace(DESCRIPTION_RE, `{${trimmed}}`) : body.replace(DESCRIPTION_RE, "").replace(/[ \t]+/g, " ").trim();
+    return `${indent}- [${checkbox}] ${next}`;
+  }
+  if (!trimmed)
+    return rawLine;
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tagRe = new RegExp(
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
+  );
+  const tagMatch = tagRe.exec(body);
+  if (tagMatch) {
+    const before = body.slice(0, tagMatch.index).replace(/\s+$/, "");
+    const after = body.slice(tagMatch.index);
+    return `${indent}- [${checkbox}] ${before} {${trimmed}} ${after}`.replace(/  +/g, " ");
+  }
+  return `${indent}- [${checkbox}] ${body.replace(/\s+$/, "")} {${trimmed}}`;
 }
 function buildTaskLine(body, prefixes, opts) {
   const tags = [];
@@ -2221,6 +2265,12 @@ var TodayView = class extends import_obsidian4.ItemView {
       ev.preventDefault();
       ev.stopPropagation();
     });
+    if (block.task.description && block.heightPx >= 36) {
+      el.createDiv({
+        cls: "dp-block-description",
+        text: block.task.description
+      });
+    }
     if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
       const subList = el.createDiv({ cls: "dp-block-subtasks" });
       block.task.subtasks.forEach((sub) => {
@@ -2425,8 +2475,15 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (task.project) {
         card.createSpan({ cls: "dp-card-project", text: task.project });
       }
-      const text = card.createDiv({ cls: "dp-card-text" });
+      const textCol = card.createDiv({ cls: "dp-card-text-col" });
+      const text = textCol.createDiv({ cls: "dp-card-text" });
       text.textContent = this.cleanBody(task.body);
+      if (task.description) {
+        textCol.createDiv({
+          cls: "dp-card-description",
+          text: task.description
+        });
+      }
       card.addEventListener("dragstart", (ev) => {
         var _a;
         const rect = card.getBoundingClientRect();
@@ -2760,7 +2817,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   cleanBody(body) {
     const p = this.plugin.settings.prefixes;
-    return body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\s+/g, " ").trim();
+    return body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim();
   }
   endOfTitleCh(rawLine) {
     const p = this.plugin.settings.prefixes;
@@ -2776,16 +2833,26 @@ var TodayView = class extends import_obsidian4.ItemView {
     return end;
   }
   openTaskEditor(file, task) {
+    var _a;
     new TaskEditModal(this.app, {
       initialTitle: this.cleanBody(task.body),
+      initialDescription: (_a = task.description) != null ? _a : "",
       initialDurationMin: task.durationMin,
       initialProject: task.project,
       initialChecked: task.checked,
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: QUICK_DURATIONS,
-      onSave: (title, durationMin, project, checked) => {
-        void this.applyTaskEdit(file, task, title, durationMin, project, checked);
+      onSave: (title, description, durationMin, project, checked) => {
+        void this.applyTaskEdit(
+          file,
+          task,
+          title,
+          description,
+          durationMin,
+          project,
+          checked
+        );
       },
       onToggleSubtask: async (sub, checked) => {
         await this.applyLineChecked(file, sub.lineNumber, checked);
@@ -2850,13 +2917,16 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }
-  async applyTaskEdit(file, task, newTitle, newDurationMin, newProject, newChecked) {
+  async applyTaskEdit(file, task, newTitle, newDescription, newDurationMin, newProject, newChecked) {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       if (task.lineNumber >= lines.length)
         return content;
       let updated = setTaskTitle(lines[task.lineNumber], newTitle, prefixes);
+      if (newDescription !== null) {
+        updated = setTaskDescription(updated, newDescription, prefixes);
+      }
       if (newDurationMin !== null) {
         updated = setDurationTag(updated, newDurationMin, prefixes);
       }
@@ -3063,6 +3133,16 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       attr: { placeholder: "Task title\u2026" }
     });
     input.value = this.opts.initialTitle;
+    const descLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Description"
+    });
+    descLabel.setAttribute("aria-hidden", "true");
+    const descInput = this.contentEl.createEl("textarea", {
+      cls: "dp-description-input",
+      attr: { placeholder: "Optional details\u2026", rows: "2" }
+    });
+    descInput.value = this.opts.initialDescription;
     const projLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "Project"
@@ -3127,9 +3207,16 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         return "";
       return sanitizeProjectName(raw) || void 0;
     };
+    const resolveDescription = () => {
+      const raw = descInput.value.replace(/\s+/g, " ").trim();
+      if (raw === this.opts.initialDescription.trim())
+        return null;
+      return raw;
+    };
     const submit = () => {
       this.opts.onSave(
         input.value.trim(),
+        resolveDescription(),
         this.durationChanged ? this.selectedDurationMin : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null
@@ -3144,6 +3231,12 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
+    descInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+        ev.preventDefault();
+        submit();
+      }
+    });
     const subLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "Sub-tasks"

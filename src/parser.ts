@@ -9,6 +9,7 @@ export interface ParsedTask {
   order: number | null;
   checked: boolean;
   project: string | null;
+  description: string | null;
   indent: string;
   subtasks: ParsedSubtask[];
 }
@@ -48,6 +49,9 @@ export interface ExerciseSummary {
 }
 
 const TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
+// Inline description in `{…}`. Only single-level braces are recognised so
+// stray `{` characters don't accidentally swallow rest-of-line content.
+const DESCRIPTION_RE = /\{([^{}]*)\}/;
 
 export function buildTagRegexes(prefixes: TagPrefixes) {
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -177,6 +181,13 @@ export function parseProject(
   return m ? m[1] : null;
 }
 
+export function parseDescription(body: string): string | null {
+  const m = DESCRIPTION_RE.exec(body);
+  if (!m) return null;
+  const text = m[1].trim();
+  return text.length > 0 ? text : null;
+}
+
 export function formatDuration(totalMin: number, prefixes: TagPrefixes): string {
   const safe = Math.max(1, Math.round(totalMin));
   const h = Math.floor(safe / 60);
@@ -225,6 +236,7 @@ export function parseTaskLine(
   const durationMin = explicitDuration ?? defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const project = parseProject(body, prefixes);
+  const description = parseDescription(body);
   const checked = m[2] !== " ";
   return {
     filePath,
@@ -237,6 +249,7 @@ export function parseTaskLine(
     order,
     checked,
     project,
+    description,
     indent,
     subtasks: [],
   };
@@ -373,12 +386,53 @@ export function setTaskTitle(
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
+  const beforeTags = tagMatch ? body.slice(0, tagMatch.index) : body;
+
+  // Preserve any inline {description} so editing the title doesn't drop it.
+  const descMatch = DESCRIPTION_RE.exec(beforeTags);
+  const descPart = descMatch ? `{${descMatch[1].trim()}}` : "";
 
   const trimmedTitle = newTitle.trim();
-  const newBody = tagsPart
-    ? `${trimmedTitle} ${tagsPart}`
-    : trimmedTitle;
-  return `${indent}- [${checkbox}] ${newBody}`;
+  const parts: string[] = [trimmedTitle];
+  if (descPart) parts.push(descPart);
+  if (tagsPart) parts.push(tagsPart);
+  return `${indent}- [${checkbox}] ${parts.join(" ")}`;
+}
+
+export function setTaskDescription(
+  rawLine: string,
+  newDescription: string,
+  prefixes: TagPrefixes,
+): string {
+  const m = TASK_LINE.exec(rawLine);
+  if (!m) return rawLine;
+  const indent = m[1];
+  const checkbox = m[2];
+  const body = m[3];
+
+  const trimmed = newDescription.trim();
+  const hasDesc = DESCRIPTION_RE.test(body);
+
+  if (hasDesc) {
+    const next = trimmed
+      ? body.replace(DESCRIPTION_RE, `{${trimmed}}`)
+      : body.replace(DESCRIPTION_RE, "").replace(/[ \t]+/g, " ").trim();
+    return `${indent}- [${checkbox}] ${next}`;
+  }
+
+  if (!trimmed) return rawLine;
+
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tagRe = new RegExp(
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
+  );
+  const tagMatch = tagRe.exec(body);
+  if (tagMatch) {
+    const before = body.slice(0, tagMatch.index).replace(/\s+$/, "");
+    const after = body.slice(tagMatch.index);
+    return `${indent}- [${checkbox}] ${before} {${trimmed}} ${after}`.replace(/  +/g, " ");
+  }
+  return `${indent}- [${checkbox}] ${body.replace(/\s+$/, "")} {${trimmed}}`;
 }
 
 export function buildTaskLine(

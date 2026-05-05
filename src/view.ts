@@ -25,6 +25,7 @@ import {
   setProjectTag,
   removeProjectTag,
   setTaskTitle,
+  setTaskDescription,
   setTaskChecked,
   snapToInterval,
   formatTotal,
@@ -785,6 +786,15 @@ export class TodayView extends ItemView {
       ev.stopPropagation();
     });
 
+    // Description (inline `{…}`) sits below the title and above sub-tasks,
+    // styled at the same scale as a sub-task row.
+    if (block.task.description && block.heightPx >= 36) {
+      el.createDiv({
+        cls: "dp-block-description",
+        text: block.task.description,
+      });
+    }
+
     // Show sub-tasks inside the block if there's enough vertical room. The
     // header row consumes ~22px, and each sub-task row is ~16px — we need
     // at least one full sub-task row (and a little breathing room) before
@@ -1020,8 +1030,15 @@ export class TodayView extends ItemView {
       if (task.project) {
         card.createSpan({ cls: "dp-card-project", text: task.project });
       }
-      const text = card.createDiv({ cls: "dp-card-text" });
+      const textCol = card.createDiv({ cls: "dp-card-text-col" });
+      const text = textCol.createDiv({ cls: "dp-card-text" });
       text.textContent = this.cleanBody(task.body);
+      if (task.description) {
+        textCol.createDiv({
+          cls: "dp-card-description",
+          text: task.description,
+        });
+      }
 
       card.addEventListener("dragstart", (ev) => {
         const rect = card.getBoundingClientRect();
@@ -1415,6 +1432,7 @@ export class TodayView extends ItemView {
       .replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "")
       .replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "")
       .replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "")
+      .replace(/\{[^{}]*\}/g, "")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -1435,14 +1453,23 @@ export class TodayView extends ItemView {
   private openTaskEditor(file: TFile, task: ParsedTask): void {
     new TaskEditModal(this.app, {
       initialTitle: this.cleanBody(task.body),
+      initialDescription: task.description ?? "",
       initialDurationMin: task.durationMin,
       initialProject: task.project,
       initialChecked: task.checked,
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: QUICK_DURATIONS,
-      onSave: (title, durationMin, project, checked) => {
-        void this.applyTaskEdit(file, task, title, durationMin, project, checked);
+      onSave: (title, description, durationMin, project, checked) => {
+        void this.applyTaskEdit(
+          file,
+          task,
+          title,
+          description,
+          durationMin,
+          project,
+          checked,
+        );
       },
       onToggleSubtask: async (sub, checked) => {
         await this.applyLineChecked(file, sub.lineNumber, checked);
@@ -1522,6 +1549,8 @@ export class TodayView extends ItemView {
     file: TFile,
     task: ParsedTask,
     newTitle: string,
+    // null = leave the description untouched
+    newDescription: string | null,
     newDurationMin: number | null,
     // undefined = leave the project tag alone, "" = remove it, otherwise set
     newProject: string | null | undefined,
@@ -1532,6 +1561,9 @@ export class TodayView extends ItemView {
       const lines = content.split("\n");
       if (task.lineNumber >= lines.length) return content;
       let updated = setTaskTitle(lines[task.lineNumber], newTitle, prefixes);
+      if (newDescription !== null) {
+        updated = setTaskDescription(updated, newDescription, prefixes);
+      }
       if (newDurationMin !== null) {
         updated = setDurationTag(updated, newDurationMin, prefixes);
       }
@@ -1740,6 +1772,7 @@ class TitlePromptModal extends Modal {
 
 interface TaskEditOpts {
   initialTitle: string;
+  initialDescription: string;
   initialDurationMin: number;
   initialProject: string | null;
   initialChecked: boolean;
@@ -1748,10 +1781,13 @@ interface TaskEditOpts {
   durations: { label: string; min: number }[];
   // durationMin is null when the user did not pick a new duration — leave the
   // existing #d/ tag (or its absence) alone.
+  // description is null when unchanged; otherwise it's the new value (empty
+  // string clears the {…} block).
   // project is undefined when unchanged; "" means remove the tag; otherwise set.
   // checked is null when unchanged.
   onSave: (
     title: string,
+    description: string | null,
     durationMin: number | null,
     project: string | null | undefined,
     checked: boolean | null,
@@ -1824,6 +1860,18 @@ class TaskEditModal extends Modal {
     });
     input.value = this.opts.initialTitle;
 
+    const descLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Description",
+    });
+    descLabel.setAttribute("aria-hidden", "true");
+
+    const descInput = this.contentEl.createEl("textarea", {
+      cls: "dp-description-input",
+      attr: { placeholder: "Optional details…", rows: "2" },
+    });
+    descInput.value = this.opts.initialDescription;
+
     const projLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "Project",
@@ -1889,9 +1937,18 @@ class TaskEditModal extends Modal {
       return sanitizeProjectName(raw) || undefined;
     };
 
+    const resolveDescription = (): string | null => {
+      // Task lines are single-line markdown; collapse any newlines the user
+      // typed into spaces so we never write a broken line back to the file.
+      const raw = descInput.value.replace(/\s+/g, " ").trim();
+      if (raw === this.opts.initialDescription.trim()) return null;
+      return raw;
+    };
+
     const submit = (): void => {
       this.opts.onSave(
         input.value.trim(),
+        resolveDescription(),
         this.durationChanged ? this.selectedDurationMin : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null,
@@ -1907,6 +1964,14 @@ class TaskEditModal extends Modal {
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
+    // Cmd/Ctrl+Enter submits from the description textarea so plain Enter
+    // can still create newlines inside the description.
+    descInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+        ev.preventDefault();
+        submit();
+      }
+    });
 
     const subLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
