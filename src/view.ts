@@ -5,8 +5,10 @@ import {
   Notice,
   Modal,
   App,
+  Platform,
   setIcon,
 } from "obsidian";
+import { parseTimelineHeight } from "./settings";
 import type TodayPlugin from "./main";
 import {
   ParsedTask,
@@ -55,6 +57,16 @@ interface DragPayload {
 const TRANSPARENT_PIXEL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
 
+const QUICK_DURATIONS: { label: string; min: number }[] = [
+  { label: "15m", min: 15 },
+  { label: "30m", min: 30 },
+  { label: "45m", min: 45 },
+  { label: "1h", min: 60 },
+  { label: "1h30m", min: 90 },
+  { label: "2h", min: 120 },
+  { label: "3h", min: 180 },
+];
+
 export class TodayView extends ItemView {
   plugin: TodayPlugin;
   private rerenderTimer: number | null = null;
@@ -63,6 +75,8 @@ export class TodayView extends ItemView {
   private selectedDate: Date = startOfDay(new Date());
   private calendarMonth: Date = startOfMonth(new Date());
   private calendarOpen: boolean = false;
+  private summariesCollapsed: boolean = false;
+  private unscheduledCollapsed: boolean = Platform.isMobile;
   private overrideFilePath: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: TodayPlugin) {
@@ -373,8 +387,29 @@ export class TodayView extends ItemView {
     openActiveTarget: TFile | null = null,
   ): void {
     const section = parent.createDiv({ cls: "dp-section" });
+    if (this.summariesCollapsed) section.addClass("is-summaries-collapsed");
 
     const header = section.createDiv({ cls: "dp-header" });
+    if (isPrimary) {
+      const collapseBtn = header.createEl("button", {
+        cls: "dp-summaries-toggle",
+        attr: {
+          "aria-label": this.summariesCollapsed
+            ? "Expand summaries"
+            : "Collapse summaries",
+          "aria-expanded": this.summariesCollapsed ? "false" : "true",
+        },
+      });
+      setIcon(
+        collapseBtn,
+        this.summariesCollapsed ? "chevron-down" : "chevron-up",
+      );
+      collapseBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this.summariesCollapsed = !this.summariesCollapsed;
+        this.scheduleRender();
+      });
+    }
     if (!isPrimary && title) header.createDiv({ cls: "dp-title", text: title });
     if (subtitle || openActiveTarget) {
       const sub = header.createDiv({ cls: "dp-subtitle" });
@@ -456,23 +491,69 @@ export class TodayView extends ItemView {
     const heightPx = totalMin * settings.pxPerMin;
 
     const wrap = parent.createDiv({ cls: "dp-timeline-wrap" });
+    const configuredHeight = Platform.isMobile
+      ? settings.timelineHeightMobile
+      : settings.timelineHeightDesktop;
+    const parsedHeight = parseTimelineHeight(configuredHeight);
+    if (parsedHeight) wrap.style.maxHeight = parsedHeight;
     const timeline = wrap.createDiv({ cls: "dp-timeline" });
     timeline.style.height = `${heightPx}px`;
+    // Half a snap interval, in px — used to size hit areas so each mark in
+    // the gutter (hour + sub-marks) cleanly partitions the band.
+    const halfSnapPx = (settings.snapMin * settings.pxPerMin) / 2;
+    timeline.style.setProperty("--dp-half-snap-px", `${halfSnapPx}px`);
 
     for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
       const top = (h * 60 - startMin) * settings.pxPerMin;
       const row = timeline.createDiv({ cls: "dp-hour-row" });
       row.style.top = `${top}px`;
-      row.createDiv({ cls: "dp-hour-label", text: this.formatHourLabel(h) });
       row.createDiv({ cls: "dp-hour-line" });
+      const band = row.createDiv({ cls: "dp-hour-band" });
+      const isLast = h >= settings.visibleEndHour;
+      band.style.height = isLast ? "0px" : `${60 * settings.pxPerMin}px`;
+      const label = band.createDiv({
+        cls: "dp-hour-label",
+        text: this.formatHourLabel(h),
+      });
+      // The closing line at endHour is decorative — clicking it would create
+      // a task past the visible end of day, so leave it inert.
+      if (isLast) continue;
+      label.addClass("is-clickable");
+      label.setAttribute("aria-label", `New task at ${this.formatHourLabel(h)}`);
+      label.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        void this.createTaskAtTime(file, h * 60, settings.defaultDurationMin);
+      });
+      const snap = settings.snapMin;
+      if (snap > 0 && snap < 60) {
+        for (let m = snap; m < 60; m += snap) {
+          const mm = m.toString().padStart(2, "0");
+          const sub = band.createDiv({
+            cls: "dp-hour-submark is-clickable",
+            text: `:${mm}`,
+          });
+          // -7px matches the hour label's vertical centering on its line.
+          sub.style.top = `${m * settings.pxPerMin - 7}px`;
+          sub.setAttribute(
+            "aria-label",
+            `New task at ${this.formatHourLabel(h)}:${mm}`,
+          );
+          sub.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            void this.createTaskAtTime(
+              file,
+              h * 60 + m,
+              settings.defaultDurationMin,
+            );
+          });
+        }
+      }
     }
 
     const blocksLayer = timeline.createDiv({ cls: "dp-blocks" });
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
     for (const block of layout)
       this.renderBlock(blocksLayer, file, block, colorMap);
-
-    this.renderGutter(timeline, blocksLayer, file, startMin, endMin);
 
     const computeSnap = (clientY: number): number | null => {
       if (!this.dragPayload) return null;
@@ -546,182 +627,18 @@ export class TodayView extends ItemView {
     this.dropIndicator = null;
   }
 
-  private renderGutter(
-    timeline: HTMLElement,
-    blocksLayer: HTMLElement,
-    file: TFile,
-    startMin: number,
-    endMin: number,
-  ): void {
-    const settings = this.plugin.settings;
-    const gutter = timeline.createDiv({ cls: "dp-gutter" });
-    const eyebrow = gutter.createDiv({ cls: "dp-gutter-eyebrow" });
-    eyebrow.createSpan({ cls: "dp-gutter-eyebrow-mark", text: "+" });
-    eyebrow.createSpan({ cls: "dp-gutter-eyebrow-text", text: "new" });
-
-    const reveal = () => timeline.addClass("is-gutter-revealed");
-    const hide = () => {
-      if (gutter.dataset.dragging) return;
-      timeline.removeClass("is-gutter-revealed");
-    };
-
-    timeline.addEventListener("pointerenter", reveal);
-    timeline.addEventListener("pointerleave", hide);
-
-    const minuteFromY = (clientY: number): number => {
-      const rect = timeline.getBoundingClientRect();
-      const y = clientY - rect.top + timeline.scrollTop;
-      const raw = y / settings.pxPerMin + startMin;
-      return snapToInterval(raw, settings.snapMin);
-    };
-
-    const DRAG_THRESHOLD_PX = 4;
-    let pending: { startClientY: number; anchorMin: number } | null = null;
-    let dragState: {
-      pointerId: number;
-      anchorMin: number;
-      indicator: HTMLElement;
-    } | null = null;
-    // After a drag commits in `pointerup`, the browser still synthesizes a
-    // `click` event from the same pointerdown/up pair. Without this guard the
-    // click handler would fire a second createTaskAtTime() at the cursor's
-    // release-Y, racing the drag write on disk and clobbering it.
-    let suppressNextClick = false;
-
-    const updateIndicator = (
-      indicator: HTMLElement,
-      topMin: number,
-      durationMin: number,
-    ): void => {
-      indicator.style.top = `${(topMin - startMin) * settings.pxPerMin}px`;
-      indicator.style.height = `${Math.max(18, durationMin * settings.pxPerMin)}px`;
-      let timeEl = indicator.querySelector<HTMLElement>(".dp-drop-indicator-time");
-      if (!timeEl) {
-        timeEl = indicator.createDiv({ cls: "dp-drop-indicator-time" });
-      }
-      timeEl.textContent = `${this.fmtClock(topMin)}–${this.fmtClock(
-        topMin + durationMin,
-      )}`;
-      let textEl = indicator.querySelector<HTMLElement>(".dp-drop-indicator-text");
-      if (!textEl) {
-        textEl = indicator.createDiv({
-          cls: "dp-drop-indicator-text",
-          text: "New task",
-        });
-      }
-    };
-
-    const beginDrag = (ev: PointerEvent, anchor: number): void => {
-      const indicator = blocksLayer.createDiv({
-        cls: "dp-drop-indicator dp-create-indicator",
-      });
-      updateIndicator(indicator, anchor, settings.defaultDurationMin);
-      dragState = { pointerId: ev.pointerId, anchorMin: anchor, indicator };
-      try {
-        gutter.setPointerCapture(ev.pointerId);
-      } catch {}
-      gutter.dataset.dragging = "1";
-    };
-
-    const cancelDrag = (): void => {
-      if (!dragState) return;
-      dragState.indicator.detach();
-      try {
-        gutter.releasePointerCapture(dragState.pointerId);
-      } catch {}
-      delete gutter.dataset.dragging;
-      dragState = null;
-    };
-
-    gutter.addEventListener("pointerdown", (ev) => {
-      if (ev.button !== 0) return;
-      reveal();
-      const anchor = Math.max(
-        startMin,
-        Math.min(endMin - settings.snapMin, minuteFromY(ev.clientY)),
-      );
-      pending = { startClientY: ev.clientY, anchorMin: anchor };
-    });
-
-    gutter.addEventListener("pointermove", (ev) => {
-      if (dragState) {
-        const m = Math.max(
-          startMin,
-          Math.min(endMin, minuteFromY(ev.clientY)),
-        );
-        const top = Math.min(dragState.anchorMin, m);
-        const bottom = Math.max(dragState.anchorMin + settings.snapMin, m);
-        updateIndicator(dragState.indicator, top, bottom - top);
-        return;
-      }
-      if (
-        pending &&
-        Math.abs(ev.clientY - pending.startClientY) > DRAG_THRESHOLD_PX
-      ) {
-        beginDrag(ev, pending.anchorMin);
-      }
-    });
-
-    gutter.addEventListener("pointerup", (ev) => {
-      if (!dragState) return;
-      // Drag committed: handle here so the trailing synthetic click is suppressed.
-      ev.preventDefault();
-      ev.stopPropagation();
-      const state = dragState;
-      const m = Math.max(
-        startMin,
-        Math.min(endMin, minuteFromY(ev.clientY)),
-      );
-      const top = Math.min(state.anchorMin, m);
-      const bottom = Math.max(state.anchorMin + settings.snapMin, m);
-      const duration = bottom - top;
-      const clampedTop = Math.min(top, endMin - duration);
-      cancelDrag();
-      pending = null;
-      suppressNextClick = true;
-      void this.createTaskAtTime(file, clampedTop, duration);
-      if (!timeline.matches(":hover"))
-        timeline.removeClass("is-gutter-revealed");
-    });
-
-    gutter.addEventListener("pointercancel", () => {
-      cancelDrag();
-      pending = null;
-    });
-
-    // Single-click handler: runs after pointerup when the pointer barely moved.
-    // Using `click` (rather than committing in pointerup) sidesteps Obsidian's
-    // sidebar-leaf activation, which can swallow the first pointerdown when the
-    // today pane isn't yet the active leaf.
-    gutter.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      if (suppressNextClick) {
-        suppressNextClick = false;
-        return;
-      }
-      const anchor = pending
-        ? pending.anchorMin
-        : Math.max(
-            startMin,
-            Math.min(endMin - settings.snapMin, minuteFromY(ev.clientY)),
-          );
-      pending = null;
-      void this.createTaskAtTime(file, anchor, settings.defaultDurationMin);
-      if (!timeline.matches(":hover"))
-        timeline.removeClass("is-gutter-revealed");
-    });
-  }
-
   private createTaskAtTime(
     file: TFile,
     startMin: number,
-    durationMin: number,
+    defaultDurationMin: number,
   ): void {
     const prefixes = this.plugin.settings.prefixes;
     new TitlePromptModal(this.app, {
       heading: `New task at ${this.fmtClock(startMin)}`,
       placeholder: "Task title…",
-      onSubmit: (title) => {
+      durations: QUICK_DURATIONS,
+      defaultDurationMin,
+      onSubmit: (title, durationMin) => {
         const newLine = buildTaskLine(title, prefixes, { startMin, durationMin });
         void this.appendTaskAfterLast(file, newLine);
       },
@@ -733,10 +650,9 @@ export class TodayView extends ItemView {
     new TitlePromptModal(this.app, {
       heading: "New unscheduled task",
       placeholder: "Task title…",
-      onSubmit: (title) => {
-        const newLine = buildTaskLine(title, prefixes, {
-          durationMin: this.plugin.settings.defaultDurationMin,
-        });
+      defaultDurationMin: this.plugin.settings.defaultDurationMin,
+      onSubmit: (title, durationMin) => {
+        const newLine = buildTaskLine(title, prefixes, { durationMin });
         void this.appendTaskAfterLast(file, newLine);
       },
     }).open();
@@ -746,15 +662,13 @@ export class TodayView extends ItemView {
     file: TFile,
     newLine: string,
   ): Promise<void> {
-    let insertAt = 0;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       const lastIdx = findLastTaskLine(content);
-      insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
       lines.splice(insertAt, 0, newLine);
       return lines.join("\n");
     });
-    void this.openLine(file, insertAt, newLine.length);
   }
 
   private renderBlock(
@@ -928,8 +842,37 @@ export class TodayView extends ItemView {
     colorMap: Map<string, string>,
   ): void {
     const list = parent.createDiv({ cls: "dp-unscheduled" });
+    if (Platform.isMobile && this.unscheduledCollapsed) {
+      list.addClass("is-collapsed");
+    }
     const head = list.createDiv({ cls: "dp-unscheduled-head" });
-    head.createSpan({ text: "Unscheduled" });
+    if (Platform.isMobile) {
+      const toggleBtn = head.createEl("button", {
+        cls: "dp-unscheduled-toggle",
+        attr: {
+          "aria-label": this.unscheduledCollapsed
+            ? "Expand unscheduled"
+            : "Collapse unscheduled",
+          "aria-expanded": this.unscheduledCollapsed ? "false" : "true",
+        },
+      });
+      setIcon(
+        toggleBtn,
+        this.unscheduledCollapsed ? "chevron-up" : "chevron-down",
+      );
+      toggleBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this.unscheduledCollapsed = !this.unscheduledCollapsed;
+        this.scheduleRender();
+      });
+    }
+    head.createSpan({ cls: "dp-unscheduled-title", text: "Unscheduled" });
+    if (Platform.isMobile && unscheduled.length > 0) {
+      head.createSpan({
+        cls: "dp-unscheduled-count",
+        text: String(unscheduled.length),
+      });
+    }
     const addBtn = head.createEl("button", {
       cls: "dp-unscheduled-add",
       attr: { "aria-label": "Add unscheduled task" },
@@ -937,15 +880,20 @@ export class TodayView extends ItemView {
     setIcon(addBtn, "plus");
     addBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      if (Platform.isMobile && this.unscheduledCollapsed) {
+        this.unscheduledCollapsed = false;
+      }
       void this.createUnscheduledTask(file);
     });
 
+    const body = list.createDiv({ cls: "dp-unscheduled-body" });
+
     if (unscheduled.length === 0) {
-      list.createDiv({ cls: "dp-empty", text: "No unscheduled tasks." });
+      body.createDiv({ cls: "dp-empty", text: "No unscheduled tasks." });
     }
 
     unscheduled.forEach((task, idx) => {
-      const card = list.createDiv({ cls: "dp-card" });
+      const card = body.createDiv({ cls: "dp-card" });
       if (task.checked) card.addClass("is-done");
       if (!task.hasExplicitDuration) card.addClass("is-implicit-duration");
       const color = task.project ? colorMap.get(task.project) : null;
@@ -1277,21 +1225,21 @@ export class TodayView extends ItemView {
   }
 }
 
-class TitlePromptModal extends Modal {
-  private opts: {
-    heading: string;
-    placeholder: string;
-    onSubmit: (title: string) => void;
-  };
+interface TitlePromptOpts {
+  heading: string;
+  placeholder: string;
+  defaultDurationMin: number;
+  // If provided, the modal advances to a duration-picker step after the title
+  // is entered. If omitted, the title submit fires onSubmit with
+  // defaultDurationMin immediately.
+  durations?: { label: string; min: number }[];
+  onSubmit: (title: string, durationMin: number) => void;
+}
 
-  constructor(
-    app: App,
-    opts: {
-      heading: string;
-      placeholder: string;
-      onSubmit: (title: string) => void;
-    },
-  ) {
+class TitlePromptModal extends Modal {
+  private opts: TitlePromptOpts;
+
+  constructor(app: App, opts: TitlePromptOpts) {
     super(app);
     this.opts = opts;
   }
@@ -1299,7 +1247,11 @@ class TitlePromptModal extends Modal {
   onOpen(): void {
     this.modalEl.addClass("dp-title-modal");
     this.titleEl.setText(this.opts.heading);
+    this.renderTitleStep();
+  }
 
+  private renderTitleStep(): void {
+    this.contentEl.empty();
     const input = this.contentEl.createEl("input", {
       type: "text",
       cls: "dp-title-input",
@@ -1311,11 +1263,60 @@ class TitlePromptModal extends Modal {
       if (ev.key === "Enter") {
         ev.preventDefault();
         const title = input.value.trim();
-        this.opts.onSubmit(title);
-        this.close();
+        if (this.opts.durations && this.opts.durations.length > 0) {
+          this.renderDurationStep(title);
+        } else {
+          this.opts.onSubmit(title, this.opts.defaultDurationMin);
+          this.close();
+        }
       }
       // Escape is handled by Modal's default close behavior — no task created.
     });
+  }
+
+  private renderDurationStep(title: string): void {
+    this.contentEl.empty();
+    const summary = this.contentEl.createDiv({ cls: "dp-prompt-summary" });
+    summary.createSpan({ cls: "dp-prompt-summary-label", text: "Task" });
+    summary.createSpan({
+      cls: "dp-prompt-summary-value",
+      text: title || "(untitled)",
+    });
+
+    const prompt = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "How long?",
+    });
+    prompt.setAttribute("aria-hidden", "true");
+
+    const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
+    const durations = this.opts.durations ?? [];
+    const buttons: HTMLButtonElement[] = [];
+    durations.forEach((d, idx) => {
+      const btn = row.createEl("button", {
+        cls: "dp-duration-btn",
+        text: d.label,
+      });
+      btn.type = "button";
+      btn.setAttribute("aria-label", `${d.label} (${idx + 1})`);
+      btn.addEventListener("click", () => {
+        this.opts.onSubmit(title, d.min);
+        this.close();
+      });
+      buttons.push(btn);
+    });
+
+    // Number-key shortcuts: 1 → first option, 2 → second, etc.
+    durations.forEach((d, idx) => {
+      this.scope.register([], `${idx + 1}`, (ev) => {
+        ev.preventDefault();
+        this.opts.onSubmit(title, d.min);
+        this.close();
+        return false;
+      });
+    });
+    // Focus the first button so Enter activates it.
+    buttons[0]?.focus();
   }
 
   onClose(): void {

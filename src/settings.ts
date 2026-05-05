@@ -24,6 +24,8 @@ export interface TodaySettings {
   dailyNoteTemplate: string;
   defaultDurationMin: number;
   projectColors: ProjectColor[];
+  timelineHeightDesktop: string;
+  timelineHeightMobile: string;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -41,7 +43,20 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   dailyNoteTemplate: "",
   defaultDurationMin: 15,
   projectColors: [],
+  timelineHeightDesktop: "",
+  timelineHeightMobile: "",
 };
+
+const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
+
+/** Accept bare integers (treated as px) or "<num><unit>" with a known unit.
+ *  Returns the canonical CSS length, or null if the input is not parseable. */
+export function parseTimelineHeight(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  if (/^\d+(?:\.\d+)?$/.test(v)) return `${v}px`;
+  return CSS_LENGTH_RE.test(v) ? v : null;
+}
 
 export class TodaySettingTab extends PluginSettingTab {
   plugin: TodayPlugin;
@@ -85,7 +100,9 @@ export class TodaySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Snap interval (minutes)")
-      .setDesc("Drag-drop snaps to this granularity.")
+      .setDesc(
+        "Drag-drop snaps to this granularity. Also controls the sub-marks revealed on hover in the timeline gutter (e.g. 15 → :15, :30, :45).",
+      )
       .addText((t) =>
         t
           .setValue(this.plugin.settings.snapMin.toString())
@@ -299,6 +316,42 @@ export class TodaySettingTab extends PluginSettingTab {
               this.plugin.settings.sleepHour,
             );
             await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Timeline height (desktop)")
+      .setDesc(
+        "Max height of the scrollable timeline on desktop. Bare numbers are treated as px (e.g. 600). Units accepted: px, vh, vw, em, rem, %. Leave blank for the default (60vh).",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("60vh")
+          .setValue(this.plugin.settings.timelineHeightDesktop)
+          .onChange(async (v) => {
+            const trimmed = v.trim();
+            if (trimmed === "" || parseTimelineHeight(trimmed) !== null) {
+              this.plugin.settings.timelineHeightDesktop = trimmed;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Timeline height (mobile)")
+      .setDesc(
+        "Max height of the scrollable timeline on mobile. Bare numbers are treated as px (e.g. 200). Units accepted: px, vh, vw, em, rem, %. Leave blank for the default (40vh).",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("40vh")
+          .setValue(this.plugin.settings.timelineHeightMobile)
+          .onChange(async (v) => {
+            const trimmed = v.trim();
+            if (trimmed === "" || parseTimelineHeight(trimmed) !== null) {
+              this.plugin.settings.timelineHeightMobile = trimmed;
+              await this.plugin.saveSettings();
+            }
           }),
       );
   }

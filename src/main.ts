@@ -1,4 +1,5 @@
-import { Plugin, WorkspaceLeaf } from "obsidian";
+import { Platform, Plugin, WorkspaceLeaf } from "obsidian";
+import { polyfill as mobileDragDropPolyfill } from "mobile-drag-drop";
 import { TodayView, VIEW_TYPE_TODAY } from "./view";
 import {
   TodaySettings,
@@ -7,11 +8,21 @@ import {
 } from "./settings";
 import { DEFAULT_PREFIXES } from "./parser";
 
+let polyfillInstalled = false;
+
 export default class TodayPlugin extends Plugin {
   settings!: TodaySettings;
 
   async onload(): Promise<void> {
     await this.loadSettings();
+
+    // HTML5 drag-and-drop doesn't fire on touch — install the polyfill once
+    // on mobile so timeline blocks and unscheduled cards become draggable.
+    // `holdToDrag` keeps tap-to-open intact (drag only after a brief press).
+    if (Platform.isMobile && !polyfillInstalled) {
+      mobileDragDropPolyfill({ holdToDrag: 200 });
+      polyfillInstalled = true;
+    }
 
     this.registerView(
       VIEW_TYPE_TODAY,

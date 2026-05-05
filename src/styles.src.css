@@ -107,8 +107,8 @@
 
   .dp-nav-btn {
     @apply inline-flex items-center justify-center cursor-pointer transition;
-    width: 24px;
-    height: 24px;
+    width: 29px;
+    height: 29px;
     /* reset Obsidian's default button padding so the 15px icon fits the 24px box */
     padding: 0;
     box-sizing: border-box;
@@ -138,8 +138,8 @@
 
   .dp-today-btn {
     @apply inline-flex items-center justify-center cursor-pointer transition;
-    width: 24px;
-    height: 24px;
+    width: 29px;
+    height: 29px;
     padding: 0;
     box-sizing: border-box;
     background: transparent;
@@ -163,8 +163,8 @@
 
   .dp-cal-btn {
     @apply inline-flex items-center justify-center cursor-pointer transition;
-    width: 24px;
-    height: 24px;
+    width: 29px;
+    height: 29px;
     padding: 0;
     box-sizing: border-box;
     background: transparent;
@@ -306,6 +306,7 @@
   /* ---------- sections ---------- */
 
   .dp-section {
+    position: relative;
     margin-bottom: 18px;
   }
 
@@ -318,6 +319,45 @@
     @apply flex flex-col;
     gap: 4px;
     margin-bottom: 10px;
+  }
+
+  .dp-section.is-summaries-collapsed .dp-stats-row {
+    display: none;
+  }
+
+  .dp-section.is-summaries-collapsed .dp-header {
+    margin-bottom: 4px;
+  }
+
+  .dp-summaries-toggle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-tab);
+    color: var(--color-ink-faint);
+    cursor: pointer;
+    transition: color 120ms, background-color 120ms, border-color 120ms;
+  }
+
+  .dp-summaries-toggle:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-ink);
+    border-color: var(--color-hairline);
+  }
+
+  .dp-summaries-toggle .svg-icon {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
   }
 
   .dp-title {
@@ -484,6 +524,45 @@
     gap: 14px;
   }
 
+  /* On mobile, lock the unscheduled list to the bottom edge of the viewport
+   * so it overlays Obsidian's status bar. Default to collapsed (header only)
+   * to keep the timeline visible; tap the chevron to expand. */
+  body.is-mobile .dp-unscheduled {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    margin: 0;
+    padding: 6px 12px 8px;
+    background: var(--color-paper);
+    border-top: 1px solid var(--color-hairline);
+    box-shadow: 0 -4px 14px color-mix(in srgb, var(--color-ink) 12%, transparent);
+    max-height: 55vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  body.is-mobile .dp-unscheduled.is-collapsed {
+    max-height: none;
+    overflow: hidden;
+  }
+
+  body.is-mobile .dp-unscheduled.is-collapsed .dp-unscheduled-body {
+    display: none;
+  }
+
+  body.is-mobile .dp-unscheduled-head {
+    margin: 0;
+    padding-bottom: 6px;
+  }
+
+  /* Reserve space at the bottom of the body so the timeline can scroll past
+   * the fixed unscheduled bar without being permanently obscured. */
+  body.is-mobile .dp-body {
+    padding-bottom: 56px;
+  }
+
   /* ---------- timeline ---------- */
 
   .dp-timeline-wrap {
@@ -508,6 +587,13 @@
     height: 0;
   }
 
+  .dp-hour-band {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 46px;
+  }
+
   .dp-hour-label {
     position: absolute;
     left: 0;
@@ -521,6 +607,55 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
     padding-right: 8px;
+    /* Expand the hit target without changing the visual position: half a
+     * snap interval of vertical padding (pulled back by negative margins)
+     * keeps the baseline fixed while making each gutter mark tappable. The
+     * fallback matches the historical 14px padding for snap=15, px=1. */
+    padding-top: var(--dp-half-snap-px, 14px);
+    padding-bottom: var(--dp-half-snap-px, 14px);
+    margin-top: calc(-1 * var(--dp-half-snap-px, 14px));
+    margin-bottom: calc(-1 * var(--dp-half-snap-px, 14px));
+    transition: color 100ms ease, background-color 100ms ease;
+  }
+
+  .dp-hour-label.is-clickable {
+    cursor: pointer;
+  }
+
+  .dp-hour-label.is-clickable:hover {
+    color: var(--color-accent);
+  }
+
+  .dp-hour-submark {
+    position: absolute;
+    left: 0;
+    width: 42px;
+    text-align: right;
+    color: var(--color-ink-faint);
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    padding-right: 8px;
+    padding-top: var(--dp-half-snap-px, 7px);
+    padding-bottom: var(--dp-half-snap-px, 7px);
+    margin-top: calc(-1 * var(--dp-half-snap-px, 7px));
+    margin-bottom: calc(-1 * var(--dp-half-snap-px, 7px));
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease, color 100ms ease;
+  }
+
+  .dp-hour-band:hover .dp-hour-submark {
+    opacity: 0.7;
+    pointer-events: auto;
+  }
+
+  .dp-hour-submark:hover {
+    color: var(--color-accent);
+    opacity: 1;
   }
 
   .dp-hour-line {
@@ -537,134 +672,6 @@
     left: 46px;
     right: 6px;
     bottom: 0;
-    transition: left 180ms cubic-bezier(0.32, 0.72, 0.35, 1);
-  }
-
-  .dp-timeline.is-gutter-revealed .dp-blocks {
-    left: calc(46px + clamp(22px, 5%, 42px));
-  }
-
-  /* ---------- gutter (click/drag to add a new task) ---------- */
-
-  .dp-gutter {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 46px;
-    width: 0;
-    overflow: hidden;
-    pointer-events: none;
-    z-index: 4;
-    cursor: cell;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--color-accent) 8%, transparent) 0%,
-        color-mix(in srgb, var(--color-accent) 4%, transparent) 100%
-      );
-    border-right: 1px dashed
-      color-mix(in srgb, var(--color-accent) 36%, transparent);
-    box-shadow: inset 1px 0 0 0
-      color-mix(in srgb, var(--color-accent) 18%, transparent);
-    transition:
-      width 180ms cubic-bezier(0.32, 0.72, 0.35, 1),
-      background-color 180ms ease,
-      box-shadow 180ms ease;
-  }
-
-  .dp-timeline.is-gutter-revealed .dp-gutter {
-    width: clamp(22px, 5%, 42px);
-    pointer-events: auto;
-  }
-
-  .dp-gutter:hover {
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--color-accent) 14%, transparent) 0%,
-        color-mix(in srgb, var(--color-accent) 7%, transparent) 100%
-      );
-    box-shadow: inset 1px 0 0 0
-      color-mix(in srgb, var(--color-accent) 32%, transparent);
-  }
-
-  .dp-gutter-eyebrow {
-    position: sticky;
-    top: 6px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 0 6px;
-    color: color-mix(in srgb, var(--color-accent) 80%, var(--color-ink));
-    pointer-events: none;
-    user-select: none;
-    opacity: 0;
-    transform: translateY(-2px);
-    transition: opacity 180ms ease 60ms, transform 180ms ease 60ms;
-  }
-
-  .dp-timeline.is-gutter-revealed .dp-gutter-eyebrow {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  .dp-gutter-eyebrow-mark {
-    font-family: var(--font-display);
-    font-weight: 500;
-    font-variation-settings: "opsz" 36;
-    font-size: 14px;
-    line-height: 1;
-    color: var(--color-accent);
-    /* nudge the serif "+" optically */
-    margin-top: -1px;
-  }
-
-  .dp-gutter-eyebrow-text {
-    font-family: var(--font-mono);
-    font-size: 7.5px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-eyebrow);
-    color: color-mix(in srgb, var(--color-accent) 70%, var(--color-ink-muted));
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-  }
-
-  /* On touch devices (no hover capability) keep the gutter resting visible
-   * so a tap lands directly on it rather than requiring a hover-reveal step. */
-  @media (hover: none) {
-    .dp-gutter {
-      width: clamp(22px, 5%, 42px);
-      pointer-events: auto;
-      opacity: 0.85;
-    }
-    .dp-gutter-eyebrow {
-      opacity: 1;
-      transform: none;
-    }
-    .dp-blocks {
-      left: calc(46px + clamp(22px, 5%, 42px));
-    }
-  }
-
-  .dp-create-indicator {
-    /* lift above existing blocks so the dashed preview is never occluded */
-    z-index: 20;
-    background: color-mix(in srgb, var(--color-accent) 22%, var(--color-paper));
-    border: 1.75px dashed var(--color-accent);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--color-accent) 35%, transparent),
-      0 6px 18px color-mix(in srgb, var(--color-accent) 22%, transparent);
-  }
-
-  .dp-create-indicator .dp-drop-indicator-time {
-    color: var(--color-accent);
-  }
-
-  .dp-create-indicator .dp-drop-indicator-text {
-    color: var(--color-ink);
-    font-style: italic;
   }
 
   /* ---------- block (scheduled task on timeline) ---------- */
@@ -855,8 +862,14 @@
     gap: 5px;
   }
 
+  .dp-unscheduled-body {
+    @apply flex flex-col;
+    gap: 5px;
+  }
+
   .dp-unscheduled-head {
-    @apply flex items-center justify-between;
+    @apply flex items-center;
+    gap: 6px;
     margin: 4px 2px 2px;
     padding-bottom: 4px;
     border-bottom: 1px solid var(--color-hairline);
@@ -866,6 +879,52 @@
     text-transform: uppercase;
     letter-spacing: var(--tracking-eyebrow);
     color: var(--color-ink-muted);
+  }
+
+  .dp-unscheduled-title {
+    flex: 1 1 auto;
+  }
+
+  .dp-unscheduled-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 8px;
+    background: var(--color-surface-hover);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .dp-unscheduled-toggle {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-tab);
+    color: var(--color-ink-muted);
+    line-height: 1;
+    transition: color 120ms, background-color 120ms, border-color 120ms;
+  }
+
+  .dp-unscheduled-toggle:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-ink);
+    border-color: var(--color-hairline);
+  }
+
+  .dp-unscheduled-toggle .svg-icon {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
   }
 
   .dp-unscheduled-head .dp-icon {
@@ -1142,4 +1201,99 @@
   .dp-title-input::placeholder {
     color: var(--color-ink-faint);
   }
+
+  .dp-prompt-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 8px 10px;
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+  }
+
+  .dp-prompt-summary-label {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-faint);
+  }
+
+  .dp-prompt-summary-value {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dp-prompt-step-label {
+    margin-top: 14px;
+    margin-bottom: 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-faint);
+  }
+
+  .dp-duration-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .dp-duration-btn {
+    flex: 1 1 auto;
+    min-width: 56px;
+    padding: 8px 10px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    cursor: pointer;
+    transition: border-color 120ms ease, background-color 120ms ease,
+      color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .dp-duration-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .dp-duration-btn:focus,
+  .dp-duration-btn:focus-visible {
+    outline: none;
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+}
+
+/* ============================================================
+ *  mobile-drag-drop polyfill
+ *  These rules apply to the floating drag image the polyfill clones
+ *  onto <body> during touch drag. They sit outside .today-root because
+ *  the drag image is detached from the plugin's container.
+ * ============================================================ */
+
+.dnd-poly-drag-image {
+  opacity: 0.6 !important;
+  pointer-events: none !important;
+}
+
+.dnd-poly-drag-image.dnd-poly-snapback {
+  transition-property: transform, -webkit-transform !important;
+  transition-duration: 250ms !important;
+  transition-timing-function: ease-out !important;
 }
