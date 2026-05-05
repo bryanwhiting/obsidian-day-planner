@@ -6,7 +6,12 @@ import {
   TFile,
 } from "obsidian";
 import type TodayPlugin from "./main";
-import { TagPrefixes, DEFAULT_PREFIXES } from "./parser";
+import {
+  TagPrefixes,
+  DEFAULT_PREFIXES,
+  formatCompactDuration,
+  parseCompactDuration,
+} from "./parser";
 import { ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
 import { TagMigrationModal, PrefixChange } from "./migrate";
 
@@ -24,6 +29,7 @@ export interface TodaySettings {
   dailyNoteFolderFallback: string;
   dailyNoteTemplate: string;
   defaultDurationMin: number;
+  quickDurationsMin: number[];
   projectColors: ProjectColor[];
   timelineHeightDesktop: string;
   timelineHeightMobile: string;
@@ -43,12 +49,41 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
   defaultDurationMin: 15,
+  quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
+
+export const MAX_QUICK_DURATIONS = 6;
+
+// Parses a comma-separated list like "5m, 10m, 1h, 1h30m" into unique minute
+// values, capped at MAX_QUICK_DURATIONS. Returns null if any token is invalid
+// or the list is empty.
+export function parseQuickDurations(raw: string): number[] | null {
+  const tokens = raw
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  if (tokens.length === 0) return null;
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const tok of tokens) {
+    const min = parseCompactDuration(tok);
+    if (min === null) return null;
+    if (seen.has(min)) continue;
+    seen.add(min);
+    out.push(min);
+    if (out.length >= MAX_QUICK_DURATIONS) break;
+  }
+  return out.length > 0 ? out : null;
+}
+
+export function formatQuickDurations(mins: number[]): string {
+  return mins.map((m) => formatCompactDuration(m)).join(", ");
+}
 
 /** Accept bare integers (treated as px) or "<num><unit>" with a known unit.
  *  Returns the canonical CSS length, or null if the input is not parseable. */
@@ -134,6 +169,28 @@ export class TodaySettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    new Setting(containerEl)
+      .setName("Quick duration chips")
+      .setDesc(
+        `Comma-separated durations for the chips on the new-task and edit-task modals (max ${MAX_QUICK_DURATIONS}). Accepts forms like 5m, 1h, 1h30m, 90m.`,
+      )
+      .addText((t) => {
+        const initial = formatQuickDurations(
+          this.plugin.settings.quickDurationsMin,
+        );
+        t.setPlaceholder("15m, 30m, 45m, 1h, 1h30m, 2h").setValue(initial);
+        t.inputEl.addEventListener("blur", async () => {
+          const parsed = parseQuickDurations(t.inputEl.value);
+          if (parsed) {
+            this.plugin.settings.quickDurationsMin = parsed;
+            await this.plugin.saveSettings();
+            t.setValue(formatQuickDurations(parsed));
+          } else {
+            t.setValue(formatQuickDurations(this.plugin.settings.quickDurationsMin));
+          }
+        });
+      });
 
     new Setting(containerEl)
       .setName("Snap interval (minutes)")

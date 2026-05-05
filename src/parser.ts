@@ -9,6 +9,7 @@ export interface ParsedTask {
   order: number | null;
   checked: boolean;
   project: string | null;
+  subproject: string | null;
   description: string | null;
   indent: string;
   subtasks: ParsedSubtask[];
@@ -26,6 +27,7 @@ export interface TagPrefixes {
   time: string;
   order: string;
   project: string;
+  subproject: string;
   exercise: string;
 }
 
@@ -34,6 +36,7 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
   time: "t",
   order: "o",
   project: "p",
+  subproject: "sp",
   exercise: "x",
 };
 
@@ -64,7 +67,11 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
       "i",
     ),
     order: new RegExp(`#${esc(prefixes.order)}\\/(\\d+)\\b`),
+    // The subproject regex must be tested before the project regex when both
+    // share an `sp` / `p` overlap; we expose them separately and order
+    // matters in cleanBody-style replacements.
     project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`),
+    subproject: new RegExp(`#${esc(prefixes.subproject)}\\/([\\w-]+)`),
     exercise: new RegExp(
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g",
@@ -177,7 +184,18 @@ export function parseProject(
   body: string,
   prefixes: TagPrefixes,
 ): string | null {
-  const m = buildTagRegexes(prefixes).project.exec(body);
+  // Strip subproject tags first so e.g. `#sp/back-end` with prefix `p` doesn't
+  // get half-matched as project `sp`.
+  const stripped = body.replace(buildTagRegexes(prefixes).subproject, "");
+  const m = buildTagRegexes(prefixes).project.exec(stripped);
+  return m ? m[1] : null;
+}
+
+export function parseSubproject(
+  body: string,
+  prefixes: TagPrefixes,
+): string | null {
+  const m = buildTagRegexes(prefixes).subproject.exec(body);
   return m ? m[1] : null;
 }
 
@@ -236,6 +254,7 @@ export function parseTaskLine(
   const durationMin = explicitDuration ?? defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const project = parseProject(body, prefixes);
+  const subproject = parseSubproject(body, prefixes);
   const description = parseDescription(body);
   const checked = m[2] !== " ";
   return {
@@ -249,6 +268,7 @@ export function parseTaskLine(
     order,
     checked,
     project,
+    subproject,
     description,
     indent,
     subtasks: [],
@@ -329,9 +349,20 @@ export function setProjectTag(
   project: string,
   prefixes: TagPrefixes,
 ): string {
+  // Strip subproject tags before testing so the project regex can't match
+  // an inadvertent overlap (sp/foo would otherwise look like p/foo if we
+  // searched the whole line first).
+  const subRe = buildTagRegexes(prefixes).subproject;
+  const stripped = rawLine.replace(subRe, " ");
   const re = buildTagRegexes(prefixes).project;
   const newTag = `#${prefixes.project}/${project}`;
-  if (re.test(rawLine)) return rawLine.replace(re, newTag);
+  if (re.test(stripped)) {
+    const replaced = stripped.replace(re, newTag);
+    return replaced.replace(/ /g, () => {
+      const m = subRe.exec(rawLine);
+      return m ? m[0] : "";
+    });
+  }
   return appendTag(rawLine, newTag);
 }
 
@@ -339,7 +370,35 @@ export function removeProjectTag(
   rawLine: string,
   prefixes: TagPrefixes,
 ): string {
+  const subRe = buildTagRegexes(prefixes).subproject;
+  const stripped = rawLine.replace(subRe, " ");
   const re = buildTagRegexes(prefixes).project;
+  const cleaned = stripped.replace(re, "");
+  return cleaned
+    .replace(/ /g, () => {
+      const m = subRe.exec(rawLine);
+      return m ? m[0] : "";
+    })
+    .replace(/[ \t]+$/, "")
+    .replace(/  +/g, " ");
+}
+
+export function setSubprojectTag(
+  rawLine: string,
+  subproject: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).subproject;
+  const newTag = `#${prefixes.subproject}/${subproject}`;
+  if (re.test(rawLine)) return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+
+export function removeSubprojectTag(
+  rawLine: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).subproject;
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
@@ -382,7 +441,7 @@ export function setTaskTitle(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -424,7 +483,7 @@ export function setTaskDescription(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
@@ -458,4 +517,25 @@ export function formatTotal(totalMin: number): string {
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+// Compact form used on quick-duration chips: "15m", "1h", "1h30m" (no space).
+export function formatCompactDuration(totalMin: number): string {
+  if (totalMin <= 0) return "0m";
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h${m}m`;
+}
+
+// Parses chip strings like "5m", "10m", "1h", "1h30m", "90m". Whitespace is
+// ignored. Returns minutes, or null if the input doesn't match.
+export function parseCompactDuration(raw: string): number | null {
+  const s = raw.replace(/\s+/g, "").toLowerCase();
+  if (!s) return null;
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?$/.exec(s);
+  if (!m || (!m[1] && !m[2])) return null;
+  const total = (m[1] ? parseInt(m[1], 10) : 0) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
+  return total > 0 ? total : null;
 }

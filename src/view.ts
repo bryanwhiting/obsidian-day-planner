@@ -29,6 +29,7 @@ import {
   setTaskChecked,
   snapToInterval,
   formatTotal,
+  formatCompactDuration,
   findLastTaskLine,
   buildTaskLine,
 } from "./parser";
@@ -71,15 +72,11 @@ function nowMinutes(): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-const QUICK_DURATIONS: { label: string; min: number }[] = [
-  { label: "15m", min: 15 },
-  { label: "30m", min: 30 },
-  { label: "45m", min: 45 },
-  { label: "1h", min: 60 },
-  { label: "1h30m", min: 90 },
-  { label: "2h", min: 120 },
-  { label: "3h", min: 180 },
-];
+function quickDurations(
+  mins: number[],
+): { label: string; min: number }[] {
+  return mins.map((m) => ({ label: formatCompactDuration(m), min: m }));
+}
 
 export class TodayView extends ItemView {
   plugin: TodayPlugin;
@@ -685,7 +682,7 @@ export class TodayView extends ItemView {
     new TitlePromptModal(this.app, {
       heading: `New task at ${this.fmtClock(startMin)}`,
       placeholder: "Task title…",
-      durations: QUICK_DURATIONS,
+      durations: quickDurations(this.plugin.settings.quickDurationsMin),
       projects: this.collectProjectNames(),
       defaultDurationMin,
       onSubmit: (title, durationMin, project) => {
@@ -704,7 +701,7 @@ export class TodayView extends ItemView {
     new TitlePromptModal(this.app, {
       heading: "New unscheduled task",
       placeholder: "Task title…",
-      durations: QUICK_DURATIONS,
+      durations: quickDurations(this.plugin.settings.quickDurationsMin),
       projects: this.collectProjectNames(),
       defaultDurationMin: this.plugin.settings.defaultDurationMin,
       onSubmit: (title, durationMin, project) => {
@@ -1459,7 +1456,7 @@ export class TodayView extends ItemView {
       initialChecked: task.checked,
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
-      durations: QUICK_DURATIONS,
+      durations: quickDurations(this.plugin.settings.quickDurationsMin),
       onSave: (title, description, durationMin, project, checked) => {
         void this.applyTaskEdit(
           file,

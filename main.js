@@ -333,6 +333,7 @@ var DEFAULT_PREFIXES = {
   time: "t",
   order: "o",
   project: "p",
+  subproject: "sp",
   exercise: "x"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
@@ -348,7 +349,11 @@ function buildTagRegexes(prefixes) {
       "i"
     ),
     order: new RegExp(`#${esc(prefixes.order)}\\/(\\d+)\\b`),
+    // The subproject regex must be tested before the project regex when both
+    // share an `sp` / `p` overlap; we expose them separately and order
+    // matters in cleanBody-style replacements.
     project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`),
+    subproject: new RegExp(`#${esc(prefixes.subproject)}\\/([\\w-]+)`),
     exercise: new RegExp(
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g"
@@ -445,7 +450,12 @@ function parseOrder(body, prefixes) {
   return m ? parseInt(m[1], 10) : null;
 }
 function parseProject(body, prefixes) {
-  const m = buildTagRegexes(prefixes).project.exec(body);
+  const stripped = body.replace(buildTagRegexes(prefixes).subproject, "");
+  const m = buildTagRegexes(prefixes).project.exec(stripped);
+  return m ? m[1] : null;
+}
+function parseSubproject(body, prefixes) {
+  const m = buildTagRegexes(prefixes).subproject.exec(body);
   return m ? m[1] : null;
 }
 function parseDescription(body) {
@@ -496,6 +506,7 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
   const durationMin = explicitDuration != null ? explicitDuration : defaultDurationMin;
   const order = parseOrder(body, prefixes);
   const project = parseProject(body, prefixes);
+  const subproject = parseSubproject(body, prefixes);
   const description = parseDescription(body);
   const checked = m[2] !== " ";
   return {
@@ -509,6 +520,7 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
     order,
     checked,
     project,
+    subproject,
     description,
     indent,
     subtasks: []
@@ -565,15 +577,28 @@ function removeOrderTag(rawLine, prefixes) {
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 function setProjectTag(rawLine, project, prefixes) {
+  const subRe = buildTagRegexes(prefixes).subproject;
+  const stripped = rawLine.replace(subRe, "\0");
   const re = buildTagRegexes(prefixes).project;
   const newTag = `#${prefixes.project}/${project}`;
-  if (re.test(rawLine))
-    return rawLine.replace(re, newTag);
+  if (re.test(stripped)) {
+    const replaced = stripped.replace(re, newTag);
+    return replaced.replace(/ /g, () => {
+      const m = subRe.exec(rawLine);
+      return m ? m[0] : "";
+    });
+  }
   return appendTag(rawLine, newTag);
 }
 function removeProjectTag(rawLine, prefixes) {
+  const subRe = buildTagRegexes(prefixes).subproject;
+  const stripped = rawLine.replace(subRe, "\0");
   const re = buildTagRegexes(prefixes).project;
-  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
+  const cleaned = stripped.replace(re, "");
+  return cleaned.replace(/ /g, () => {
+    const m = subRe.exec(rawLine);
+    return m ? m[0] : "";
+  }).replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 function appendTag(rawLine, tag) {
   const trimmed = rawLine.replace(/[ \t]+$/, "");
@@ -608,7 +633,7 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   const body = m[3];
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -640,7 +665,7 @@ function setTaskDescription(rawLine, newDescription, prefixes) {
     return rawLine;
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
@@ -671,6 +696,27 @@ function formatTotal(totalMin) {
   if (m === 0)
     return `${h}h`;
   return `${h}h ${m}m`;
+}
+function formatCompactDuration(totalMin) {
+  if (totalMin <= 0)
+    return "0m";
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0)
+    return `${m}m`;
+  if (m === 0)
+    return `${h}h`;
+  return `${h}h${m}m`;
+}
+function parseCompactDuration(raw) {
+  const s = raw.replace(/\s+/g, "").toLowerCase();
+  if (!s)
+    return null;
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?$/.exec(s);
+  if (!m || !m[1] && !m[2])
+    return null;
+  const total = (m[1] ? parseInt(m[1], 10) : 0) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
+  return total > 0 ? total : null;
 }
 
 // src/colors.ts
@@ -933,11 +979,35 @@ var DEFAULT_SETTINGS = {
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
   defaultDurationMin: 15,
+  quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
   timelineHeightDesktop: "",
   timelineHeightMobile: ""
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
+var MAX_QUICK_DURATIONS = 6;
+function parseQuickDurations(raw) {
+  const tokens = raw.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
+  if (tokens.length === 0)
+    return null;
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const tok of tokens) {
+    const min = parseCompactDuration(tok);
+    if (min === null)
+      return null;
+    if (seen.has(min))
+      continue;
+    seen.add(min);
+    out.push(min);
+    if (out.length >= MAX_QUICK_DURATIONS)
+      break;
+  }
+  return out.length > 0 ? out : null;
+}
+function formatQuickDurations(mins) {
+  return mins.map((m) => formatCompactDuration(m)).join(", ");
+}
 function parseTimelineHeight(raw) {
   const v = raw.trim();
   if (!v)
@@ -1010,6 +1080,24 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    new import_obsidian2.Setting(containerEl).setName("Quick duration chips").setDesc(
+      `Comma-separated durations for the chips on the new-task and edit-task modals (max ${MAX_QUICK_DURATIONS}). Accepts forms like 5m, 1h, 1h30m, 90m.`
+    ).addText((t) => {
+      const initial = formatQuickDurations(
+        this.plugin.settings.quickDurationsMin
+      );
+      t.setPlaceholder("15m, 30m, 45m, 1h, 1h30m, 2h").setValue(initial);
+      t.inputEl.addEventListener("blur", async () => {
+        const parsed = parseQuickDurations(t.inputEl.value);
+        if (parsed) {
+          this.plugin.settings.quickDurationsMin = parsed;
+          await this.plugin.saveSettings();
+          t.setValue(formatQuickDurations(parsed));
+        } else {
+          t.setValue(formatQuickDurations(this.plugin.settings.quickDurationsMin));
+        }
+      });
+    });
     new import_obsidian2.Setting(containerEl).setName("Snap interval (minutes)").setDesc(
       "Drag-drop snaps to this granularity. Also controls the sub-marks revealed on hover in the timeline gutter (e.g. 15 \u2192 :15, :30, :45)."
     ).addText(
@@ -1651,15 +1739,9 @@ function nowMinutes() {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
 }
-var QUICK_DURATIONS = [
-  { label: "15m", min: 15 },
-  { label: "30m", min: 30 },
-  { label: "45m", min: 45 },
-  { label: "1h", min: 60 },
-  { label: "1h30m", min: 90 },
-  { label: "2h", min: 120 },
-  { label: "3h", min: 180 }
-];
+function quickDurations(mins) {
+  return mins.map((m) => ({ label: formatCompactDuration(m), min: m }));
+}
 var TodayView = class extends import_obsidian4.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -2177,7 +2259,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     new TitlePromptModal(this.app, {
       heading: `New task at ${this.fmtClock(startMin)}`,
       placeholder: "Task title\u2026",
-      durations: QUICK_DURATIONS,
+      durations: quickDurations(this.plugin.settings.quickDurationsMin),
       projects: this.collectProjectNames(),
       defaultDurationMin,
       onSubmit: (title, durationMin, project) => {
@@ -2195,7 +2277,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     new TitlePromptModal(this.app, {
       heading: "New unscheduled task",
       placeholder: "Task title\u2026",
-      durations: QUICK_DURATIONS,
+      durations: quickDurations(this.plugin.settings.quickDurationsMin),
       projects: this.collectProjectNames(),
       defaultDurationMin: this.plugin.settings.defaultDurationMin,
       onSubmit: (title, durationMin, project) => {
@@ -2842,7 +2924,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       initialChecked: task.checked,
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
-      durations: QUICK_DURATIONS,
+      durations: quickDurations(this.plugin.settings.quickDurationsMin),
       onSave: (title, description, durationMin, project, checked) => {
         void this.applyTaskEdit(
           file,
