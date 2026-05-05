@@ -2097,26 +2097,17 @@ var TodayView = class extends import_obsidian4.ItemView {
         const subRow = subList.createDiv({ cls: "dp-block-subtask" });
         if (sub.checked)
           subRow.addClass("is-done");
-        const box = subRow.createEl("button", {
-          cls: "dp-block-subtask-check",
-          attr: { "aria-label": "Toggle sub-task" }
-        });
-        box.type = "button";
-        if (sub.checked) {
-          box.addClass("is-checked");
-          (0, import_obsidian4.setIcon)(box, "check");
-        }
-        subRow.createSpan({
+        const text = subRow.createSpan({
           cls: "dp-block-subtask-text",
           text: sub.text
         });
-        box.addEventListener("click", (ev) => {
+        text.addEventListener("click", (ev) => {
           ev.stopPropagation();
           void this.applyLineChecked(file, sub.lineNumber, !sub.checked);
         });
-        box.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-        box.addEventListener("mousedown", (ev) => ev.stopPropagation());
-        box.addEventListener("dragstart", (ev) => {
+        text.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+        text.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        text.addEventListener("dragstart", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
         });

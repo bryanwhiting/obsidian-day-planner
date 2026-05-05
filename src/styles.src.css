@@ -801,7 +801,6 @@
   .dp-block-subtask {
     display: flex;
     align-items: center;
-    gap: 5px;
     min-width: 0;
     line-height: 1.25;
   }
@@ -811,49 +810,24 @@
     text-decoration: line-through;
   }
 
-  .dp-block-subtask-check {
-    flex: 0 0 auto;
-    width: 11px;
-    height: 11px;
-    padding: 0;
-    margin: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    color: var(--dp-on-color);
-    border: 1px solid color-mix(in srgb, var(--dp-on-color) 55%, transparent);
-    border-radius: 2px;
-    cursor: pointer;
-    box-shadow: none;
-  }
-
-  .dp-block-subtask-check:hover {
-    border-color: var(--dp-on-color);
-    background: color-mix(in srgb, var(--dp-on-color) 10%, transparent);
-  }
-
-  .dp-block-subtask-check.is-checked {
-    background: color-mix(in srgb, var(--dp-on-color) 75%, transparent);
-    border-color: color-mix(in srgb, var(--dp-on-color) 75%, transparent);
-    color: var(--dp-color);
-  }
-
-  .dp-block-subtask-check .svg-icon {
-    width: 9px;
-    height: 9px;
-    stroke-width: 3;
-  }
-
   .dp-block-subtask-text {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 100%;
+    padding: 1px 4px;
+    margin-left: -3px;
+    border-radius: 3px;
     font-family: var(--font-sans);
     font-size: 10.5px;
     color: color-mix(in srgb, var(--dp-on-color) 90%, transparent);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  .dp-block-subtask-text:hover {
+    background: color-mix(in srgb, var(--dp-on-color) 12%, transparent);
   }
 
   /* warning icon inside block (no explicit duration) */

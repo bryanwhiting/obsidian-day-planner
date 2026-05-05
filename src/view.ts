@@ -768,29 +768,21 @@ export class TodayView extends ItemView {
       block.task.subtasks.forEach((sub) => {
         const subRow = subList.createDiv({ cls: "dp-block-subtask" });
         if (sub.checked) subRow.addClass("is-done");
-        const box = subRow.createEl("button", {
-          cls: "dp-block-subtask-check",
-          attr: { "aria-label": "Toggle sub-task" },
-        });
-        box.type = "button";
-        if (sub.checked) {
-          box.addClass("is-checked");
-          setIcon(box, "check");
-        }
-        subRow.createSpan({
+        const text = subRow.createSpan({
           cls: "dp-block-subtask-text",
           text: sub.text,
         });
-        // The box must not propagate to the block's click (opens modal),
-        // dragstart, or pointerdown (resize handle uses pointerdown but
-        // it's a sibling — still, defensive stopPropagation).
-        box.addEventListener("click", (ev) => {
+        // Clicking the text toggles the sub-task. Anywhere else on the
+        // block falls through to the block's own click handler, which
+        // opens the edit modal.
+        text.addEventListener("click", (ev) => {
           ev.stopPropagation();
           void this.applyLineChecked(file, sub.lineNumber, !sub.checked);
         });
-        box.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-        box.addEventListener("mousedown", (ev) => ev.stopPropagation());
-        box.addEventListener("dragstart", (ev) => {
+        // Don't let a press on the text initiate the block's drag.
+        text.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+        text.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        text.addEventListener("dragstart", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
         });
