@@ -72,22 +72,28 @@ export function parseExercises(
   prefixes: TagPrefixes,
 ): ExerciseSummary[] {
   const re = buildTagRegexes(prefixes).exercise;
-  re.lastIndex = 0;
   const out: ExerciseSummary[] = [];
   const byName = new Map<string, ExerciseSummary>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    const name = m[1];
-    const reps = parseInt(m[2], 10);
-    const weight = m[3] !== undefined ? parseFloat(m[3]) : null;
-    if (!isFinite(reps) || reps <= 0) continue;
-    let summary = byName.get(name);
-    if (!summary) {
-      summary = { name, sets: [] };
-      byName.set(name, summary);
-      out.push(summary);
+  for (const line of content.split("\n")) {
+    const taskMatch = TASK_LINE.exec(line);
+    // Only completed task lines count toward the workout summary. Skip open
+    // tasks, plain bullets, prose — anything without an explicit "x" status.
+    if (!taskMatch) continue;
+    const status = taskMatch[2];
+    if (status !== "x" && status !== "X") continue;
+    for (const m of taskMatch[3].matchAll(re)) {
+      const name = m[1];
+      const reps = parseInt(m[2], 10);
+      const weight = m[3] !== undefined ? parseFloat(m[3]) : null;
+      if (!isFinite(reps) || reps <= 0) continue;
+      let summary = byName.get(name);
+      if (!summary) {
+        summary = { name, sets: [] };
+        byName.set(name, summary);
+        out.push(summary);
+      }
+      summary.sets.push({ reps, weight });
     }
-    summary.sets.push({ reps, weight });
   }
   return out;
 }
