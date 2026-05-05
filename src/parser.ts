@@ -25,6 +25,7 @@ export interface TagPrefixes {
   time: string;
   order: string;
   project: string;
+  exercise: string;
 }
 
 export const DEFAULT_PREFIXES: TagPrefixes = {
@@ -32,7 +33,18 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
   time: "t",
   order: "o",
   project: "p",
+  exercise: "x",
 };
+
+export interface ExerciseSet {
+  reps: number;
+  weight: number | null;
+}
+
+export interface ExerciseSummary {
+  name: string;
+  sets: ExerciseSet[];
+}
 
 const TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 
@@ -48,7 +60,62 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
     ),
     order: new RegExp(`#${esc(prefixes.order)}\\/(\\d+)\\b`),
     project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`),
+    exercise: new RegExp(
+      `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
+      "g",
+    ),
   };
+}
+
+export function parseExercises(
+  content: string,
+  prefixes: TagPrefixes,
+): ExerciseSummary[] {
+  const re = buildTagRegexes(prefixes).exercise;
+  re.lastIndex = 0;
+  const out: ExerciseSummary[] = [];
+  const byName = new Map<string, ExerciseSummary>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const name = m[1];
+    const reps = parseInt(m[2], 10);
+    const weight = m[3] !== undefined ? parseFloat(m[3]) : null;
+    if (!isFinite(reps) || reps <= 0) continue;
+    let summary = byName.get(name);
+    if (!summary) {
+      summary = { name, sets: [] };
+      byName.set(name, summary);
+      out.push(summary);
+    }
+    summary.sets.push({ reps, weight });
+  }
+  return out;
+}
+
+export function formatExerciseSummary(summary: ExerciseSummary): string {
+  const hasWeight = summary.sets.some((s) => s.weight !== null);
+  if (!hasWeight) {
+    const total = summary.sets.reduce((a, s) => a + s.reps, 0);
+    return `${summary.name} ${total}`;
+  }
+  // Group sets that share a weight (or no weight) and sum their reps. Insertion
+  // order is preserved so the most-recent weights don't reshuffle the line.
+  const buckets = new Map<string, { reps: number; weight: number | null }>();
+  for (const set of summary.sets) {
+    const key = set.weight === null ? "" : String(set.weight);
+    const cur = buckets.get(key);
+    if (cur) cur.reps += set.reps;
+    else buckets.set(key, { reps: set.reps, weight: set.weight });
+  }
+  const parts: string[] = [];
+  for (const { reps, weight } of buckets.values()) {
+    parts.push(weight === null ? `${reps}` : `${reps}×${weight}`);
+  }
+  return `${summary.name} ${parts.join(", ")}`;
+}
+
+export function formatExerciseLine(summaries: ExerciseSummary[]): string {
+  return summaries.map(formatExerciseSummary).join(" • ");
 }
 
 export function parseDuration(
@@ -286,7 +353,7 @@ export function setTaskTitle(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";

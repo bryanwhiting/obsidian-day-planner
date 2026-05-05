@@ -13,7 +13,10 @@ import type TodayPlugin from "./main";
 import {
   ParsedTask,
   ParsedSubtask,
+  ExerciseSummary,
   parseFileTasks,
+  parseExercises,
+  formatExerciseLine,
   setTimeTag,
   removeTimeTag,
   setOrderTag,
@@ -198,7 +201,18 @@ export class TodayView extends ItemView {
       }
     }
 
-    const tasks = await this.readTasks(displayFile);
+    const fileContent = displayFile
+      ? await this.app.vault.read(displayFile)
+      : "";
+    const tasks = displayFile
+      ? parseFileTasks(
+          displayFile.path,
+          fileContent,
+          this.plugin.settings.prefixes,
+          this.plugin.settings.defaultDurationMin,
+        )
+      : [];
+    const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
 
     const activeFile = this.app.workspace.getActiveFile();
     const showOpenActiveLink =
@@ -222,6 +236,7 @@ export class TodayView extends ItemView {
       displayFile,
       displayPath,
       tasks,
+      exercises,
       true,
       colorMap,
       showOpenActiveLink ? activeFile : null,
@@ -379,17 +394,6 @@ export class TodayView extends ItemView {
     });
   }
 
-  private async readTasks(file: TFile | null): Promise<ParsedTask[]> {
-    if (!file) return [];
-    const content = await this.app.vault.read(file);
-    return parseFileTasks(
-      file.path,
-      content,
-      this.plugin.settings.prefixes,
-      this.plugin.settings.defaultDurationMin,
-    );
-  }
-
   private renderSection(
     parent: HTMLElement,
     title: string,
@@ -397,6 +401,7 @@ export class TodayView extends ItemView {
     file: TFile | null,
     path: string,
     tasks: ParsedTask[],
+    exercises: ExerciseSummary[],
     isPrimary: boolean,
     colorMap: Map<string, string>,
     openActiveTarget: TFile | null = null,
@@ -460,6 +465,11 @@ export class TodayView extends ItemView {
           this.scheduleRender();
         });
       }
+    }
+
+    if (isPrimary) {
+      const workout = header.createDiv({ cls: "dp-workout" });
+      workout.textContent = formatExerciseLine(exercises);
     }
 
     const statsRow = header.createDiv({ cls: "dp-stats-row" });
@@ -1319,6 +1329,7 @@ export class TodayView extends ItemView {
       .replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "")
       .replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "")
+      .replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -1327,7 +1338,7 @@ export class TodayView extends ItemView {
     const p = this.plugin.settings.prefixes;
     const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(
-      `#(?:${esc(p.duration)}|${esc(p.time)}|${esc(p.order)}|${esc(p.project)})\\/`,
+      `#(?:${esc(p.duration)}|${esc(p.time)}|${esc(p.order)}|${esc(p.project)}|${esc(p.exercise)})\\/`,
     );
     const m = re.exec(rawLine);
     const cutoff = m ? m.index : rawLine.length;

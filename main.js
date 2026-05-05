@@ -332,7 +332,8 @@ var DEFAULT_PREFIXES = {
   duration: "d",
   time: "t",
   order: "o",
-  project: "p"
+  project: "p",
+  exercise: "x"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 function buildTagRegexes(prefixes) {
@@ -346,8 +347,58 @@ function buildTagRegexes(prefixes) {
       "i"
     ),
     order: new RegExp(`#${esc(prefixes.order)}\\/(\\d+)\\b`),
-    project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`)
+    project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`),
+    exercise: new RegExp(
+      `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
+      "g"
+    )
   };
+}
+function parseExercises(content, prefixes) {
+  const re = buildTagRegexes(prefixes).exercise;
+  re.lastIndex = 0;
+  const out = [];
+  const byName = /* @__PURE__ */ new Map();
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    const name = m[1];
+    const reps = parseInt(m[2], 10);
+    const weight = m[3] !== void 0 ? parseFloat(m[3]) : null;
+    if (!isFinite(reps) || reps <= 0)
+      continue;
+    let summary = byName.get(name);
+    if (!summary) {
+      summary = { name, sets: [] };
+      byName.set(name, summary);
+      out.push(summary);
+    }
+    summary.sets.push({ reps, weight });
+  }
+  return out;
+}
+function formatExerciseSummary(summary) {
+  const hasWeight = summary.sets.some((s) => s.weight !== null);
+  if (!hasWeight) {
+    const total = summary.sets.reduce((a, s) => a + s.reps, 0);
+    return `${summary.name} ${total}`;
+  }
+  const buckets = /* @__PURE__ */ new Map();
+  for (const set of summary.sets) {
+    const key = set.weight === null ? "" : String(set.weight);
+    const cur = buckets.get(key);
+    if (cur)
+      cur.reps += set.reps;
+    else
+      buckets.set(key, { reps: set.reps, weight: set.weight });
+  }
+  const parts = [];
+  for (const { reps, weight } of buckets.values()) {
+    parts.push(weight === null ? `${reps}` : `${reps}\xD7${weight}`);
+  }
+  return `${summary.name} ${parts.join(", ")}`;
+}
+function formatExerciseLine(summaries) {
+  return summaries.map(formatExerciseSummary).join(" \u2022 ");
 }
 function parseDuration(body, prefixes) {
   const m = buildTagRegexes(prefixes).duration.exec(body);
@@ -531,7 +582,7 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   const body = m[3];
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -802,6 +853,8 @@ function keyLabel(key) {
       return "Order";
     case "project":
       return "Project";
+    case "exercise":
+      return "Exercise";
   }
 }
 
@@ -860,7 +913,13 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     const snap = this.prefixSnapshot;
     this.prefixSnapshot = null;
     const current = this.plugin.settings.prefixes;
-    const keys = ["duration", "time", "order", "project"];
+    const keys = [
+      "duration",
+      "time",
+      "order",
+      "project",
+      "exercise"
+    ];
     const changes = [];
     for (const key of keys) {
       const oldP = snap[key];
@@ -933,6 +992,14 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       (t) => t.setValue(this.plugin.settings.prefixes.order).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.order = v;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Exercise tag prefix").setDesc(buildExerciseDesc()).addText(
+      (t) => t.setValue(this.plugin.settings.prefixes.exercise).onChange(async (v) => {
+        if (/^[a-zA-Z]+$/.test(v)) {
+          this.plugin.settings.prefixes.exercise = v;
           await this.plugin.saveSettings();
         }
       })
@@ -1218,6 +1285,23 @@ function buildOrderDesc() {
     ". The plugin manages this automatically when you drag to reorder unscheduled cards, so you usually don't type it yourself. Example: ",
     makeCode("#o/3"),
     " puts a task third in the unscheduled list."
+  );
+  return f;
+}
+function buildExerciseDesc() {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Logs a workout set inline in your daily note. Default prefix ",
+    makeCode("x"),
+    ". Format: ",
+    makeCode("#x/<name>/<reps>"),
+    " for bodyweight, or ",
+    makeCode("#x/<name>/<reps>/<weight>"),
+    " when weighted. Examples: ",
+    makeCode("#x/pushups/25"),
+    " (25 pushups), ",
+    makeCode("#x/bench/10/135"),
+    " (10 reps at 135 lbs). The plugin sums reps per exercise (and per weight bucket when weighted) and renders a one-line summary at the top of the section."
   );
   return f;
 }
@@ -1622,7 +1706,14 @@ var TodayView = class extends import_obsidian4.ItemView {
         this.overrideFilePath = null;
       }
     }
-    const tasks = await this.readTasks(displayFile);
+    const fileContent = displayFile ? await this.app.vault.read(displayFile) : "";
+    const tasks = displayFile ? parseFileTasks(
+      displayFile.path,
+      fileContent,
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin
+    ) : [];
+    const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
     const activeFile = this.app.workspace.getActiveFile();
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
     this.renderDateNav(root);
@@ -1638,6 +1729,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       displayFile,
       displayPath,
       tasks,
+      exercises,
       true,
       colorMap,
       showOpenActiveLink ? activeFile : null
@@ -1780,18 +1872,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       day: "numeric"
     });
   }
-  async readTasks(file) {
-    if (!file)
-      return [];
-    const content = await this.app.vault.read(file);
-    return parseFileTasks(
-      file.path,
-      content,
-      this.plugin.settings.prefixes,
-      this.plugin.settings.defaultDurationMin
-    );
-  }
-  renderSection(parent, title, subtitle, file, path, tasks, isPrimary, colorMap, openActiveTarget = null) {
+  renderSection(parent, title, subtitle, file, path, tasks, exercises, isPrimary, colorMap, openActiveTarget = null) {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed)
       section.addClass("is-summaries-collapsed");
@@ -1851,6 +1932,10 @@ var TodayView = class extends import_obsidian4.ItemView {
           this.scheduleRender();
         });
       }
+    }
+    if (isPrimary) {
+      const workout = header.createDiv({ cls: "dp-workout" });
+      workout.textContent = formatExerciseLine(exercises);
     }
     const statsRow = header.createDiv({ cls: "dp-stats-row" });
     this.renderPlannedTable(statsRow, tasks);
@@ -2594,13 +2679,13 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   cleanBody(body) {
     const p = this.plugin.settings.prefixes;
-    return body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "").replace(/\s+/g, " ").trim();
+    return body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\s+/g, " ").trim();
   }
   endOfTitleCh(rawLine) {
     const p = this.plugin.settings.prefixes;
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(
-      `#(?:${esc(p.duration)}|${esc(p.time)}|${esc(p.order)}|${esc(p.project)})\\/`
+      `#(?:${esc(p.duration)}|${esc(p.time)}|${esc(p.order)}|${esc(p.project)}|${esc(p.exercise)})\\/`
     );
     const m = re.exec(rawLine);
     const cutoff = m ? m.index : rawLine.length;

@@ -90,7 +90,13 @@ export class TodaySettingTab extends PluginSettingTab {
     const snap = this.prefixSnapshot;
     this.prefixSnapshot = null;
     const current = this.plugin.settings.prefixes;
-    const keys: (keyof TagPrefixes)[] = ["duration", "time", "order", "project"];
+    const keys: (keyof TagPrefixes)[] = [
+      "duration",
+      "time",
+      "order",
+      "project",
+      "exercise",
+    ];
     const changes: PrefixChange[] = [];
     for (const key of keys) {
       const oldP = snap[key];
@@ -199,6 +205,20 @@ export class TodaySettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }
         }),
+      );
+
+    new Setting(containerEl)
+      .setName("Exercise tag prefix")
+      .setDesc(buildExerciseDesc())
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.prefixes.exercise)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.prefixes.exercise = v;
+              await this.plugin.saveSettings();
+            }
+          }),
       );
   }
 
@@ -578,6 +598,24 @@ function buildOrderDesc(): DocumentFragment {
     ". The plugin manages this automatically when you drag to reorder unscheduled cards, so you usually don't type it yourself. Example: ",
     makeCode("#o/3"),
     " puts a task third in the unscheduled list.",
+  );
+  return f;
+}
+
+function buildExerciseDesc(): DocumentFragment {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Logs a workout set inline in your daily note. Default prefix ",
+    makeCode("x"),
+    ". Format: ",
+    makeCode("#x/<name>/<reps>"),
+    " for bodyweight, or ",
+    makeCode("#x/<name>/<reps>/<weight>"),
+    " when weighted. Examples: ",
+    makeCode("#x/pushups/25"),
+    " (25 pushups), ",
+    makeCode("#x/bench/10/135"),
+    " (10 reps at 135 lbs). The plugin sums reps per exercise (and per weight bucket when weighted) and renders a one-line summary at the top of the section.",
   );
   return f;
 }
