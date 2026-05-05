@@ -2455,13 +2455,23 @@ var TodayView = class extends import_obsidian4.ItemView {
     const totals = computeTotals(tasks);
     const total = totals.scheduledMin + totals.unscheduledMin;
     const settings = this.plugin.settings;
+    const workdayMin = Math.max(
+      0,
+      (settings.workEndHour - settings.workStartHour) * 60
+    );
     const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
+    const headerLabel = `Workday (${workRange}; ${formatTotal(workdayMin)})`;
     const table = parent.createDiv({ cls: "dp-stat-table" });
-    table.createSpan({ cls: "dp-st-h", text: `Workday (${workRange})` });
+    table.createSpan({ cls: "dp-st-h", text: headerLabel });
     table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
     this.renderStatRow(table, "Scheduled", totals.scheduledMin);
     this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
     this.renderStatRow(table, "Total", total, true);
+    if (total > workdayMin) {
+      this.renderStatRow(table, "Overbooked", total - workdayMin);
+      const cells = Array.from(table.children);
+      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
+    }
   }
   renderFreeTable(parent, tasks) {
     const settings = this.plugin.settings;

@@ -499,6 +499,10 @@
     color: var(--color-ink-muted);
   }
 
+  .dp-st-warn {
+    color: var(--color-warn);
+  }
+
   .dp-create {
     @apply w-full cursor-pointer transition;
     margin-top: 8px;
