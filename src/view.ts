@@ -1623,16 +1623,11 @@ class TaskEditModal extends Modal {
       attr: { "aria-label": "Mark task complete" },
     });
     checkBtn.type = "button";
-    const renderCheck = () => {
-      checkBtn.toggleClass("is-checked", this.checked);
-      checkBtn.empty();
-      if (this.checked) setIcon(checkBtn, "check");
-    };
-    renderCheck();
+    if (this.checked) checkBtn.addClass("is-checked");
     checkBtn.addEventListener("click", () => {
       this.checked = !this.checked;
       this.checkedChanged = true;
-      renderCheck();
+      checkBtn.toggleClass("is-checked", this.checked);
     });
 
     const input = titleRow.createEl("input", {
@@ -1737,30 +1732,19 @@ class TaskEditModal extends Modal {
         let checked = sub.checked;
         const row = list.createDiv({ cls: "dp-edit-subtask" });
         if (checked) row.addClass("is-done");
-        const box = row.createEl("button", {
-          cls: "dp-edit-check",
-          attr: { "aria-label": "Toggle sub-task" },
-        });
-        box.type = "button";
-        const renderBox = () => {
-          box.toggleClass("is-checked", checked);
-          box.empty();
-          if (checked) setIcon(box, "check");
-        };
-        renderBox();
-        const text = row.createSpan({
+        const box = row.createSpan({ cls: "dp-edit-check" });
+        if (checked) box.addClass("is-checked");
+        row.createSpan({
           cls: "dp-edit-subtask-text",
           text: sub.text,
         });
-        box.addEventListener("click", () => {
+        // Click anywhere on the row to toggle.
+        row.addEventListener("click", () => {
           checked = !checked;
-          renderBox();
           row.toggleClass("is-done", checked);
+          box.toggleClass("is-checked", checked);
           void this.opts.onToggleSubtask(sub, checked);
         });
-        // Allow click on the row text to toggle as well — keeps the hit
-        // target generous for short titles.
-        text.addEventListener("click", () => box.click());
       });
     }
 

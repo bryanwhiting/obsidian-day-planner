@@ -1519,20 +1519,20 @@
 
   .dp-edit-check {
     flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     padding: 0;
     margin: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     background: var(--color-paper);
-    color: var(--color-ink);
-    border: 1.5px solid var(--color-hairline);
-    border-radius: var(--radius-card);
+    border: 1.5px solid color-mix(in srgb, var(--color-ink) 28%, transparent);
+    border-radius: 50%;
     cursor: pointer;
-    transition: border-color 120ms ease, background-color 120ms ease,
-      color 120ms ease;
+    box-shadow: none;
+    transition: background-color 120ms ease, border-color 120ms ease;
+    position: relative;
   }
 
   .dp-edit-check:hover {
@@ -1542,29 +1542,32 @@
   .dp-edit-check.is-checked {
     background: var(--color-accent);
     border-color: var(--color-accent);
-    color: var(--color-on-accent);
   }
 
-  .dp-edit-check .svg-icon {
-    width: 14px;
-    height: 14px;
-    stroke-width: 3;
+  .dp-edit-check.is-checked::after {
+    content: "";
+    width: 4px;
+    height: 7px;
+    border-right: 1.5px solid var(--color-on-accent);
+    border-bottom: 1.5px solid var(--color-on-accent);
+    transform: rotate(45deg) translate(-1px, -1px);
   }
 
   .dp-edit-subtasks {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     margin-top: 4px;
   }
 
   .dp-edit-subtask {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 6px;
+    gap: 10px;
+    padding: 5px 6px;
     border-radius: var(--radius-card);
     cursor: pointer;
+    user-select: none;
   }
 
   .dp-edit-subtask:hover {
@@ -1577,13 +1580,13 @@
   }
 
   .dp-edit-subtask .dp-edit-check {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
-  .dp-edit-subtask .dp-edit-check .svg-icon {
-    width: 11px;
-    height: 11px;
+  .dp-edit-subtask .dp-edit-check.is-checked::after {
+    width: 3.5px;
+    height: 6px;
   }
 
   .dp-edit-subtask-text {

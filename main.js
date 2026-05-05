@@ -2791,17 +2791,12 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       attr: { "aria-label": "Mark task complete" }
     });
     checkBtn.type = "button";
-    const renderCheck = () => {
-      checkBtn.toggleClass("is-checked", this.checked);
-      checkBtn.empty();
-      if (this.checked)
-        (0, import_obsidian4.setIcon)(checkBtn, "check");
-    };
-    renderCheck();
+    if (this.checked)
+      checkBtn.addClass("is-checked");
     checkBtn.addEventListener("click", () => {
       this.checked = !this.checked;
       this.checkedChanged = true;
-      renderCheck();
+      checkBtn.toggleClass("is-checked", this.checked);
     });
     const input = titleRow.createEl("input", {
       type: "text",
@@ -2902,29 +2897,19 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         const row2 = list.createDiv({ cls: "dp-edit-subtask" });
         if (checked)
           row2.addClass("is-done");
-        const box = row2.createEl("button", {
-          cls: "dp-edit-check",
-          attr: { "aria-label": "Toggle sub-task" }
-        });
-        box.type = "button";
-        const renderBox = () => {
-          box.toggleClass("is-checked", checked);
-          box.empty();
-          if (checked)
-            (0, import_obsidian4.setIcon)(box, "check");
-        };
-        renderBox();
-        const text = row2.createSpan({
+        const box = row2.createSpan({ cls: "dp-edit-check" });
+        if (checked)
+          box.addClass("is-checked");
+        row2.createSpan({
           cls: "dp-edit-subtask-text",
           text: sub.text
         });
-        box.addEventListener("click", () => {
+        row2.addEventListener("click", () => {
           checked = !checked;
-          renderBox();
           row2.toggleClass("is-done", checked);
+          box.toggleClass("is-checked", checked);
           void this.opts.onToggleSubtask(sub, checked);
         });
-        text.addEventListener("click", () => box.click());
       });
     }
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
