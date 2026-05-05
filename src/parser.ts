@@ -431,8 +431,16 @@ export function setTaskTitle(
   const descMatch = DESCRIPTION_RE.exec(beforeTags);
   const descPart = descMatch ? `{${descMatch[1].trim()}}` : "";
 
+  // Preserve bare hashtags like `#meeting` (context tags) — the modal hides
+  // them from the title input, but we must not silently delete them on save.
+  const bareTags: string[] = [];
+  for (const bm of beforeTags.matchAll(/#[A-Za-z][\w-]*(?![\w/-])/g)) {
+    bareTags.push(bm[0]);
+  }
+
   const trimmedTitle = newTitle.trim();
   const parts: string[] = [trimmedTitle];
+  for (const t of bareTags) parts.push(t);
   if (descPart) parts.push(descPart);
   if (tagsPart) parts.push(tagsPart);
   return `${indent}- [${checkbox}] ${parts.join(" ")}`;

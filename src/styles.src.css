@@ -887,6 +887,47 @@
     white-space: nowrap;
   }
 
+  .dp-block-project-wrap {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .dp-block-project-icon {
+    display: inline-flex;
+    align-items: center;
+    color: color-mix(in srgb, var(--dp-on-color) 92%, transparent);
+  }
+
+  .dp-block-project-icon .svg-icon {
+    width: 11px;
+    height: 11px;
+  }
+
+  .dp-block-subproject {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--dp-on-color) 70%, transparent);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .dp-block-context-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--dp-on-color);
+    margin-right: 1px;
+  }
+
+  .dp-block-context-icon .svg-icon {
+    width: 12px;
+    height: 12px;
+  }
+
   .dp-block-text {
     flex: 0 1 auto;
     min-width: 0;
@@ -1228,6 +1269,69 @@
     color: var(--dp-color, var(--color-ink-muted));
     letter-spacing: 0.01em;
     white-space: nowrap;
+  }
+
+  .dp-card-project-wrap {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .dp-card-project-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--dp-color, var(--color-ink-muted));
+  }
+
+  .dp-card-project-icon .svg-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .dp-card-subproject {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--color-ink-muted);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .dp-card-context-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--dp-color, var(--color-accent));
+  }
+
+  .dp-card-context-icon .svg-icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .dp-st-project-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 2px;
+    color: var(--color-ink-muted);
+  }
+
+  .dp-st-project-icon .svg-icon {
+    width: 11px;
+    height: 11px;
+  }
+
+  .dp-project-color-icon {
+    flex: 0 0 110px;
+    padding: 4px 8px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 12px;
   }
 
   .dp-card-text-col {

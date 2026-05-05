@@ -627,8 +627,14 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   const beforeTags = tagMatch ? body.slice(0, tagMatch.index) : body;
   const descMatch = DESCRIPTION_RE.exec(beforeTags);
   const descPart = descMatch ? `{${descMatch[1].trim()}}` : "";
+  const bareTags = [];
+  for (const bm of beforeTags.matchAll(/#[A-Za-z][\w-]*(?![\w/-])/g)) {
+    bareTags.push(bm[0]);
+  }
   const trimmedTitle = newTitle.trim();
   const parts = [trimmedTitle];
+  for (const t of bareTags)
+    parts.push(t);
   if (descPart)
     parts.push(descPart);
   if (tagsPart)
