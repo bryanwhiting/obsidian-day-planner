@@ -8,6 +8,7 @@ import {
 import type TodayPlugin from "./main";
 import { TagPrefixes, DEFAULT_PREFIXES } from "./parser";
 import { ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
+import { TagMigrationModal, PrefixChange } from "./migrate";
 
 export interface TodaySettings {
   visibleStartHour: number;
@@ -60,6 +61,11 @@ export function parseTimelineHeight(raw: string): string | null {
 
 export class TodaySettingTab extends PluginSettingTab {
   plugin: TodayPlugin;
+  // Captured the first time the tab is opened, cleared on hide(). Persists
+  // across re-renders triggered from inside display() (e.g. project section
+  // calling this.display() after a prefix edit), so we can compare the user's
+  // final state against where they started when the tab closes.
+  private prefixSnapshot: TagPrefixes | null = null;
 
   constructor(app: App, plugin: TodayPlugin) {
     super(app, plugin);
@@ -68,12 +74,37 @@ export class TodaySettingTab extends PluginSettingTab {
 
   display(): void {
     const { containerEl } = this;
+    if (!this.prefixSnapshot) {
+      this.prefixSnapshot = { ...this.plugin.settings.prefixes };
+    }
     containerEl.empty();
 
     this.renderDefaultsSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
+  }
+
+  hide(): void {
+    if (!this.prefixSnapshot) return;
+    const snap = this.prefixSnapshot;
+    this.prefixSnapshot = null;
+    const current = this.plugin.settings.prefixes;
+    const keys: (keyof TagPrefixes)[] = ["duration", "time", "order", "project"];
+    const changes: PrefixChange[] = [];
+    for (const key of keys) {
+      const oldP = snap[key];
+      const newP = current[key];
+      if (oldP && newP && oldP !== newP) {
+        changes.push({ key, oldPrefix: oldP, newPrefix: newP });
+      }
+    }
+    if (changes.length > 0) {
+      new TagMigrationModal(this.app, {
+        changes,
+        folder: this.plugin.settings.dailyNoteFolderFallback,
+      }).open();
+    }
   }
 
   private renderDefaultsSection(containerEl: HTMLElement): void {

@@ -318,14 +318,14 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/settings.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
 // src/parser.ts
 var DEFAULT_PREFIXES = {
@@ -604,6 +604,177 @@ function isValidHex(hex) {
   return parseHex(hex) !== null;
 }
 
+// src/migrate.ts
+var import_obsidian = require("obsidian");
+var escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var TagMigrationModal = class extends import_obsidian.Modal {
+  constructor(app, opts) {
+    super(app);
+    this.matches = [];
+    this.totalReplacements = 0;
+    this.scanning = true;
+    this.opts = opts;
+  }
+  async onOpen() {
+    this.modalEl.addClass("dp-title-modal");
+    this.modalEl.addClass("dp-migrate-modal");
+    this.titleEl.setText("Migrate task tags");
+    this.renderScanning();
+    await this.scan();
+    this.scanning = false;
+    this.render();
+  }
+  renderScanning() {
+    this.contentEl.empty();
+    this.contentEl.createDiv({
+      cls: "dp-migrate-scanning",
+      text: "Scanning\u2026"
+    });
+  }
+  collectFiles() {
+    const all = this.app.vault.getMarkdownFiles();
+    const folder = this.opts.folder.trim().replace(/\/+$/, "");
+    if (!folder)
+      return all;
+    const prefix = `${folder}/`;
+    return all.filter((f) => f.path.startsWith(prefix));
+  }
+  buildAlternationRegex() {
+    const ordered = [...this.opts.changes].sort(
+      (a, b) => b.oldPrefix.length - a.oldPrefix.length
+    );
+    const alternation = ordered.map((c) => escapeRegex(c.oldPrefix)).join("|");
+    return new RegExp(`#(${alternation})\\/`, "g");
+  }
+  prefixMap() {
+    const m = /* @__PURE__ */ new Map();
+    for (const ch of this.opts.changes)
+      m.set(ch.oldPrefix, ch.newPrefix);
+    return m;
+  }
+  async scan() {
+    const files = this.collectFiles();
+    const re = this.buildAlternationRegex();
+    const matches = [];
+    let total = 0;
+    for (const file of files) {
+      const content = await this.app.vault.read(file);
+      const found = content.match(re);
+      if (found && found.length > 0) {
+        matches.push({ file, count: found.length });
+        total += found.length;
+      }
+    }
+    this.matches = matches.sort(
+      (a, b) => a.file.path.localeCompare(b.file.path)
+    );
+    this.totalReplacements = total;
+  }
+  render() {
+    this.contentEl.empty();
+    const warn = this.contentEl.createDiv({ cls: "dp-migrate-warn" });
+    warn.setText(
+      "This rewrites task lines in your vault. The change can't be undone \u2014 make a backup if you're unsure."
+    );
+    const summary = this.contentEl.createDiv({ cls: "dp-migrate-summary" });
+    const folderText = this.opts.folder.trim() || "entire vault";
+    const folderRow = summary.createDiv({ cls: "dp-migrate-summary-row" });
+    folderRow.createSpan({ cls: "dp-migrate-summary-label", text: "Folder" });
+    folderRow.createSpan({
+      cls: "dp-migrate-summary-value",
+      text: folderText
+    });
+    for (const ch of this.opts.changes) {
+      const row = summary.createDiv({ cls: "dp-migrate-summary-row" });
+      row.createSpan({
+        cls: "dp-migrate-summary-label",
+        text: keyLabel(ch.key)
+      });
+      row.createSpan({
+        cls: "dp-migrate-summary-value",
+        text: `#${ch.oldPrefix}/ \u2192 #${ch.newPrefix}/`
+      });
+    }
+    if (this.matches.length === 0) {
+      const none = this.contentEl.createDiv({ cls: "dp-migrate-none" });
+      none.setText("No matches found in the selected folder.");
+    } else {
+      const stats = this.contentEl.createDiv({ cls: "dp-migrate-stats" });
+      const fileWord = this.matches.length === 1 ? "file" : "files";
+      const tagWord = this.totalReplacements === 1 ? "tag" : "tags";
+      stats.setText(
+        `Found ${this.totalReplacements} ${tagWord} across ${this.matches.length} ${fileWord}.`
+      );
+      const list = this.contentEl.createDiv({ cls: "dp-migrate-files" });
+      this.matches.forEach((m) => {
+        const row = list.createDiv({ cls: "dp-migrate-file-row" });
+        row.createSpan({ cls: "dp-migrate-file-path", text: m.file.path });
+        row.createSpan({
+          cls: "dp-migrate-file-count",
+          text: m.count.toString()
+        });
+      });
+    }
+    const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+    const skip = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Skip"
+    });
+    skip.type = "button";
+    skip.addEventListener("click", () => this.close());
+    if (this.matches.length > 0) {
+      const apply = actions.createEl("button", {
+        cls: "dp-edit-save-btn mod-cta",
+        text: `Migrate ${this.totalReplacements} ${this.totalReplacements === 1 ? "tag" : "tags"}`
+      });
+      apply.type = "button";
+      apply.addEventListener("click", () => void this.apply(apply));
+    }
+  }
+  async apply(applyBtn) {
+    applyBtn.disabled = true;
+    applyBtn.setText("Migrating\u2026");
+    const re = this.buildAlternationRegex();
+    const map = this.prefixMap();
+    let total = 0;
+    let touched = 0;
+    for (const m of this.matches) {
+      let fileChanges = 0;
+      await this.app.vault.process(m.file, (content) => {
+        return content.replace(re, (_full, oldPrefix) => {
+          var _a;
+          fileChanges++;
+          const newPrefix = (_a = map.get(oldPrefix)) != null ? _a : oldPrefix;
+          return `#${newPrefix}/`;
+        });
+      });
+      if (fileChanges > 0) {
+        total += fileChanges;
+        touched++;
+      }
+    }
+    new import_obsidian.Notice(
+      `Migrated ${total} tag${total === 1 ? "" : "s"} across ${touched} file${touched === 1 ? "" : "s"}.`
+    );
+    this.close();
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+function keyLabel(key) {
+  switch (key) {
+    case "duration":
+      return "Duration";
+    case "time":
+      return "Time";
+    case "order":
+      return "Order";
+    case "project":
+      return "Project";
+  }
+}
+
 // src/settings.ts
 var DEFAULT_SETTINGS = {
   visibleStartHour: 6,
@@ -632,22 +803,52 @@ function parseTimelineHeight(raw) {
     return `${v}px`;
   return CSS_LENGTH_RE.test(v) ? v : null;
 }
-var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
+var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    // Captured the first time the tab is opened, cleared on hide(). Persists
+    // across re-renders triggered from inside display() (e.g. project section
+    // calling this.display() after a prefix edit), so we can compare the user's
+    // final state against where they started when the tab closes.
+    this.prefixSnapshot = null;
     this.plugin = plugin;
   }
   display() {
     const { containerEl } = this;
+    if (!this.prefixSnapshot) {
+      this.prefixSnapshot = { ...this.plugin.settings.prefixes };
+    }
     containerEl.empty();
     this.renderDefaultsSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
+  hide() {
+    if (!this.prefixSnapshot)
+      return;
+    const snap = this.prefixSnapshot;
+    this.prefixSnapshot = null;
+    const current = this.plugin.settings.prefixes;
+    const keys = ["duration", "time", "order", "project"];
+    const changes = [];
+    for (const key of keys) {
+      const oldP = snap[key];
+      const newP = current[key];
+      if (oldP && newP && oldP !== newP) {
+        changes.push({ key, oldPrefix: oldP, newPrefix: newP });
+      }
+    }
+    if (changes.length > 0) {
+      new TagMigrationModal(this.app, {
+        changes,
+        folder: this.plugin.settings.dailyNoteFolderFallback
+      }).open();
+    }
+  }
   renderDefaultsSection(containerEl) {
-    new import_obsidian.Setting(containerEl).setName("Defaults").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Default duration (minutes)").setDesc(
+    new import_obsidian2.Setting(containerEl).setName("Defaults").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Default duration (minutes)").setDesc(
       "Used for tasks that have a #t/ start time but no #d/ tag. Drag the bottom edge of the block to commit a real duration."
     ).addText(
       (t) => t.setValue(this.plugin.settings.defaultDurationMin.toString()).onChange(async (v) => {
@@ -660,7 +861,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Snap interval (minutes)").setDesc(
+    new import_obsidian2.Setting(containerEl).setName("Snap interval (minutes)").setDesc(
       "Drag-drop snaps to this granularity. Also controls the sub-marks revealed on hover in the timeline gutter (e.g. 15 \u2192 :15, :30, :45)."
     ).addText(
       (t) => t.setValue(this.plugin.settings.snapMin.toString()).onChange(async (v) => {
@@ -673,7 +874,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Pixels per minute").setDesc("Vertical scale of the timeline.").addText(
+    new import_obsidian2.Setting(containerEl).setName("Pixels per minute").setDesc("Vertical scale of the timeline.").addText(
       (t) => t.setValue(this.plugin.settings.pxPerMin.toString()).onChange(async (v) => {
         const n = parseFloat(v);
         if (!isNaN(n) && n > 0 && n <= 10) {
@@ -682,7 +883,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         }
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Duration tag prefix").setDesc(buildDurationDesc()).addText(
+    new import_obsidian2.Setting(containerEl).setName("Duration tag prefix").setDesc(buildDurationDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.duration).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.duration = v;
@@ -690,7 +891,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         }
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Time tag prefix").setDesc(buildTimeDesc()).addText(
+    new import_obsidian2.Setting(containerEl).setName("Time tag prefix").setDesc(buildTimeDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.time).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.time = v;
@@ -698,7 +899,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         }
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Order tag prefix").setDesc(buildOrderDesc()).addText(
+    new import_obsidian2.Setting(containerEl).setName("Order tag prefix").setDesc(buildOrderDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.order).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.order = v;
@@ -708,8 +909,8 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
     );
   }
   renderTemplatingSection(containerEl) {
-    new import_obsidian.Setting(containerEl).setName("Templating").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Daily note format fallback").setDesc(
+    new import_obsidian2.Setting(containerEl).setName("Templating").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Daily note format fallback").setDesc(
       "Used if the core Daily Notes plugin isn't enabled. Tokens: YYYY MM DD."
     ).addText(
       (t) => t.setValue(this.plugin.settings.dailyNoteFormatFallback).onChange(async (v) => {
@@ -719,13 +920,13 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         }
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Daily notes folder").setDesc("Where should your daily notes be saved?").addText(
+    new import_obsidian2.Setting(containerEl).setName("Daily notes folder").setDesc("Where should your daily notes be saved?").addText(
       (t) => t.setValue(this.plugin.settings.dailyNoteFolderFallback).onChange(async (v) => {
         this.plugin.settings.dailyNoteFolderFallback = v.trim();
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Daily note template").setDesc(
+    new import_obsidian2.Setting(containerEl).setName("Daily note template").setDesc(
       "Vault path to a template file (e.g. Templates/Daily.md). Its contents are copied verbatim into newly created daily notes. Leave blank for empty notes."
     ).addText((t) => {
       t.setPlaceholder("Templates/Daily.md").setValue(this.plugin.settings.dailyNoteTemplate).onChange(async (v) => {
@@ -740,22 +941,22 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
     });
   }
   renderDayConfigSection(containerEl) {
-    new import_obsidian.Setting(containerEl).setName("Day config").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Visible start hour").setDesc("First hour shown on the timeline (0-23).").addText(
+    new import_obsidian2.Setting(containerEl).setName("Day config").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Visible start hour").setDesc("First hour shown on the timeline (0-23).").addText(
       (t) => t.setValue(this.plugin.settings.visibleStartHour.toString()).onChange(async (v) => {
         const n = clampInt(v, 0, 23, this.plugin.settings.visibleStartHour);
         this.plugin.settings.visibleStartHour = n;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Visible end hour").setDesc("Last hour shown (1-24, must exceed start).").addText(
+    new import_obsidian2.Setting(containerEl).setName("Visible end hour").setDesc("Last hour shown (1-24, must exceed start).").addText(
       (t) => t.setValue(this.plugin.settings.visibleEndHour.toString()).onChange(async (v) => {
         const n = clampInt(v, 1, 24, this.plugin.settings.visibleEndHour);
         this.plugin.settings.visibleEndHour = n;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Working hours start").setDesc("Start of the working window (0-23). Used for the 'Working hours open' stat.").addText(
+    new import_obsidian2.Setting(containerEl).setName("Working hours start").setDesc("Start of the working window (0-23). Used for the 'Working hours open' stat.").addText(
       (t) => t.setValue(this.plugin.settings.workStartHour.toString()).onChange(async (v) => {
         this.plugin.settings.workStartHour = clampInt(
           v,
@@ -766,7 +967,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Working hours end").setDesc("End of the working window (1-24, must exceed start).").addText(
+    new import_obsidian2.Setting(containerEl).setName("Working hours end").setDesc("End of the working window (1-24, must exceed start).").addText(
       (t) => t.setValue(this.plugin.settings.workEndHour.toString()).onChange(async (v) => {
         this.plugin.settings.workEndHour = clampInt(
           v,
@@ -777,7 +978,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Wake hour").setDesc("Start of the awake window (0-23). Used for the 'Day available' stat.").addText(
+    new import_obsidian2.Setting(containerEl).setName("Wake hour").setDesc("Start of the awake window (0-23). Used for the 'Day available' stat.").addText(
       (t) => t.setValue(this.plugin.settings.wakeHour.toString()).onChange(async (v) => {
         this.plugin.settings.wakeHour = clampInt(
           v,
@@ -788,7 +989,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Sleep hour").setDesc("End of the awake window (1-24, must exceed wake hour).").addText(
+    new import_obsidian2.Setting(containerEl).setName("Sleep hour").setDesc("End of the awake window (1-24, must exceed wake hour).").addText(
       (t) => t.setValue(this.plugin.settings.sleepHour.toString()).onChange(async (v) => {
         this.plugin.settings.sleepHour = clampInt(
           v,
@@ -799,7 +1000,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Timeline height (desktop)").setDesc(
+    new import_obsidian2.Setting(containerEl).setName("Timeline height (desktop)").setDesc(
       "Max height of the scrollable timeline on desktop. Bare numbers are treated as px (e.g. 600). Units accepted: px, vh, vw, em, rem, %. Leave blank for the default (60vh)."
     ).addText(
       (t) => t.setPlaceholder("60vh").setValue(this.plugin.settings.timelineHeightDesktop).onChange(async (v) => {
@@ -810,7 +1011,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
         }
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Timeline height (mobile)").setDesc(
+    new import_obsidian2.Setting(containerEl).setName("Timeline height (mobile)").setDesc(
       "Max height of the scrollable timeline on mobile. Bare numbers are treated as px (e.g. 200). Units accepted: px, vh, vw, em, rem, %. Leave blank for the default (40vh)."
     ).addText(
       (t) => t.setPlaceholder("40vh").setValue(this.plugin.settings.timelineHeightMobile).onChange(async (v) => {
@@ -823,8 +1024,8 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
     );
   }
   renderProjectsSection(containerEl) {
-    new import_obsidian.Setting(containerEl).setName("Projects").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Project tag prefix").setDesc(buildProjectPrefixDesc()).addText(
+    new import_obsidian2.Setting(containerEl).setName("Projects").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Project tag prefix").setDesc(buildProjectPrefixDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.project).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.project = v;
@@ -846,7 +1047,7 @@ var TodaySettingTab = class extends import_obsidian.PluginSettingTab {
       makeCode(`${prefix}/`),
       " prefix; it's added automatically. Projects without a pinned color get distinct auto-assigned colors alphabetically."
     );
-    new import_obsidian.Setting(containerEl).setName("Project colors").setDesc(desc).addButton(
+    new import_obsidian2.Setting(containerEl).setName("Project colors").setDesc(desc).addButton(
       (b) => b.setButtonText("Add project color").setCta().onClick(async () => {
         this.plugin.settings.projectColors.push({
           project: "",
@@ -1015,7 +1216,7 @@ function normalizeHex(hex) {
   }
   return "#5b8def";
 }
-var FileSuggest = class extends import_obsidian.AbstractInputSuggest {
+var FileSuggest = class extends import_obsidian2.AbstractInputSuggest {
   constructor(app, inputEl, onSelectFile) {
     super(app, inputEl);
     this.inputEl = inputEl;
@@ -1164,18 +1365,18 @@ function groupOverlaps(scheduled) {
 }
 
 // src/dailyNote.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 async function resolveDailyNote(app, date, fallback) {
   var _a;
   const opts = readDailyNotesOptions(app);
   const format = (opts.format || fallback.format).trim();
   const folder = ((_a = opts.folder) != null ? _a : fallback.folder).trim();
   const fileName = formatDate(date, format) + ".md";
-  const path = (0, import_obsidian2.normalizePath)(folder ? `${folder}/${fileName}` : fileName);
+  const path = (0, import_obsidian3.normalizePath)(folder ? `${folder}/${fileName}` : fileName);
   const file = app.vault.getAbstractFileByPath(path);
   return {
     path,
-    file: file instanceof import_obsidian2.TFile ? file : null
+    file: file instanceof import_obsidian3.TFile ? file : null
   };
 }
 async function ensureDailyNote(app, date, fallback, notify = true) {
@@ -1191,7 +1392,7 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
   const initialContent = await readTemplateContent(app, fallback.template);
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify)
-    new import_obsidian2.Notice(`Created ${resolved.path}`);
+    new import_obsidian3.Notice(`Created ${resolved.path}`);
   return file;
 }
 async function readTemplateContent(app, templatePath) {
@@ -1199,10 +1400,10 @@ async function readTemplateContent(app, templatePath) {
   if (!raw)
     return "";
   const withExt = raw.toLowerCase().endsWith(".md") ? raw : `${raw}.md`;
-  const path = (0, import_obsidian2.normalizePath)(withExt);
+  const path = (0, import_obsidian3.normalizePath)(withExt);
   const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof import_obsidian2.TFile)) {
-    new import_obsidian2.Notice(`Today: template not found at ${path}`);
+  if (!(file instanceof import_obsidian3.TFile)) {
+    new import_obsidian3.Notice(`Today: template not found at ${path}`);
     return "";
   }
   return app.vault.read(file);
@@ -1264,7 +1465,7 @@ var QUICK_DURATIONS = [
   { label: "2h", min: 120 },
   { label: "3h", min: 180 }
 ];
-var TodayView = class extends import_obsidian3.ItemView {
+var TodayView = class extends import_obsidian4.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -1274,7 +1475,7 @@ var TodayView = class extends import_obsidian3.ItemView {
     this.calendarMonth = startOfMonth(new Date());
     this.calendarOpen = false;
     this.summariesCollapsed = false;
-    this.unscheduledCollapsed = import_obsidian3.Platform.isMobile;
+    this.unscheduledCollapsed = import_obsidian4.Platform.isMobile;
     this.overrideFilePath = null;
     this.plugin = plugin;
   }
@@ -1290,7 +1491,7 @@ var TodayView = class extends import_obsidian3.ItemView {
   async onOpen() {
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
-        if (file instanceof import_obsidian3.TFile)
+        if (file instanceof import_obsidian4.TFile)
           this.scheduleRender();
       })
     );
@@ -1359,7 +1560,7 @@ var TodayView = class extends import_obsidian3.ItemView {
     let displayPath = dailyResolved.path;
     if (this.overrideFilePath) {
       const f = this.app.vault.getAbstractFileByPath(this.overrideFilePath);
-      if (f instanceof import_obsidian3.TFile) {
+      if (f instanceof import_obsidian4.TFile) {
         displayFile = f;
         displayPath = f.path;
       } else {
@@ -1400,26 +1601,26 @@ var TodayView = class extends import_obsidian3.ItemView {
       cls: "dp-nav-btn dp-nav-arrow",
       attr: { "aria-label": "Previous day" }
     });
-    (0, import_obsidian3.setIcon)(prev, "chevron-left");
+    (0, import_obsidian4.setIcon)(prev, "chevron-left");
     const today = nav.createEl("button", {
       cls: "dp-today-btn",
       attr: { "aria-label": "Jump to today" }
     });
-    (0, import_obsidian3.setIcon)(today, "sun");
+    (0, import_obsidian4.setIcon)(today, "sun");
     const label = nav.createDiv({ cls: "dp-datenav-label" });
     label.textContent = this.formatDateLabel(this.selectedDate);
     const calBtn = nav.createEl("button", {
       cls: "dp-cal-btn",
       attr: { "aria-label": "Toggle calendar" }
     });
-    (0, import_obsidian3.setIcon)(calBtn, "calendar");
+    (0, import_obsidian4.setIcon)(calBtn, "calendar");
     if (this.calendarOpen)
       calBtn.addClass("is-active");
     const next = nav.createEl("button", {
       cls: "dp-nav-btn dp-nav-arrow",
       attr: { "aria-label": "Next day" }
     });
-    (0, import_obsidian3.setIcon)(next, "chevron-right");
+    (0, import_obsidian4.setIcon)(next, "chevron-right");
     prev.addEventListener(
       "click",
       () => void this.navigateTo(addDays(this.selectedDate, -1))
@@ -1452,7 +1653,7 @@ var TodayView = class extends import_obsidian3.ItemView {
       try {
         await ensureDailyNote(this.app, target, fallback);
       } catch (e) {
-        new import_obsidian3.Notice(`Today: failed to create note (${e.message})`);
+        new import_obsidian4.Notice(`Today: failed to create note (${e.message})`);
       }
     }
     this.scheduleRender();
@@ -1547,7 +1748,7 @@ var TodayView = class extends import_obsidian3.ItemView {
           "aria-expanded": this.summariesCollapsed ? "false" : "true"
         }
       });
-      (0, import_obsidian3.setIcon)(
+      (0, import_obsidian4.setIcon)(
         collapseBtn,
         this.summariesCollapsed ? "chevron-down" : "chevron-up"
       );
@@ -1630,7 +1831,7 @@ var TodayView = class extends import_obsidian3.ItemView {
     const totalMin = endMin - startMin;
     const heightPx = totalMin * settings.pxPerMin;
     const wrap = parent.createDiv({ cls: "dp-timeline-wrap" });
-    const configuredHeight = import_obsidian3.Platform.isMobile ? settings.timelineHeightMobile : settings.timelineHeightDesktop;
+    const configuredHeight = import_obsidian4.Platform.isMobile ? settings.timelineHeightMobile : settings.timelineHeightDesktop;
     const parsedHeight = parseTimelineHeight(configuredHeight);
     if (parsedHeight)
       wrap.style.maxHeight = parsedHeight;
@@ -1812,7 +2013,7 @@ var TodayView = class extends import_obsidian3.ItemView {
     const row = el.createDiv({ cls: "dp-block-row" });
     if (!block.task.hasExplicitDuration) {
       const warn = row.createSpan({ cls: "dp-warn" });
-      (0, import_obsidian3.setIcon)(warn, "alert-triangle");
+      (0, import_obsidian4.setIcon)(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
     }
     row.createSpan({
@@ -1937,11 +2138,11 @@ var TodayView = class extends import_obsidian3.ItemView {
   }
   renderUnscheduled(parent, file, unscheduled, colorMap) {
     const list = parent.createDiv({ cls: "dp-unscheduled" });
-    if (import_obsidian3.Platform.isMobile && this.unscheduledCollapsed) {
+    if (import_obsidian4.Platform.isMobile && this.unscheduledCollapsed) {
       list.addClass("is-collapsed");
     }
     const head = list.createDiv({ cls: "dp-unscheduled-head" });
-    if (import_obsidian3.Platform.isMobile) {
+    if (import_obsidian4.Platform.isMobile) {
       const toggleBtn = head.createEl("button", {
         cls: "dp-unscheduled-toggle",
         attr: {
@@ -1949,7 +2150,7 @@ var TodayView = class extends import_obsidian3.ItemView {
           "aria-expanded": this.unscheduledCollapsed ? "false" : "true"
         }
       });
-      (0, import_obsidian3.setIcon)(
+      (0, import_obsidian4.setIcon)(
         toggleBtn,
         this.unscheduledCollapsed ? "chevron-up" : "chevron-down"
       );
@@ -1960,7 +2161,7 @@ var TodayView = class extends import_obsidian3.ItemView {
       });
     }
     head.createSpan({ cls: "dp-unscheduled-title", text: "Unscheduled" });
-    if (import_obsidian3.Platform.isMobile && unscheduled.length > 0) {
+    if (import_obsidian4.Platform.isMobile && unscheduled.length > 0) {
       head.createSpan({
         cls: "dp-unscheduled-count",
         text: String(unscheduled.length)
@@ -1970,10 +2171,10 @@ var TodayView = class extends import_obsidian3.ItemView {
       cls: "dp-unscheduled-add",
       attr: { "aria-label": "Add unscheduled task" }
     });
-    (0, import_obsidian3.setIcon)(addBtn, "plus");
+    (0, import_obsidian4.setIcon)(addBtn, "plus");
     addBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      if (import_obsidian3.Platform.isMobile && this.unscheduledCollapsed) {
+      if (import_obsidian4.Platform.isMobile && this.unscheduledCollapsed) {
         this.unscheduledCollapsed = false;
       }
       void this.createUnscheduledTask(file);
@@ -1997,7 +2198,7 @@ var TodayView = class extends import_obsidian3.ItemView {
       const meta = card.createDiv({ cls: "dp-card-meta" });
       if (!task.hasExplicitDuration) {
         const warn = meta.createSpan({ cls: "dp-warn" });
-        (0, import_obsidian3.setIcon)(warn, "alert-triangle");
+        (0, import_obsidian4.setIcon)(warn, "alert-triangle");
         warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
       }
       meta.createSpan({ text: formatTotal(task.durationMin) });
@@ -2112,8 +2313,8 @@ var TodayView = class extends import_obsidian3.ItemView {
   }
   async editLine(payload, transform) {
     const file = this.app.vault.getAbstractFileByPath(payload.filePath);
-    if (!(file instanceof import_obsidian3.TFile)) {
-      new import_obsidian3.Notice("Today: source file no longer exists.");
+    if (!(file instanceof import_obsidian4.TFile)) {
+      new import_obsidian4.Notice("Today: source file no longer exists.");
       this.scheduleRender();
       return;
     }
@@ -2132,7 +2333,7 @@ var TodayView = class extends import_obsidian3.ItemView {
       return lines.join("\n");
     });
     if (stale) {
-      new import_obsidian3.Notice("Today: file changed since last render \u2014 refreshing.");
+      new import_obsidian4.Notice("Today: file changed since last render \u2014 refreshing.");
       this.scheduleRender();
     }
   }
@@ -2321,7 +2522,7 @@ var TodayView = class extends import_obsidian3.ItemView {
     await leaf.openFile(file);
   }
 };
-var TitlePromptModal = class extends import_obsidian3.Modal {
+var TitlePromptModal = class extends import_obsidian4.Modal {
   constructor(app, opts) {
     super(app);
     this.opts = opts;
@@ -2399,7 +2600,7 @@ var TitlePromptModal = class extends import_obsidian3.Modal {
 function sanitizeProjectName(raw) {
   return raw.trim().replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
-var TaskEditModal = class extends import_obsidian3.Modal {
+var TaskEditModal = class extends import_obsidian4.Modal {
   constructor(app, opts) {
     super(app);
     this.durationChanged = false;
@@ -2524,10 +2725,10 @@ var TaskEditModal = class extends import_obsidian3.Modal {
 
 // src/main.ts
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian4.Plugin {
+var TodayPlugin = class extends import_obsidian5.Plugin {
   async onload() {
     await this.loadSettings();
-    if (import_obsidian4.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian5.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
