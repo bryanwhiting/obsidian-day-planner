@@ -1745,6 +1745,7 @@ var TodayView = class extends import_obsidian3.ItemView {
     new TitlePromptModal(this.app, {
       heading: "New unscheduled task",
       placeholder: "Task title\u2026",
+      durations: QUICK_DURATIONS,
       defaultDurationMin: this.plugin.settings.defaultDurationMin,
       onSubmit: (title, durationMin) => {
         const newLine = buildTaskLine(title, prefixes, { durationMin });
