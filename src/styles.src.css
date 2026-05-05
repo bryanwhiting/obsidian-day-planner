@@ -584,7 +584,8 @@
   }
 
   .dp-day-dot-free {
-    background: var(--color-free);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--color-free);
   }
 
   .dp-day-dot-sleep {
