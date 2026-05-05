@@ -1650,16 +1650,28 @@ class TaskEditModal extends Modal {
     this.contentEl.empty();
 
     const titleRow = this.contentEl.createDiv({ cls: "dp-edit-title-row" });
-    const checkBtn = titleRow.createEl("button", {
+    const checkBox = titleRow.createSpan({
       cls: "dp-edit-check",
-      attr: { "aria-label": "Mark task complete" },
+      attr: {
+        role: "checkbox",
+        tabindex: "0",
+        "aria-label": "Mark task complete",
+        "aria-checked": this.checked ? "true" : "false",
+      },
     });
-    checkBtn.type = "button";
-    if (this.checked) checkBtn.addClass("is-checked");
-    checkBtn.addEventListener("click", () => {
+    if (this.checked) checkBox.addClass("is-checked");
+    const toggleChecked = (): void => {
       this.checked = !this.checked;
       this.checkedChanged = true;
-      checkBtn.toggleClass("is-checked", this.checked);
+      checkBox.toggleClass("is-checked", this.checked);
+      checkBox.setAttribute("aria-checked", this.checked ? "true" : "false");
+    };
+    checkBox.addEventListener("click", toggleChecked);
+    checkBox.addEventListener("keydown", (ev) => {
+      if (ev.key === " " || ev.key === "Enter") {
+        ev.preventDefault();
+        toggleChecked();
+      }
     });
 
     const input = titleRow.createEl("input", {
