@@ -12,7 +12,7 @@ import {
   formatCompactDuration,
   parseCompactDuration,
 } from "./parser";
-import { ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
+import { ContextTag, ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
 import { TagMigrationModal, PrefixChange } from "./migrate";
 
 export interface TodaySettings {
@@ -31,6 +31,7 @@ export interface TodaySettings {
   defaultDurationMin: number;
   quickDurationsMin: number[];
   projectColors: ProjectColor[];
+  contextTags: ContextTag[];
   timelineHeightDesktop: string;
   timelineHeightMobile: string;
 }
@@ -51,13 +52,14 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
+  contextTags: [],
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 
-export const MAX_QUICK_DURATIONS = 6;
+export const MAX_QUICK_DURATIONS = 9;
 
 // Parses a comma-separated list like "5m, 10m, 1h, 1h30m" into unique minute
 // values, capped at MAX_QUICK_DURATIONS. Returns null if any token is invalid
@@ -116,6 +118,7 @@ export class TodaySettingTab extends PluginSettingTab {
 
     this.renderDefaultsSection(containerEl);
     this.renderProjectsSection(containerEl);
+    this.renderContextTagsSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
@@ -130,6 +133,7 @@ export class TodaySettingTab extends PluginSettingTab {
       "time",
       "order",
       "project",
+      "subproject",
       "exercise",
     ];
     const changes: PrefixChange[] = [];
@@ -480,6 +484,21 @@ export class TodaySettingTab extends PluginSettingTab {
         }),
       );
 
+    new Setting(containerEl)
+      .setName("Sub-project tag prefix")
+      .setDesc(buildSubprojectPrefixDesc())
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.prefixes.subproject)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.prefixes.subproject = v;
+              await this.plugin.saveSettings();
+              this.display();
+            }
+          }),
+      );
+
     const prefix = this.plugin.settings.prefixes.project;
 
     const desc = document.createDocumentFragment();
@@ -578,12 +597,144 @@ export class TodaySettingTab extends PluginSettingTab {
         }
       });
 
+      const iconInput = row.createEl("input", {
+        cls: "dp-project-color-icon",
+        attr: {
+          type: "text",
+          placeholder: "lucide icon",
+          spellcheck: "false",
+        },
+      });
+      iconInput.value = entry.icon ?? "";
+      iconInput.addEventListener("change", async () => {
+        const v = iconInput.value.trim();
+        this.plugin.settings.projectColors[idx].icon = v || undefined;
+        await this.plugin.saveSettings();
+      });
+
       const remove = row.createEl("button", {
         cls: "dp-project-color-remove",
         text: "Remove",
       });
       remove.addEventListener("click", async () => {
         this.plugin.settings.projectColors.splice(idx, 1);
+        await this.plugin.saveSettings();
+        this.display();
+      });
+    });
+  }
+
+  private renderContextTagsSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Context tags").setHeading();
+
+    const desc = document.createDocumentFragment();
+    desc.append(
+      "Pin a color and a Lucide icon to a hashtag (e.g. ",
+      makeCode("#meeting"),
+      " or ",
+      makeCode("#walking"),
+      "). Tasks containing the hashtag are colored with the context color (overriding the project color) and show the icon on the block. Browse icon names at ",
+      makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
+      ".",
+    );
+
+    new Setting(containerEl)
+      .setName("Tags")
+      .setDesc(desc)
+      .addButton((b) =>
+        b
+          .setButtonText("Add context tag")
+          .setCta()
+          .onClick(async () => {
+            this.plugin.settings.contextTags.push({
+              tag: "",
+              color:
+                DEFAULT_PALETTE[
+                  this.plugin.settings.contextTags.length %
+                    DEFAULT_PALETTE.length
+                ],
+              icon: "",
+            });
+            await this.plugin.saveSettings();
+            this.display();
+          }),
+      );
+
+    const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    this.plugin.settings.contextTags.forEach((entry, idx) => {
+      const row = list.createDiv({ cls: "dp-project-color-row" });
+
+      const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
+      nameWrap.createSpan({ cls: "dp-project-color-prefix", text: "#" });
+      const nameInput = nameWrap.createEl("input", {
+        cls: "dp-project-color-name",
+        attr: { type: "text", placeholder: "tag" },
+      });
+      nameInput.value = entry.tag;
+      // Strip leading "#" if the user types it.
+      nameInput.addEventListener("input", () => {
+        if (nameInput.value.startsWith("#")) {
+          const pos = Math.max(0, (nameInput.selectionStart ?? 1) - 1);
+          nameInput.value = nameInput.value.replace(/^#+/, "");
+          nameInput.setSelectionRange(pos, pos);
+        }
+      });
+      nameInput.addEventListener("change", async () => {
+        const v = nameInput.value.trim().replace(/^#+/, "");
+        nameInput.value = v;
+        this.plugin.settings.contextTags[idx].tag = v;
+        await this.plugin.saveSettings();
+      });
+
+      const colorInput = row.createEl("input", {
+        cls: "dp-project-color-swatch",
+        attr: { type: "color" },
+      });
+      colorInput.value = normalizeHex(entry.color);
+      colorInput.addEventListener("change", async () => {
+        if (isValidHex(colorInput.value)) {
+          this.plugin.settings.contextTags[idx].color = colorInput.value;
+          hexInput.value = colorInput.value;
+          await this.plugin.saveSettings();
+        }
+      });
+
+      const hexInput = row.createEl("input", {
+        cls: "dp-project-color-hex",
+        attr: { type: "text", placeholder: "#5B8DEF" },
+      });
+      hexInput.value = entry.color;
+      hexInput.addEventListener("change", async () => {
+        const v = hexInput.value.trim();
+        if (isValidHex(v)) {
+          this.plugin.settings.contextTags[idx].color = v;
+          colorInput.value = normalizeHex(v);
+          await this.plugin.saveSettings();
+        } else {
+          hexInput.value = entry.color;
+        }
+      });
+
+      const iconInput = row.createEl("input", {
+        cls: "dp-project-color-icon",
+        attr: {
+          type: "text",
+          placeholder: "lucide icon",
+          spellcheck: "false",
+        },
+      });
+      iconInput.value = entry.icon ?? "";
+      iconInput.addEventListener("change", async () => {
+        this.plugin.settings.contextTags[idx].icon = iconInput.value.trim();
+        await this.plugin.saveSettings();
+      });
+
+      const remove = row.createEl("button", {
+        cls: "dp-project-color-remove",
+        text: "Remove",
+      });
+      remove.addEventListener("click", async () => {
+        this.plugin.settings.contextTags.splice(idx, 1);
         await this.plugin.saveSettings();
         this.display();
       });
@@ -691,6 +842,27 @@ function buildProjectPrefixDesc(): DocumentFragment {
     " — and the timeline block plus the row in the Project totals table will share the same color. Names can use letters, digits, dashes, and underscores.",
   );
   return f;
+}
+
+function buildSubprojectPrefixDesc(): DocumentFragment {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Optional finer grouping under a project. Default prefix ",
+    makeCode("sp"),
+    ". Example: ",
+    makeCode("#sp/back-end"),
+    ". The sub-project name is shown next to the project label.",
+  );
+  return f;
+}
+
+function makeAnchor(href: string, text: string): HTMLElement {
+  const a = document.createElement("a");
+  a.href = href;
+  a.textContent = text;
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
 }
 
 function normalizeHex(hex: string): string {

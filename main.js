@@ -577,28 +577,15 @@ function removeOrderTag(rawLine, prefixes) {
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 function setProjectTag(rawLine, project, prefixes) {
-  const subRe = buildTagRegexes(prefixes).subproject;
-  const stripped = rawLine.replace(subRe, "\0");
   const re = buildTagRegexes(prefixes).project;
   const newTag = `#${prefixes.project}/${project}`;
-  if (re.test(stripped)) {
-    const replaced = stripped.replace(re, newTag);
-    return replaced.replace(/ /g, () => {
-      const m = subRe.exec(rawLine);
-      return m ? m[0] : "";
-    });
-  }
+  if (re.test(rawLine))
+    return rawLine.replace(re, newTag);
   return appendTag(rawLine, newTag);
 }
 function removeProjectTag(rawLine, prefixes) {
-  const subRe = buildTagRegexes(prefixes).subproject;
-  const stripped = rawLine.replace(subRe, "\0");
   const re = buildTagRegexes(prefixes).project;
-  const cleaned = stripped.replace(re, "");
-  return cleaned.replace(/ /g, () => {
-    const m = subRe.exec(rawLine);
-    return m ? m[0] : "";
-  }).replace(/[ \t]+$/, "").replace(/  +/g, " ");
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 function appendTag(rawLine, tag) {
   const trimmed = rawLine.replace(/[ \t]+$/, "");
@@ -959,6 +946,8 @@ function keyLabel(key) {
       return "Order";
     case "project":
       return "Project";
+    case "subproject":
+      return "Sub-project";
     case "exercise":
       return "Exercise";
   }
@@ -981,11 +970,12 @@ var DEFAULT_SETTINGS = {
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
+  contextTags: [],
   timelineHeightDesktop: "",
   timelineHeightMobile: ""
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
-var MAX_QUICK_DURATIONS = 6;
+var MAX_QUICK_DURATIONS = 9;
 function parseQuickDurations(raw) {
   const tokens = raw.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
   if (tokens.length === 0)
@@ -1034,6 +1024,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     containerEl.empty();
     this.renderDefaultsSection(containerEl);
     this.renderProjectsSection(containerEl);
+    this.renderContextTagsSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
@@ -1048,6 +1039,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       "time",
       "order",
       "project",
+      "subproject",
       "exercise"
     ];
     const changes = [];
@@ -1279,6 +1271,15 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
+    new import_obsidian2.Setting(containerEl).setName("Sub-project tag prefix").setDesc(buildSubprojectPrefixDesc()).addText(
+      (t) => t.setValue(this.plugin.settings.prefixes.subproject).onChange(async (v) => {
+        if (/^[a-zA-Z]+$/.test(v)) {
+          this.plugin.settings.prefixes.subproject = v;
+          await this.plugin.saveSettings();
+          this.display();
+        }
+      })
+    );
     const prefix = this.plugin.settings.prefixes.project;
     const desc = document.createDocumentFragment();
     desc.append(
@@ -1304,6 +1305,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
     this.plugin.settings.projectColors.forEach((entry, idx) => {
+      var _a;
       const row = list.createDiv({ cls: "dp-project-color-row" });
       const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
       nameWrap.createSpan({
@@ -1317,11 +1319,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       nameInput.value = entry.project;
       const stripPrefix = (s) => s.replace(new RegExp(`^#?${prefix}/`, "i"), "");
       nameInput.addEventListener("input", () => {
-        var _a;
+        var _a2;
         const original = nameInput.value;
         const stripped = stripPrefix(original);
         if (stripped !== original) {
-          const pos = Math.max(0, (_a = nameInput.selectionStart) != null ? _a : 0);
+          const pos = Math.max(0, (_a2 = nameInput.selectionStart) != null ? _a2 : 0);
           nameInput.value = stripped;
           const newPos = Math.max(0, pos - (original.length - stripped.length));
           nameInput.setSelectionRange(newPos, newPos);
@@ -1360,12 +1362,125 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           hexInput.value = entry.color;
         }
       });
+      const iconInput = row.createEl("input", {
+        cls: "dp-project-color-icon",
+        attr: {
+          type: "text",
+          placeholder: "lucide icon",
+          spellcheck: "false"
+        }
+      });
+      iconInput.value = (_a = entry.icon) != null ? _a : "";
+      iconInput.addEventListener("change", async () => {
+        const v = iconInput.value.trim();
+        this.plugin.settings.projectColors[idx].icon = v || void 0;
+        await this.plugin.saveSettings();
+      });
       const remove = row.createEl("button", {
         cls: "dp-project-color-remove",
         text: "Remove"
       });
       remove.addEventListener("click", async () => {
         this.plugin.settings.projectColors.splice(idx, 1);
+        await this.plugin.saveSettings();
+        this.display();
+      });
+    });
+  }
+  renderContextTagsSection(containerEl) {
+    new import_obsidian2.Setting(containerEl).setName("Context tags").setHeading();
+    const desc = document.createDocumentFragment();
+    desc.append(
+      "Pin a color and a Lucide icon to a hashtag (e.g. ",
+      makeCode("#meeting"),
+      " or ",
+      makeCode("#walking"),
+      "). Tasks containing the hashtag are colored with the context color (overriding the project color) and show the icon on the block. Browse icon names at ",
+      makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
+      "."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Tags").setDesc(desc).addButton(
+      (b) => b.setButtonText("Add context tag").setCta().onClick(async () => {
+        this.plugin.settings.contextTags.push({
+          tag: "",
+          color: DEFAULT_PALETTE[this.plugin.settings.contextTags.length % DEFAULT_PALETTE.length],
+          icon: ""
+        });
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    this.plugin.settings.contextTags.forEach((entry, idx) => {
+      var _a;
+      const row = list.createDiv({ cls: "dp-project-color-row" });
+      const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
+      nameWrap.createSpan({ cls: "dp-project-color-prefix", text: "#" });
+      const nameInput = nameWrap.createEl("input", {
+        cls: "dp-project-color-name",
+        attr: { type: "text", placeholder: "tag" }
+      });
+      nameInput.value = entry.tag;
+      nameInput.addEventListener("input", () => {
+        var _a2;
+        if (nameInput.value.startsWith("#")) {
+          const pos = Math.max(0, ((_a2 = nameInput.selectionStart) != null ? _a2 : 1) - 1);
+          nameInput.value = nameInput.value.replace(/^#+/, "");
+          nameInput.setSelectionRange(pos, pos);
+        }
+      });
+      nameInput.addEventListener("change", async () => {
+        const v = nameInput.value.trim().replace(/^#+/, "");
+        nameInput.value = v;
+        this.plugin.settings.contextTags[idx].tag = v;
+        await this.plugin.saveSettings();
+      });
+      const colorInput = row.createEl("input", {
+        cls: "dp-project-color-swatch",
+        attr: { type: "color" }
+      });
+      colorInput.value = normalizeHex(entry.color);
+      colorInput.addEventListener("change", async () => {
+        if (isValidHex(colorInput.value)) {
+          this.plugin.settings.contextTags[idx].color = colorInput.value;
+          hexInput.value = colorInput.value;
+          await this.plugin.saveSettings();
+        }
+      });
+      const hexInput = row.createEl("input", {
+        cls: "dp-project-color-hex",
+        attr: { type: "text", placeholder: "#5B8DEF" }
+      });
+      hexInput.value = entry.color;
+      hexInput.addEventListener("change", async () => {
+        const v = hexInput.value.trim();
+        if (isValidHex(v)) {
+          this.plugin.settings.contextTags[idx].color = v;
+          colorInput.value = normalizeHex(v);
+          await this.plugin.saveSettings();
+        } else {
+          hexInput.value = entry.color;
+        }
+      });
+      const iconInput = row.createEl("input", {
+        cls: "dp-project-color-icon",
+        attr: {
+          type: "text",
+          placeholder: "lucide icon",
+          spellcheck: "false"
+        }
+      });
+      iconInput.value = (_a = entry.icon) != null ? _a : "";
+      iconInput.addEventListener("change", async () => {
+        this.plugin.settings.contextTags[idx].icon = iconInput.value.trim();
+        await this.plugin.saveSettings();
+      });
+      const remove = row.createEl("button", {
+        cls: "dp-project-color-remove",
+        text: "Remove"
+      });
+      remove.addEventListener("click", async () => {
+        this.plugin.settings.contextTags.splice(idx, 1);
         await this.plugin.saveSettings();
         this.display();
       });
@@ -1467,6 +1582,25 @@ function buildProjectPrefixDesc() {
     " \u2014 and the timeline block plus the row in the Project totals table will share the same color. Names can use letters, digits, dashes, and underscores."
   );
   return f;
+}
+function buildSubprojectPrefixDesc() {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Optional finer grouping under a project. Default prefix ",
+    makeCode("sp"),
+    ". Example: ",
+    makeCode("#sp/back-end"),
+    ". The sub-project name is shown next to the project label."
+  );
+  return f;
+}
+function makeAnchor(href, text) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.textContent = text;
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
 }
 function normalizeHex(hex) {
   const trimmed = hex.trim();
@@ -2296,6 +2430,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     });
   }
   renderBlock(layer, file, block, colorMap) {
+    var _a, _b;
     const el = layer.createDiv({ cls: "dp-block" });
     el.style.top = `${block.topPx}px`;
     el.style.height = `${Math.max(18, block.heightPx)}px`;
@@ -2307,7 +2442,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       el.addClass("is-implicit-duration");
     if (block.task.durationMin < 25)
       el.addClass("is-compact");
-    const color = block.task.project ? colorMap.get(block.task.project) : null;
+    const ctx = this.findContextTag(block.task);
+    const projectColor = block.task.project ? colorMap.get(block.task.project) : null;
+    const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
     if (color) {
       el.style.setProperty("--dp-color", color);
       el.style.setProperty("--dp-on-color", contrastingTextColor(color));
@@ -2315,6 +2452,11 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     el.draggable = true;
     const row = el.createDiv({ cls: "dp-block-row" });
+    if (ctx == null ? void 0 : ctx.icon) {
+      const ctxIcon = row.createSpan({ cls: "dp-block-context-icon" });
+      (0, import_obsidian4.setIcon)(ctxIcon, ctx.icon);
+      ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
+    }
     if (!block.task.hasExplicitDuration) {
       const warn = row.createSpan({ cls: "dp-warn" });
       (0, import_obsidian4.setIcon)(warn, "alert-triangle");
@@ -2326,7 +2468,19 @@ var TodayView = class extends import_obsidian4.ItemView {
     });
     row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
     if (block.task.project) {
-      row.createSpan({ cls: "dp-block-project", text: block.task.project });
+      const projWrap = row.createSpan({ cls: "dp-block-project-wrap" });
+      const projIcon = this.resolveProjectIcon(block.task.project);
+      if (projIcon) {
+        const ic = projWrap.createSpan({ cls: "dp-block-project-icon" });
+        (0, import_obsidian4.setIcon)(ic, projIcon);
+      }
+      projWrap.createSpan({ cls: "dp-block-project", text: block.task.project });
+      if (block.task.subproject) {
+        projWrap.createSpan({
+          cls: "dp-block-subproject",
+          text: `/ ${block.task.subproject}`
+        });
+      }
       row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
     }
     const titleText = row.createSpan({
@@ -2376,7 +2530,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       });
     }
     el.addEventListener("dragstart", (ev) => {
-      var _a;
+      var _a2;
       const rect = el.getBoundingClientRect();
       this.dragPayload = {
         filePath: file.path,
@@ -2389,7 +2543,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       };
       el.addClass("is-dragging");
       this.suppressNativeDragImage(ev);
-      (_a = ev.dataTransfer) == null ? void 0 : _a.setData("text/plain", block.task.rawLine);
+      (_a2 = ev.dataTransfer) == null ? void 0 : _a2.setData("text/plain", block.task.rawLine);
       if (ev.dataTransfer)
         ev.dataTransfer.effectAllowed = "move";
     });
@@ -2536,18 +2690,26 @@ var TodayView = class extends import_obsidian4.ItemView {
       body.createDiv({ cls: "dp-empty", text: "No unscheduled tasks." });
     }
     unscheduled.forEach((task, idx) => {
+      var _a, _b;
       const card = body.createDiv({ cls: "dp-card" });
       if (task.checked)
         card.addClass("is-done");
       if (!task.hasExplicitDuration)
         card.addClass("is-implicit-duration");
-      const color = task.project ? colorMap.get(task.project) : null;
+      const ctx = this.findContextTag(task);
+      const projectColor = task.project ? colorMap.get(task.project) : null;
+      const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
       if (color) {
         card.style.setProperty("--dp-color", color);
         card.addClass("has-project-color");
       }
       card.draggable = true;
       const meta = card.createDiv({ cls: "dp-card-meta" });
+      if (ctx == null ? void 0 : ctx.icon) {
+        const ctxIcon = meta.createSpan({ cls: "dp-card-context-icon" });
+        (0, import_obsidian4.setIcon)(ctxIcon, ctx.icon);
+        ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
+      }
       if (!task.hasExplicitDuration) {
         const warn = meta.createSpan({ cls: "dp-warn" });
         (0, import_obsidian4.setIcon)(warn, "alert-triangle");
@@ -2555,7 +2717,19 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
       meta.createSpan({ text: formatTotal(task.durationMin) });
       if (task.project) {
-        card.createSpan({ cls: "dp-card-project", text: task.project });
+        const projGroup = card.createSpan({ cls: "dp-card-project-wrap" });
+        const projIcon = this.resolveProjectIcon(task.project);
+        if (projIcon) {
+          const ic = projGroup.createSpan({ cls: "dp-card-project-icon" });
+          (0, import_obsidian4.setIcon)(ic, projIcon);
+        }
+        projGroup.createSpan({ cls: "dp-card-project", text: task.project });
+        if (task.subproject) {
+          projGroup.createSpan({
+            cls: "dp-card-subproject",
+            text: `/ ${task.subproject}`
+          });
+        }
       }
       const textCol = card.createDiv({ cls: "dp-card-text-col" });
       const text = textCol.createDiv({ cls: "dp-card-text" });
@@ -2567,7 +2741,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         });
       }
       card.addEventListener("dragstart", (ev) => {
-        var _a;
+        var _a2;
         const rect = card.getBoundingClientRect();
         this.dragPayload = {
           filePath: file.path,
@@ -2580,7 +2754,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         };
         card.addClass("is-dragging");
         this.suppressNativeDragImage(ev);
-        (_a = ev.dataTransfer) == null ? void 0 : _a.setData("text/plain", task.rawLine);
+        (_a2 = ev.dataTransfer) == null ? void 0 : _a2.setData("text/plain", task.rawLine);
         if (ev.dataTransfer)
           ev.dataTransfer.effectAllowed = "move";
       });
@@ -2590,8 +2764,8 @@ var TodayView = class extends import_obsidian4.ItemView {
         this.hideDropIndicator();
       });
       card.addEventListener("dragover", (ev) => {
-        var _a;
-        if (((_a = this.dragPayload) == null ? void 0 : _a.source) === "unscheduled")
+        var _a2;
+        if (((_a2 = this.dragPayload) == null ? void 0 : _a2.source) === "unscheduled")
           ev.preventDefault();
       });
       card.addEventListener("drop", (ev) => {
@@ -2852,6 +3026,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       const color = colorMap.get(name);
       if (color)
         swatch.style.backgroundColor = color;
+      const projIconName = this.resolveProjectIcon(name);
+      if (projIconName) {
+        const ic = nameCell.createSpan({ cls: "dp-st-project-icon" });
+        (0, import_obsidian4.setIcon)(ic, projIconName);
+      }
       nameCell.createSpan({ text: name });
       table.createSpan({ cls: "dp-st-value", text: formatTotal(mins) });
     }
@@ -2898,8 +3077,46 @@ var TodayView = class extends import_obsidian4.ItemView {
     return m === 0 ? `${h12}${ampm}` : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
   }
   cleanBody(body) {
+    var _a;
     const p = this.plugin.settings.prefixes;
-    return body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim();
+    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.subproject}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "");
+    for (const ctx of this.plugin.settings.contextTags) {
+      const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
+      if (!tag)
+        continue;
+      const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
+    }
+    return out.replace(/\s+/g, " ").trim();
+  }
+  // Returns the first configured context tag whose `#<tag>` appears in the
+  // task body, matching whole-tag (not as a prefix of another tag). Order
+  // follows the user's settings list so they can prioritise.
+  findContextTag(task) {
+    var _a;
+    const tags = this.plugin.settings.contextTags;
+    if (!tags || tags.length === 0)
+      return null;
+    for (const ctx of tags) {
+      const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
+      if (!tag)
+        continue;
+      const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`#${esc}(?![\\w/-])`, "i").test(task.body))
+        return ctx;
+    }
+    return null;
+  }
+  resolveProjectIcon(project) {
+    var _a;
+    if (!project)
+      return null;
+    for (const pc of this.plugin.settings.projectColors) {
+      if (pc.icon && ((_a = pc.project) == null ? void 0 : _a.toLowerCase()) === project.toLowerCase()) {
+        return pc.icon;
+      }
+    }
+    return null;
   }
   endOfTitleCh(rawLine) {
     const p = this.plugin.settings.prefixes;

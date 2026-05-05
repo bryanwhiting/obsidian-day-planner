@@ -1,6 +1,17 @@
 export interface ProjectColor {
   project: string;
   color: string;
+  // Optional Lucide icon name (e.g. "briefcase", "users"). Rendered next to
+  // the project label wherever projects appear.
+  icon?: string;
+}
+
+export interface ContextTag {
+  // Bare hashtag without the leading `#` (e.g. "meeting", "walking"). Matched
+  // literally as `#<tag>` against task bodies.
+  tag: string;
+  color: string;
+  icon: string;
 }
 
 export const DEFAULT_PALETTE: string[] = [

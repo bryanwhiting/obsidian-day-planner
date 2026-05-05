@@ -349,20 +349,9 @@ export function setProjectTag(
   project: string,
   prefixes: TagPrefixes,
 ): string {
-  // Strip subproject tags before testing so the project regex can't match
-  // an inadvertent overlap (sp/foo would otherwise look like p/foo if we
-  // searched the whole line first).
-  const subRe = buildTagRegexes(prefixes).subproject;
-  const stripped = rawLine.replace(subRe, " ");
   const re = buildTagRegexes(prefixes).project;
   const newTag = `#${prefixes.project}/${project}`;
-  if (re.test(stripped)) {
-    const replaced = stripped.replace(re, newTag);
-    return replaced.replace(/ /g, () => {
-      const m = subRe.exec(rawLine);
-      return m ? m[0] : "";
-    });
-  }
+  if (re.test(rawLine)) return rawLine.replace(re, newTag);
   return appendTag(rawLine, newTag);
 }
 
@@ -370,17 +359,8 @@ export function removeProjectTag(
   rawLine: string,
   prefixes: TagPrefixes,
 ): string {
-  const subRe = buildTagRegexes(prefixes).subproject;
-  const stripped = rawLine.replace(subRe, " ");
   const re = buildTagRegexes(prefixes).project;
-  const cleaned = stripped.replace(re, "");
-  return cleaned
-    .replace(/ /g, () => {
-      const m = subRe.exec(rawLine);
-      return m ? m[0] : "";
-    })
-    .replace(/[ \t]+$/, "")
-    .replace(/  +/g, " ");
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
 export function setSubprojectTag(

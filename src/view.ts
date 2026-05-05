@@ -40,7 +40,7 @@ import {
   layoutTimeline,
   LayoutBlock,
 } from "./scheduler";
-import { resolveProjectColors, contrastingTextColor } from "./colors";
+import { resolveProjectColors, contrastingTextColor, ContextTag } from "./colors";
 import {
   resolveDailyNote,
   ensureDailyNote,
@@ -738,7 +738,13 @@ export class TodayView extends ItemView {
     if (block.task.checked) el.addClass("is-done");
     if (!block.task.hasExplicitDuration) el.addClass("is-implicit-duration");
     if (block.task.durationMin < 25) el.addClass("is-compact");
-    const color = block.task.project ? colorMap.get(block.task.project) : null;
+    const ctx = this.findContextTag(block.task);
+    const projectColor = block.task.project
+      ? colorMap.get(block.task.project)
+      : null;
+    // Context-tag color overrides the project color so a meeting/walk visibly
+    // pops on top of an otherwise-uniform project palette.
+    const color = ctx?.color ?? projectColor ?? null;
     if (color) {
       el.style.setProperty("--dp-color", color);
       el.style.setProperty("--dp-on-color", contrastingTextColor(color));
@@ -747,6 +753,11 @@ export class TodayView extends ItemView {
     el.draggable = true;
 
     const row = el.createDiv({ cls: "dp-block-row" });
+    if (ctx?.icon) {
+      const ctxIcon = row.createSpan({ cls: "dp-block-context-icon" });
+      setIcon(ctxIcon, ctx.icon);
+      ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
+    }
     if (!block.task.hasExplicitDuration) {
       const warn = row.createSpan({ cls: "dp-warn" });
       setIcon(warn, "alert-triangle");
@@ -758,7 +769,19 @@ export class TodayView extends ItemView {
     });
     row.createSpan({ cls: "dp-block-sep", text: "·" });
     if (block.task.project) {
-      row.createSpan({ cls: "dp-block-project", text: block.task.project });
+      const projWrap = row.createSpan({ cls: "dp-block-project-wrap" });
+      const projIcon = this.resolveProjectIcon(block.task.project);
+      if (projIcon) {
+        const ic = projWrap.createSpan({ cls: "dp-block-project-icon" });
+        setIcon(ic, projIcon);
+      }
+      projWrap.createSpan({ cls: "dp-block-project", text: block.task.project });
+      if (block.task.subproject) {
+        projWrap.createSpan({
+          cls: "dp-block-subproject",
+          text: `/ ${block.task.subproject}`,
+        });
+      }
       row.createSpan({ cls: "dp-block-sep", text: "·" });
     }
     const titleText = row.createSpan({
@@ -1011,13 +1034,20 @@ export class TodayView extends ItemView {
       const card = body.createDiv({ cls: "dp-card" });
       if (task.checked) card.addClass("is-done");
       if (!task.hasExplicitDuration) card.addClass("is-implicit-duration");
-      const color = task.project ? colorMap.get(task.project) : null;
+      const ctx = this.findContextTag(task);
+      const projectColor = task.project ? colorMap.get(task.project) : null;
+      const color = ctx?.color ?? projectColor ?? null;
       if (color) {
         card.style.setProperty("--dp-color", color);
         card.addClass("has-project-color");
       }
       card.draggable = true;
       const meta = card.createDiv({ cls: "dp-card-meta" });
+      if (ctx?.icon) {
+        const ctxIcon = meta.createSpan({ cls: "dp-card-context-icon" });
+        setIcon(ctxIcon, ctx.icon);
+        ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
+      }
       if (!task.hasExplicitDuration) {
         const warn = meta.createSpan({ cls: "dp-warn" });
         setIcon(warn, "alert-triangle");
@@ -1025,7 +1055,19 @@ export class TodayView extends ItemView {
       }
       meta.createSpan({ text: formatTotal(task.durationMin) });
       if (task.project) {
-        card.createSpan({ cls: "dp-card-project", text: task.project });
+        const projGroup = card.createSpan({ cls: "dp-card-project-wrap" });
+        const projIcon = this.resolveProjectIcon(task.project);
+        if (projIcon) {
+          const ic = projGroup.createSpan({ cls: "dp-card-project-icon" });
+          setIcon(ic, projIcon);
+        }
+        projGroup.createSpan({ cls: "dp-card-project", text: task.project });
+        if (task.subproject) {
+          projGroup.createSpan({
+            cls: "dp-card-subproject",
+            text: `/ ${task.subproject}`,
+          });
+        }
       }
       const textCol = card.createDiv({ cls: "dp-card-text-col" });
       const text = textCol.createDiv({ cls: "dp-card-text" });
@@ -1371,6 +1413,11 @@ export class TodayView extends ItemView {
       const swatch = nameCell.createSpan({ cls: "dp-st-swatch" });
       const color = colorMap.get(name);
       if (color) swatch.style.backgroundColor = color;
+      const projIconName = this.resolveProjectIcon(name);
+      if (projIconName) {
+        const ic = nameCell.createSpan({ cls: "dp-st-project-icon" });
+        setIcon(ic, projIconName);
+      }
       nameCell.createSpan({ text: name });
       table.createSpan({ cls: "dp-st-value", text: formatTotal(mins) });
     }
@@ -1423,15 +1470,49 @@ export class TodayView extends ItemView {
 
   private cleanBody(body: string): string {
     const p = this.plugin.settings.prefixes;
-    return body
+    let out = body
       .replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "")
+      .replace(new RegExp(`#${p.subproject}\\/[\\w-]+`, "g"), "")
       .replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "")
       .replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "")
-      .replace(/\{[^{}]*\}/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+      .replace(/\{[^{}]*\}/g, "");
+    for (const ctx of this.plugin.settings.contextTags) {
+      const tag = ctx.tag?.trim();
+      if (!tag) continue;
+      const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
+    }
+    return out.replace(/\s+/g, " ").trim();
+  }
+
+  // Returns the first configured context tag whose `#<tag>` appears in the
+  // task body, matching whole-tag (not as a prefix of another tag). Order
+  // follows the user's settings list so they can prioritise.
+  private findContextTag(task: ParsedTask): ContextTag | null {
+    const tags = this.plugin.settings.contextTags;
+    if (!tags || tags.length === 0) return null;
+    for (const ctx of tags) {
+      const tag = ctx.tag?.trim();
+      if (!tag) continue;
+      const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`#${esc}(?![\\w/-])`, "i").test(task.body)) return ctx;
+    }
+    return null;
+  }
+
+  private resolveProjectIcon(project: string | null): string | null {
+    if (!project) return null;
+    for (const pc of this.plugin.settings.projectColors) {
+      if (
+        pc.icon &&
+        pc.project?.toLowerCase() === project.toLowerCase()
+      ) {
+        return pc.icon;
+      }
+    }
+    return null;
   }
 
   private endOfTitleCh(rawLine: string): number {
