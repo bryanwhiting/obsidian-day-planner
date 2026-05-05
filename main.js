@@ -2108,6 +2108,14 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-block-text",
       text: this.cleanBody(block.task.body)
     });
+    row.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      void this.applyLineChecked(
+        file,
+        block.task.lineNumber,
+        !block.task.checked
+      );
+    });
     if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
       const subList = el.createDiv({ cls: "dp-block-subtasks" });
       block.task.subtasks.forEach((sub) => {
