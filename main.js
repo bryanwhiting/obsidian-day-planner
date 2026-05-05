@@ -362,9 +362,7 @@ function parseExercises(content, prefixes) {
     const taskMatch = TASK_LINE.exec(line);
     if (!taskMatch)
       continue;
-    const status = taskMatch[2];
-    if (status !== "x" && status !== "X")
-      continue;
+    const done = taskMatch[2] === "x" || taskMatch[2] === "X";
     for (const m of taskMatch[3].matchAll(re)) {
       const name = m[1];
       const reps = parseInt(m[2], 10);
@@ -377,19 +375,20 @@ function parseExercises(content, prefixes) {
         byName.set(name, summary);
         out.push(summary);
       }
-      summary.sets.push({ reps, weight });
+      summary.sets.push({ reps, weight, done });
     }
   }
   return out;
 }
-function formatExerciseSummary(summary) {
-  const hasWeight = summary.sets.some((s) => s.weight !== null);
+function formatSets(sets) {
+  if (sets.length === 0)
+    return "";
+  const hasWeight = sets.some((s) => s.weight !== null);
   if (!hasWeight) {
-    const total = summary.sets.reduce((a, s) => a + s.reps, 0);
-    return `${summary.name} ${total}`;
+    return String(sets.reduce((a, s) => a + s.reps, 0));
   }
   const buckets = /* @__PURE__ */ new Map();
-  for (const set of summary.sets) {
+  for (const set of sets) {
     const key = set.weight === null ? "" : String(set.weight);
     const cur = buckets.get(key);
     if (cur)
@@ -401,7 +400,18 @@ function formatExerciseSummary(summary) {
   for (const { reps, weight } of buckets.values()) {
     parts.push(weight === null ? `${reps}` : `${reps}\xD7${weight}`);
   }
-  return `${summary.name} ${parts.join(", ")}`;
+  return parts.join(", ");
+}
+function formatExerciseSummary(summary) {
+  const done = formatSets(summary.sets.filter((s) => s.done));
+  const pending = formatSets(summary.sets.filter((s) => !s.done));
+  if (done && pending)
+    return `${summary.name} ${done} (${pending})`;
+  if (done)
+    return `${summary.name} ${done}`;
+  if (pending)
+    return `${summary.name} (${pending})`;
+  return summary.name;
 }
 function formatExerciseLine(summaries) {
   return summaries.map(formatExerciseSummary).join(" \u2022 ");

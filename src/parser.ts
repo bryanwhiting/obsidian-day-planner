@@ -39,6 +39,7 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
 export interface ExerciseSet {
   reps: number;
   weight: number | null;
+  done: boolean;
 }
 
 export interface ExerciseSummary {
@@ -76,11 +77,10 @@ export function parseExercises(
   const byName = new Map<string, ExerciseSummary>();
   for (const line of content.split("\n")) {
     const taskMatch = TASK_LINE.exec(line);
-    // Only completed task lines count toward the workout summary. Skip open
-    // tasks, plain bullets, prose — anything without an explicit "x" status.
+    // Tags only count when they're on a task line. Plain prose / bullets are
+    // skipped — there's no completion state to read on a non-task line.
     if (!taskMatch) continue;
-    const status = taskMatch[2];
-    if (status !== "x" && status !== "X") continue;
+    const done = taskMatch[2] === "x" || taskMatch[2] === "X";
     for (const m of taskMatch[3].matchAll(re)) {
       const name = m[1];
       const reps = parseInt(m[2], 10);
@@ -92,22 +92,23 @@ export function parseExercises(
         byName.set(name, summary);
         out.push(summary);
       }
-      summary.sets.push({ reps, weight });
+      summary.sets.push({ reps, weight, done });
     }
   }
   return out;
 }
 
-export function formatExerciseSummary(summary: ExerciseSummary): string {
-  const hasWeight = summary.sets.some((s) => s.weight !== null);
+// Aggregates a list of sets into a display string. Bodyweight sets collapse
+// into a single rep total ("50"); weighted sets group by weight bucket and
+// sum reps within each ("10×135, 8×155"). Returns "" for an empty list.
+function formatSets(sets: ExerciseSet[]): string {
+  if (sets.length === 0) return "";
+  const hasWeight = sets.some((s) => s.weight !== null);
   if (!hasWeight) {
-    const total = summary.sets.reduce((a, s) => a + s.reps, 0);
-    return `${summary.name} ${total}`;
+    return String(sets.reduce((a, s) => a + s.reps, 0));
   }
-  // Group sets that share a weight (or no weight) and sum their reps. Insertion
-  // order is preserved so the most-recent weights don't reshuffle the line.
   const buckets = new Map<string, { reps: number; weight: number | null }>();
-  for (const set of summary.sets) {
+  for (const set of sets) {
     const key = set.weight === null ? "" : String(set.weight);
     const cur = buckets.get(key);
     if (cur) cur.reps += set.reps;
@@ -117,7 +118,16 @@ export function formatExerciseSummary(summary: ExerciseSummary): string {
   for (const { reps, weight } of buckets.values()) {
     parts.push(weight === null ? `${reps}` : `${reps}×${weight}`);
   }
-  return `${summary.name} ${parts.join(", ")}`;
+  return parts.join(", ");
+}
+
+export function formatExerciseSummary(summary: ExerciseSummary): string {
+  const done = formatSets(summary.sets.filter((s) => s.done));
+  const pending = formatSets(summary.sets.filter((s) => !s.done));
+  if (done && pending) return `${summary.name} ${done} (${pending})`;
+  if (done) return `${summary.name} ${done}`;
+  if (pending) return `${summary.name} (${pending})`;
+  return summary.name;
 }
 
 export function formatExerciseLine(summaries: ExerciseSummary[]): string {
