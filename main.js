@@ -2598,8 +2598,12 @@ var TodayView = class extends import_obsidian4.ItemView {
     const eveningRange = `${this.formatHourLabel(settings.workEndHour)}-${this.formatHourLabel(settings.sleepHour)}`;
     const column = parent.createDiv({ cls: "dp-stat-col" });
     const table = column.createDiv({ cls: "dp-stat-table" });
-    this.renderStatRow(table, "Scheduled", totals.scheduledMin);
-    this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
+    this.renderStatRow(table, "Scheduled", totals.scheduledMin, {
+      kind: "scheduled"
+    });
+    this.renderStatRow(table, "Unscheduled", totals.unscheduledMin, {
+      kind: "unscheduled"
+    });
     if (planned > workdayMin) {
       this.renderStatRow(table, "Overbooked", planned - workdayMin);
       const cells = Array.from(table.children);
@@ -2607,11 +2611,17 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     const freeTotal = morningOpen + workOpen + eveningOpen;
     table.createDiv({ cls: "dp-st-row-divider" });
-    this.renderStatRow(table, "Free Time", freeTotal);
-    this.renderStatRow(table, `Morning (${morningRange})`, morningOpen, false, true);
-    this.renderStatRow(table, `Workday (${workRange})`, workOpen, false, true);
-    this.renderStatRow(table, `Evening (${eveningRange})`, eveningOpen, false, true);
-    this.renderStatRow(table, "Sleep", sleepDurationMin);
+    this.renderStatRow(table, "Free Time", freeTotal, { kind: "free" });
+    this.renderStatRow(table, `Morning (${morningRange})`, morningOpen, {
+      indent: true
+    });
+    this.renderStatRow(table, `Workday (${workRange})`, workOpen, {
+      indent: true
+    });
+    this.renderStatRow(table, `Evening (${eveningRange})`, eveningOpen, {
+      indent: true
+    });
+    this.renderStatRow(table, "Sleep", sleepDurationMin, { kind: "sleep" });
     this.renderDayDotGrid(column, {
       scheduledMin: totals.scheduledMin,
       unscheduledMin: totals.unscheduledMin,
@@ -2661,15 +2671,20 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
     }
   }
-  renderStatRow(table, label, mins, strong = false, indent = false) {
+  renderStatRow(table, label, mins, opts = {}) {
     const nameClasses = ["dp-st-name"];
     const valueClasses = ["dp-st-value"];
-    if (strong) {
+    if (opts.strong) {
       nameClasses.push("dp-st-strong");
       valueClasses.push("dp-st-strong");
     }
-    if (indent)
+    if (opts.indent)
       nameClasses.push("dp-st-indent");
+    if (opts.kind) {
+      const k = `dp-st-kind-${opts.kind}`;
+      nameClasses.push(k);
+      valueClasses.push(k);
+    }
     table.createSpan({ cls: nameClasses.join(" "), text: label });
     table.createSpan({ cls: valueClasses.join(" "), text: formatTotal(mins) });
   }
