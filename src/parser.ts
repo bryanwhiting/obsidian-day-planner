@@ -9,6 +9,15 @@ export interface ParsedTask {
   order: number | null;
   checked: boolean;
   project: string | null;
+  indent: string;
+  subtasks: ParsedSubtask[];
+}
+
+export interface ParsedSubtask {
+  lineNumber: number;
+  rawLine: string;
+  text: string;
+  checked: boolean;
 }
 
 export interface TagPrefixes {
@@ -126,6 +135,7 @@ export function parseTaskLine(
 ): ParsedTask | null {
   const m = TASK_LINE.exec(rawLine);
   if (!m) return null;
+  const indent = m[1];
   const body = m[3];
   const explicitDuration = parseDuration(body, prefixes);
   const startMin = parseTime(body, prefixes);
@@ -144,9 +154,14 @@ export function parseTaskLine(
     order,
     checked,
     project,
+    indent,
+    subtasks: [],
   };
 }
 
+// A sub-task is any task line whose indent is strictly greater than its
+// nearest preceding top-level task. Sub-tasks are attached to that parent
+// and excluded from the returned list (so they don't appear on the planner).
 export function parseFileTasks(
   filePath: string,
   fileContent: string,
@@ -155,9 +170,24 @@ export function parseFileTasks(
 ): ParsedTask[] {
   const lines = fileContent.split("\n");
   const tasks: ParsedTask[] = [];
+  let parent: ParsedTask | null = null;
   for (let i = 0; i < lines.length; i++) {
+    const m = TASK_LINE.exec(lines[i]);
+    if (!m) continue;
+    const indent = m[1];
+    if (parent && indent.length > parent.indent.length) {
+      parent.subtasks.push({
+        lineNumber: i,
+        rawLine: lines[i],
+        text: m[3],
+        checked: m[2] !== " ",
+      });
+      continue;
+    }
     const t = parseTaskLine(filePath, i, lines[i], prefixes, defaultDurationMin);
-    if (t) tasks.push(t);
+    if (!t) continue;
+    tasks.push(t);
+    parent = t;
   }
   return tasks;
 }
@@ -233,6 +263,14 @@ export function findLastTaskLine(content: string): number {
     if (TASK_LINE.test(lines[i])) return i;
   }
   return -1;
+}
+
+export function setTaskChecked(rawLine: string, checked: boolean): string {
+  const m = TASK_LINE.exec(rawLine);
+  if (!m) return rawLine;
+  const indent = m[1];
+  const body = m[3];
+  return `${indent}- [${checked ? "x" : " "}] ${body}`;
 }
 
 export function setTaskTitle(

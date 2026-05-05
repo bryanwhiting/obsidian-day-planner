@@ -12,6 +12,7 @@ import { parseTimelineHeight } from "./settings";
 import type TodayPlugin from "./main";
 import {
   ParsedTask,
+  ParsedSubtask,
   parseFileTasks,
   setTimeTag,
   removeTimeTag,
@@ -21,6 +22,7 @@ import {
   setProjectTag,
   removeProjectTag,
   setTaskTitle,
+  setTaskChecked,
   snapToInterval,
   formatTotal,
   findLastTaskLine,
@@ -757,6 +759,44 @@ export class TodayView extends ItemView {
       text: this.cleanBody(block.task.body),
     });
 
+    // Show sub-tasks inside the block if there's enough vertical room. The
+    // header row consumes ~22px, and each sub-task row is ~16px — we need
+    // at least one full sub-task row (and a little breathing room) before
+    // we bother rendering. Excess rows are clipped by overflow:hidden.
+    if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
+      const subList = el.createDiv({ cls: "dp-block-subtasks" });
+      block.task.subtasks.forEach((sub) => {
+        const subRow = subList.createDiv({ cls: "dp-block-subtask" });
+        if (sub.checked) subRow.addClass("is-done");
+        const box = subRow.createEl("button", {
+          cls: "dp-block-subtask-check",
+          attr: { "aria-label": "Toggle sub-task" },
+        });
+        box.type = "button";
+        if (sub.checked) {
+          box.addClass("is-checked");
+          setIcon(box, "check");
+        }
+        subRow.createSpan({
+          cls: "dp-block-subtask-text",
+          text: sub.text,
+        });
+        // The box must not propagate to the block's click (opens modal),
+        // dragstart, or pointerdown (resize handle uses pointerdown but
+        // it's a sibling — still, defensive stopPropagation).
+        box.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          void this.applyLineChecked(file, sub.lineNumber, !sub.checked);
+        });
+        box.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+        box.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        box.addEventListener("dragstart", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+        });
+      });
+    }
+
     el.addEventListener("dragstart", (ev) => {
       const rect = el.getBoundingClientRect();
       this.dragPayload = {
@@ -1277,10 +1317,15 @@ export class TodayView extends ItemView {
       initialTitle: this.cleanBody(task.body),
       initialDurationMin: task.durationMin,
       initialProject: task.project,
+      initialChecked: task.checked,
+      subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: QUICK_DURATIONS,
-      onSave: (title, durationMin, project) => {
-        void this.applyTaskEdit(file, task, title, durationMin, project);
+      onSave: (title, durationMin, project, checked) => {
+        void this.applyTaskEdit(file, task, title, durationMin, project, checked);
+      },
+      onToggleSubtask: async (sub, checked) => {
+        await this.applyLineChecked(file, sub.lineNumber, checked);
       },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
@@ -1314,6 +1359,7 @@ export class TodayView extends ItemView {
     newDurationMin: number | null,
     // undefined = leave the project tag alone, "" = remove it, otherwise set
     newProject: string | null | undefined,
+    newChecked: boolean | null,
   ): Promise<void> {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
@@ -1328,7 +1374,23 @@ export class TodayView extends ItemView {
           ? setProjectTag(updated, newProject, prefixes)
           : removeProjectTag(updated, prefixes);
       }
+      if (newChecked !== null) {
+        updated = setTaskChecked(updated, newChecked);
+      }
       lines[task.lineNumber] = updated;
+      return lines.join("\n");
+    });
+  }
+
+  private async applyLineChecked(
+    file: TFile,
+    lineNumber: number,
+    checked: boolean,
+  ): Promise<void> {
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length) return content;
+      lines[lineNumber] = setTaskChecked(lines[lineNumber], checked);
       return lines.join("\n");
     });
   }
@@ -1514,16 +1576,21 @@ interface TaskEditOpts {
   initialTitle: string;
   initialDurationMin: number;
   initialProject: string | null;
+  initialChecked: boolean;
+  subtasks: ParsedSubtask[];
   projects: string[];
   durations: { label: string; min: number }[];
   // durationMin is null when the user did not pick a new duration — leave the
   // existing #d/ tag (or its absence) alone.
   // project is undefined when unchanged; "" means remove the tag; otherwise set.
+  // checked is null when unchanged.
   onSave: (
     title: string,
     durationMin: number | null,
     project: string | null | undefined,
+    checked: boolean | null,
   ) => void;
+  onToggleSubtask: (sub: ParsedSubtask, checked: boolean) => Promise<void>;
   onShowInNote: () => void;
 }
 
@@ -1541,12 +1608,15 @@ class TaskEditModal extends Modal {
   private opts: TaskEditOpts;
   private selectedDurationMin: number;
   private durationChanged = false;
+  private checked: boolean;
+  private checkedChanged = false;
   private datalistId: string;
 
   constructor(app: App, opts: TaskEditOpts) {
     super(app);
     this.opts = opts;
     this.selectedDurationMin = opts.initialDurationMin;
+    this.checked = opts.initialChecked;
     this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
   }
 
@@ -1555,7 +1625,25 @@ class TaskEditModal extends Modal {
     this.titleEl.setText("Edit task");
     this.contentEl.empty();
 
-    const input = this.contentEl.createEl("input", {
+    const titleRow = this.contentEl.createDiv({ cls: "dp-edit-title-row" });
+    const checkBtn = titleRow.createEl("button", {
+      cls: "dp-edit-check",
+      attr: { "aria-label": "Mark task complete" },
+    });
+    checkBtn.type = "button";
+    const renderCheck = () => {
+      checkBtn.toggleClass("is-checked", this.checked);
+      checkBtn.empty();
+      if (this.checked) setIcon(checkBtn, "check");
+    };
+    renderCheck();
+    checkBtn.addEventListener("click", () => {
+      this.checked = !this.checked;
+      this.checkedChanged = true;
+      renderCheck();
+    });
+
+    const input = titleRow.createEl("input", {
       type: "text",
       cls: "dp-title-input",
       attr: { placeholder: "Task title…" },
@@ -1632,6 +1720,7 @@ class TaskEditModal extends Modal {
         input.value.trim(),
         this.durationChanged ? this.selectedDurationMin : null,
         resolveProject(),
+        this.checkedChanged ? this.checked : null,
       );
       this.close();
     };
@@ -1644,6 +1733,44 @@ class TaskEditModal extends Modal {
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
+
+    if (this.opts.subtasks.length > 0) {
+      const subLabel = this.contentEl.createDiv({
+        cls: "dp-prompt-step-label",
+        text: "Sub-tasks",
+      });
+      subLabel.setAttribute("aria-hidden", "true");
+      const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
+      this.opts.subtasks.forEach((sub) => {
+        let checked = sub.checked;
+        const row = list.createDiv({ cls: "dp-edit-subtask" });
+        if (checked) row.addClass("is-done");
+        const box = row.createEl("button", {
+          cls: "dp-edit-check",
+          attr: { "aria-label": "Toggle sub-task" },
+        });
+        box.type = "button";
+        const renderBox = () => {
+          box.toggleClass("is-checked", checked);
+          box.empty();
+          if (checked) setIcon(box, "check");
+        };
+        renderBox();
+        const text = row.createSpan({
+          cls: "dp-edit-subtask-text",
+          text: sub.text,
+        });
+        box.addEventListener("click", () => {
+          checked = !checked;
+          renderBox();
+          row.toggleClass("is-done", checked);
+          void this.opts.onToggleSubtask(sub, checked);
+        });
+        // Allow click on the row text to toggle as well — keeps the hit
+        // target generous for short titles.
+        text.addEventListener("click", () => box.click());
+      });
+    }
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {

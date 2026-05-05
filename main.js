@@ -414,6 +414,7 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
   const m = TASK_LINE.exec(rawLine);
   if (!m)
     return null;
+  const indent = m[1];
   const body = m[3];
   const explicitDuration = parseDuration(body, prefixes);
   const startMin = parseTime(body, prefixes);
@@ -431,16 +432,34 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
     startMin,
     order,
     checked,
-    project
+    project,
+    indent,
+    subtasks: []
   };
 }
 function parseFileTasks(filePath, fileContent, prefixes, defaultDurationMin) {
   const lines = fileContent.split("\n");
   const tasks = [];
+  let parent = null;
   for (let i = 0; i < lines.length; i++) {
+    const m = TASK_LINE.exec(lines[i]);
+    if (!m)
+      continue;
+    const indent = m[1];
+    if (parent && indent.length > parent.indent.length) {
+      parent.subtasks.push({
+        lineNumber: i,
+        rawLine: lines[i],
+        text: m[3],
+        checked: m[2] !== " "
+      });
+      continue;
+    }
     const t = parseTaskLine(filePath, i, lines[i], prefixes, defaultDurationMin);
-    if (t)
-      tasks.push(t);
+    if (!t)
+      continue;
+    tasks.push(t);
+    parent = t;
   }
   return tasks;
 }
@@ -494,6 +513,14 @@ function findLastTaskLine(content) {
       return i;
   }
   return -1;
+}
+function setTaskChecked(rawLine, checked) {
+  const m = TASK_LINE.exec(rawLine);
+  if (!m)
+    return rawLine;
+  const indent = m[1];
+  const body = m[3];
+  return `${indent}- [${checked ? "x" : " "}] ${body}`;
 }
 function setTaskTitle(rawLine, newTitle, prefixes) {
   const m = TASK_LINE.exec(rawLine);
@@ -2064,6 +2091,37 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-block-text",
       text: this.cleanBody(block.task.body)
     });
+    if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
+      const subList = el.createDiv({ cls: "dp-block-subtasks" });
+      block.task.subtasks.forEach((sub) => {
+        const subRow = subList.createDiv({ cls: "dp-block-subtask" });
+        if (sub.checked)
+          subRow.addClass("is-done");
+        const box = subRow.createEl("button", {
+          cls: "dp-block-subtask-check",
+          attr: { "aria-label": "Toggle sub-task" }
+        });
+        box.type = "button";
+        if (sub.checked) {
+          box.addClass("is-checked");
+          (0, import_obsidian4.setIcon)(box, "check");
+        }
+        subRow.createSpan({
+          cls: "dp-block-subtask-text",
+          text: sub.text
+        });
+        box.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          void this.applyLineChecked(file, sub.lineNumber, !sub.checked);
+        });
+        box.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+        box.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        box.addEventListener("dragstart", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+        });
+      });
+    }
     el.addEventListener("dragstart", (ev) => {
       var _a;
       const rect = el.getBoundingClientRect();
@@ -2520,10 +2578,15 @@ var TodayView = class extends import_obsidian4.ItemView {
       initialTitle: this.cleanBody(task.body),
       initialDurationMin: task.durationMin,
       initialProject: task.project,
+      initialChecked: task.checked,
+      subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: QUICK_DURATIONS,
-      onSave: (title, durationMin, project) => {
-        void this.applyTaskEdit(file, task, title, durationMin, project);
+      onSave: (title, durationMin, project, checked) => {
+        void this.applyTaskEdit(file, task, title, durationMin, project, checked);
+      },
+      onToggleSubtask: async (sub, checked) => {
+        await this.applyLineChecked(file, sub.lineNumber, checked);
       },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
@@ -2549,7 +2612,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }
-  async applyTaskEdit(file, task, newTitle, newDurationMin, newProject) {
+  async applyTaskEdit(file, task, newTitle, newDurationMin, newProject, newChecked) {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
@@ -2562,7 +2625,19 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (newProject !== void 0) {
         updated = newProject ? setProjectTag(updated, newProject, prefixes) : removeProjectTag(updated, prefixes);
       }
+      if (newChecked !== null) {
+        updated = setTaskChecked(updated, newChecked);
+      }
       lines[task.lineNumber] = updated;
+      return lines.join("\n");
+    });
+  }
+  async applyLineChecked(file, lineNumber, checked) {
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length)
+        return content;
+      lines[lineNumber] = setTaskChecked(lines[lineNumber], checked);
       return lines.join("\n");
     });
   }
@@ -2708,8 +2783,10 @@ var TaskEditModal = class extends import_obsidian4.Modal {
   constructor(app, opts) {
     super(app);
     this.durationChanged = false;
+    this.checkedChanged = false;
     this.opts = opts;
     this.selectedDurationMin = opts.initialDurationMin;
+    this.checked = opts.initialChecked;
     this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
   }
   onOpen() {
@@ -2717,7 +2794,25 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     this.modalEl.addClass("dp-title-modal");
     this.titleEl.setText("Edit task");
     this.contentEl.empty();
-    const input = this.contentEl.createEl("input", {
+    const titleRow = this.contentEl.createDiv({ cls: "dp-edit-title-row" });
+    const checkBtn = titleRow.createEl("button", {
+      cls: "dp-edit-check",
+      attr: { "aria-label": "Mark task complete" }
+    });
+    checkBtn.type = "button";
+    const renderCheck = () => {
+      checkBtn.toggleClass("is-checked", this.checked);
+      checkBtn.empty();
+      if (this.checked)
+        (0, import_obsidian4.setIcon)(checkBtn, "check");
+    };
+    renderCheck();
+    checkBtn.addEventListener("click", () => {
+      this.checked = !this.checked;
+      this.checkedChanged = true;
+      renderCheck();
+    });
+    const input = titleRow.createEl("input", {
       type: "text",
       cls: "dp-title-input",
       attr: { placeholder: "Task title\u2026" }
@@ -2791,7 +2886,8 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       this.opts.onSave(
         input.value.trim(),
         this.durationChanged ? this.selectedDurationMin : null,
-        resolveProject()
+        resolveProject(),
+        this.checkedChanged ? this.checked : null
       );
       this.close();
     };
@@ -2803,6 +2899,43 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
+    if (this.opts.subtasks.length > 0) {
+      const subLabel = this.contentEl.createDiv({
+        cls: "dp-prompt-step-label",
+        text: "Sub-tasks"
+      });
+      subLabel.setAttribute("aria-hidden", "true");
+      const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
+      this.opts.subtasks.forEach((sub) => {
+        let checked = sub.checked;
+        const row2 = list.createDiv({ cls: "dp-edit-subtask" });
+        if (checked)
+          row2.addClass("is-done");
+        const box = row2.createEl("button", {
+          cls: "dp-edit-check",
+          attr: { "aria-label": "Toggle sub-task" }
+        });
+        box.type = "button";
+        const renderBox = () => {
+          box.toggleClass("is-checked", checked);
+          box.empty();
+          if (checked)
+            (0, import_obsidian4.setIcon)(box, "check");
+        };
+        renderBox();
+        const text = row2.createSpan({
+          cls: "dp-edit-subtask-text",
+          text: sub.text
+        });
+        box.addEventListener("click", () => {
+          checked = !checked;
+          renderBox();
+          row2.toggleClass("is-done", checked);
+          void this.opts.onToggleSubtask(sub, checked);
+        });
+        text.addEventListener("click", () => box.click());
+      });
+    }
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {
       cls: "dp-edit-show-btn",
