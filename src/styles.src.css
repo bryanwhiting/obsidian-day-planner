@@ -1560,7 +1560,7 @@
     appearance: none;
     -webkit-appearance: none;
     background: var(--color-paper);
-    border: 1.5px solid color-mix(in srgb, var(--color-ink) 50%, transparent);
+    border: 1.5px solid var(--color-ink-muted);
     border-radius: 50%;
     cursor: pointer;
     box-shadow: none;
@@ -1637,6 +1637,52 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .dp-edit-subtask-add {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .dp-edit-subtask-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 5px 8px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+  }
+
+  .dp-edit-subtask-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+
+  .dp-edit-subtask-add-btn {
+    flex: 0 0 auto;
+    padding: 5px 10px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    cursor: pointer;
+  }
+
+  .dp-edit-subtask-add-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .dp-edit-subtask-add-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .dp-edit-actions {

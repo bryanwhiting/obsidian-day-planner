@@ -1362,10 +1362,51 @@ export class TodayView extends ItemView {
       onToggleSubtask: async (sub, checked) => {
         await this.applyLineChecked(file, sub.lineNumber, checked);
       },
+      onAddSubtask: async (text) => {
+        return await this.appendSubtask(file, task, text);
+      },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
     }).open();
+  }
+
+  // Inserts a new sub-task line below the parent's existing sub-tasks (or
+  // directly below the parent if none exist). Re-parses on each call so
+  // line numbers stay correct across multiple additions in one session.
+  private async appendSubtask(
+    file: TFile,
+    task: ParsedTask,
+    text: string,
+  ): Promise<ParsedSubtask | null> {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    let inserted: ParsedSubtask | null = null;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const fresh = parseFileTasks(
+        file.path,
+        content,
+        this.plugin.settings.prefixes,
+        this.plugin.settings.defaultDurationMin,
+      ).find((t) => t.lineNumber === task.lineNumber);
+      if (!fresh) return content;
+      const insertAt =
+        fresh.subtasks.length > 0
+          ? fresh.subtasks[fresh.subtasks.length - 1].lineNumber + 1
+          : fresh.lineNumber + 1;
+      const subIndent = fresh.indent + "  ";
+      const newLine = `${subIndent}- [ ] ${trimmed}`;
+      lines.splice(insertAt, 0, newLine);
+      inserted = {
+        lineNumber: insertAt,
+        rawLine: newLine,
+        text: trimmed,
+        checked: false,
+      };
+      return lines.join("\n");
+    });
+    return inserted;
   }
 
   private collectProjectNames(): string[] {
@@ -1626,6 +1667,7 @@ interface TaskEditOpts {
     checked: boolean | null,
   ) => void;
   onToggleSubtask: (sub: ParsedSubtask, checked: boolean) => Promise<void>;
+  onAddSubtask: (text: string) => Promise<ParsedSubtask | null>;
   onShowInNote: () => void;
 }
 
@@ -1776,32 +1818,67 @@ class TaskEditModal extends Modal {
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
 
-    if (this.opts.subtasks.length > 0) {
-      const subLabel = this.contentEl.createDiv({
-        cls: "dp-prompt-step-label",
-        text: "Sub-tasks",
+    const subLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Sub-tasks",
+    });
+    subLabel.setAttribute("aria-hidden", "true");
+    const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
+
+    const renderSubtask = (sub: ParsedSubtask): void => {
+      let checked = sub.checked;
+      const row = list.createDiv({ cls: "dp-edit-subtask" });
+      if (checked) row.addClass("is-done");
+      const box = row.createSpan({ cls: "dp-edit-check" });
+      if (checked) box.addClass("is-checked");
+      row.createSpan({
+        cls: "dp-edit-subtask-text",
+        text: sub.text,
       });
-      subLabel.setAttribute("aria-hidden", "true");
-      const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
-      this.opts.subtasks.forEach((sub) => {
-        let checked = sub.checked;
-        const row = list.createDiv({ cls: "dp-edit-subtask" });
-        if (checked) row.addClass("is-done");
-        const box = row.createSpan({ cls: "dp-edit-check" });
-        if (checked) box.addClass("is-checked");
-        row.createSpan({
-          cls: "dp-edit-subtask-text",
-          text: sub.text,
-        });
-        // Click anywhere on the row to toggle.
-        row.addEventListener("click", () => {
-          checked = !checked;
-          row.toggleClass("is-done", checked);
-          box.toggleClass("is-checked", checked);
-          void this.opts.onToggleSubtask(sub, checked);
-        });
+      row.addEventListener("click", () => {
+        checked = !checked;
+        row.toggleClass("is-done", checked);
+        box.toggleClass("is-checked", checked);
+        void this.opts.onToggleSubtask(sub, checked);
       });
-    }
+    };
+
+    this.opts.subtasks.forEach(renderSubtask);
+
+    const addRow = this.contentEl.createDiv({ cls: "dp-edit-subtask-add" });
+    const addInput = addRow.createEl("input", {
+      type: "text",
+      cls: "dp-edit-subtask-input",
+      attr: { placeholder: "New sub-task…" },
+    });
+    const addBtn = addRow.createEl("button", {
+      cls: "dp-edit-subtask-add-btn",
+      text: "Add",
+    });
+    addBtn.type = "button";
+    const submitNewSubtask = async (): Promise<void> => {
+      const text = addInput.value.trim();
+      if (!text) return;
+      addInput.disabled = true;
+      addBtn.disabled = true;
+      const sub = await this.opts.onAddSubtask(text);
+      addInput.disabled = false;
+      addBtn.disabled = false;
+      if (sub) {
+        renderSubtask(sub);
+        addInput.value = "";
+      }
+      addInput.focus();
+    };
+    addBtn.addEventListener("click", () => {
+      void submitNewSubtask();
+    });
+    addInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        void submitNewSubtask();
+      }
+    });
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {

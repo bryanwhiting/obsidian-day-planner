@@ -2715,10 +2715,45 @@ var TodayView = class extends import_obsidian4.ItemView {
       onToggleSubtask: async (sub, checked) => {
         await this.applyLineChecked(file, sub.lineNumber, checked);
       },
+      onAddSubtask: async (text) => {
+        return await this.appendSubtask(file, task, text);
+      },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       }
     }).open();
+  }
+  // Inserts a new sub-task line below the parent's existing sub-tasks (or
+  // directly below the parent if none exist). Re-parses on each call so
+  // line numbers stay correct across multiple additions in one session.
+  async appendSubtask(file, task, text) {
+    const trimmed = text.trim();
+    if (!trimmed)
+      return null;
+    let inserted = null;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const fresh = parseFileTasks(
+        file.path,
+        content,
+        this.plugin.settings.prefixes,
+        this.plugin.settings.defaultDurationMin
+      ).find((t) => t.lineNumber === task.lineNumber);
+      if (!fresh)
+        return content;
+      const insertAt = fresh.subtasks.length > 0 ? fresh.subtasks[fresh.subtasks.length - 1].lineNumber + 1 : fresh.lineNumber + 1;
+      const subIndent = fresh.indent + "  ";
+      const newLine = `${subIndent}- [ ] ${trimmed}`;
+      lines.splice(insertAt, 0, newLine);
+      inserted = {
+        lineNumber: insertAt,
+        rawLine: newLine,
+        text: trimmed,
+        checked: false
+      };
+      return lines.join("\n");
+    });
+    return inserted;
   }
   collectProjectNames() {
     var _a, _b;
@@ -3033,33 +3068,67 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
-    if (this.opts.subtasks.length > 0) {
-      const subLabel = this.contentEl.createDiv({
-        cls: "dp-prompt-step-label",
-        text: "Sub-tasks"
+    const subLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Sub-tasks"
+    });
+    subLabel.setAttribute("aria-hidden", "true");
+    const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
+    const renderSubtask = (sub) => {
+      let checked = sub.checked;
+      const row2 = list.createDiv({ cls: "dp-edit-subtask" });
+      if (checked)
+        row2.addClass("is-done");
+      const box = row2.createSpan({ cls: "dp-edit-check" });
+      if (checked)
+        box.addClass("is-checked");
+      row2.createSpan({
+        cls: "dp-edit-subtask-text",
+        text: sub.text
       });
-      subLabel.setAttribute("aria-hidden", "true");
-      const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
-      this.opts.subtasks.forEach((sub) => {
-        let checked = sub.checked;
-        const row2 = list.createDiv({ cls: "dp-edit-subtask" });
-        if (checked)
-          row2.addClass("is-done");
-        const box = row2.createSpan({ cls: "dp-edit-check" });
-        if (checked)
-          box.addClass("is-checked");
-        row2.createSpan({
-          cls: "dp-edit-subtask-text",
-          text: sub.text
-        });
-        row2.addEventListener("click", () => {
-          checked = !checked;
-          row2.toggleClass("is-done", checked);
-          box.toggleClass("is-checked", checked);
-          void this.opts.onToggleSubtask(sub, checked);
-        });
+      row2.addEventListener("click", () => {
+        checked = !checked;
+        row2.toggleClass("is-done", checked);
+        box.toggleClass("is-checked", checked);
+        void this.opts.onToggleSubtask(sub, checked);
       });
-    }
+    };
+    this.opts.subtasks.forEach(renderSubtask);
+    const addRow = this.contentEl.createDiv({ cls: "dp-edit-subtask-add" });
+    const addInput = addRow.createEl("input", {
+      type: "text",
+      cls: "dp-edit-subtask-input",
+      attr: { placeholder: "New sub-task\u2026" }
+    });
+    const addBtn = addRow.createEl("button", {
+      cls: "dp-edit-subtask-add-btn",
+      text: "Add"
+    });
+    addBtn.type = "button";
+    const submitNewSubtask = async () => {
+      const text = addInput.value.trim();
+      if (!text)
+        return;
+      addInput.disabled = true;
+      addBtn.disabled = true;
+      const sub = await this.opts.onAddSubtask(text);
+      addInput.disabled = false;
+      addBtn.disabled = false;
+      if (sub) {
+        renderSubtask(sub);
+        addInput.value = "";
+      }
+      addInput.focus();
+    };
+    addBtn.addEventListener("click", () => {
+      void submitNewSubtask();
+    });
+    addInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        void submitNewSubtask();
+      }
+    });
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {
       cls: "dp-edit-show-btn",
