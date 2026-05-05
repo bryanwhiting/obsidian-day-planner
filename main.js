@@ -2607,7 +2607,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (planned > workdayMin) {
       this.renderStatRow(table, "Overbooked", planned - workdayMin);
       const cells = Array.from(table.children);
-      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
+      cells.slice(-2).forEach((el) => el.classList.add("dp-st-danger"));
     }
     const freeTotal = morningOpen + workOpen + eveningOpen;
     table.createDiv({ cls: "dp-st-row-divider" });

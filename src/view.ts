@@ -1219,7 +1219,7 @@ export class TodayView extends ItemView {
     if (planned > workdayMin) {
       this.renderStatRow(table, "Overbooked", planned - workdayMin);
       const cells = Array.from(table.children) as HTMLElement[];
-      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
+      cells.slice(-2).forEach((el) => el.classList.add("dp-st-danger"));
     }
 
     const freeTotal = morningOpen + workOpen + eveningOpen;

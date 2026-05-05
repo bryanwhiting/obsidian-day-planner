@@ -30,8 +30,9 @@
   --color-accent: var(--interactive-accent);
   --color-on-accent: var(--text-on-accent);
   --color-warn: var(--color-orange, #c8741c);
+  --color-danger: var(--color-red, #c4344a);
   --color-free: var(--color-green, #3aa56b);
-  --color-sleep: var(--color-ink-faint);
+  --color-sleep: var(--color-purple, #8a5cf5);
 
   --radius-tab: 4px;
   --radius-card: 6px;
@@ -546,6 +547,11 @@
     color: var(--color-warn);
   }
 
+  .dp-st-danger {
+    color: var(--color-danger);
+    font-weight: 600;
+  }
+
   .dp-st-indent {
     padding-left: 10px;
   }
@@ -583,7 +589,6 @@
 
   .dp-day-dot-sleep {
     background: var(--color-sleep);
-    opacity: 0.55;
   }
 
   .dp-st-kind-scheduled {
