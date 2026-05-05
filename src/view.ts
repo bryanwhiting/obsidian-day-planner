@@ -511,10 +511,10 @@ export class TodayView extends ItemView {
     if (parsedHeight) wrap.style.maxHeight = parsedHeight;
     const timeline = wrap.createDiv({ cls: "dp-timeline" });
     timeline.style.height = `${heightPx}px`;
-    // Half a snap interval, in px — used to size hit areas so each mark in
-    // the gutter (hour + sub-marks) cleanly partitions the band.
-    const halfSnapPx = (settings.snapMin * settings.pxPerMin) / 2;
-    timeline.style.setProperty("--dp-half-snap-px", `${halfSnapPx}px`);
+    // One snap interval in px — sizes each gutter mark's hit box so they
+    // tile the band edge-to-edge, centered on their mark line.
+    const snapPx = settings.snapMin * settings.pxPerMin;
+    timeline.style.setProperty("--dp-snap-px", `${snapPx}px`);
 
     for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
       const top = (h * 60 - startMin) * settings.pxPerMin;
@@ -545,8 +545,8 @@ export class TodayView extends ItemView {
             cls: "dp-hour-submark is-clickable",
             text: `:${mm}`,
           });
-          // -7px matches the hour label's vertical centering on its line.
-          sub.style.top = `${m * settings.pxPerMin - 7}px`;
+          // Center the hit box on the mark line: half a snap above the mark.
+          sub.style.top = `${m * settings.pxPerMin - snapPx / 2}px`;
           sub.setAttribute(
             "aria-label",
             `New task at ${this.formatHourLabel(h)}:${mm}`,

@@ -598,7 +598,12 @@
     position: absolute;
     left: 0;
     width: 42px;
-    top: -7px;
+    /* Hit box is exactly one snap interval, centered on the hour line so
+     * adjacent marks tile without overlap. line-height equals height so
+     * the text is vertically centered on the mark. */
+    height: var(--dp-snap-px, 30px);
+    line-height: var(--dp-snap-px, 30px);
+    top: calc(-1 * var(--dp-snap-px, 30px) / 2);
     text-align: right;
     color: var(--color-ink-faint);
     font-family: var(--font-mono);
@@ -607,14 +612,6 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
     padding-right: 8px;
-    /* Expand the hit target without changing the visual position: half a
-     * snap interval of vertical padding (pulled back by negative margins)
-     * keeps the baseline fixed while making each gutter mark tappable. The
-     * fallback matches the historical 14px padding for snap=15, px=1. */
-    padding-top: var(--dp-half-snap-px, 14px);
-    padding-bottom: var(--dp-half-snap-px, 14px);
-    margin-top: calc(-1 * var(--dp-half-snap-px, 14px));
-    margin-bottom: calc(-1 * var(--dp-half-snap-px, 14px));
     transition: color 100ms ease, background-color 100ms ease;
   }
 
@@ -630,6 +627,10 @@
     position: absolute;
     left: 0;
     width: 42px;
+    /* Same fixed-height hit box as .dp-hour-label; `top` is set inline so
+     * the box's vertical center sits on the sub-mark's minute line. */
+    height: var(--dp-snap-px, 15px);
+    line-height: var(--dp-snap-px, 15px);
     text-align: right;
     color: var(--color-ink-faint);
     font-family: var(--font-mono);
@@ -638,10 +639,6 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
     padding-right: 8px;
-    padding-top: var(--dp-half-snap-px, 7px);
-    padding-bottom: var(--dp-half-snap-px, 7px);
-    margin-top: calc(-1 * var(--dp-half-snap-px, 7px));
-    margin-bottom: calc(-1 * var(--dp-half-snap-px, 7px));
     cursor: pointer;
     opacity: 0;
     pointer-events: none;

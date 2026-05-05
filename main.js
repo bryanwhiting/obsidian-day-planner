@@ -1849,8 +1849,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       wrap.style.maxHeight = parsedHeight;
     const timeline = wrap.createDiv({ cls: "dp-timeline" });
     timeline.style.height = `${heightPx}px`;
-    const halfSnapPx = settings.snapMin * settings.pxPerMin / 2;
-    timeline.style.setProperty("--dp-half-snap-px", `${halfSnapPx}px`);
+    const snapPx = settings.snapMin * settings.pxPerMin;
+    timeline.style.setProperty("--dp-snap-px", `${snapPx}px`);
     for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
       const top = (h * 60 - startMin) * settings.pxPerMin;
       const row = timeline.createDiv({ cls: "dp-hour-row" });
@@ -1879,7 +1879,7 @@ var TodayView = class extends import_obsidian4.ItemView {
             cls: "dp-hour-submark is-clickable",
             text: `:${mm}`
           });
-          sub.style.top = `${m * settings.pxPerMin - 7}px`;
+          sub.style.top = `${m * settings.pxPerMin - snapPx / 2}px`;
           sub.setAttribute(
             "aria-label",
             `New task at ${this.formatHourLabel(h)}:${mm}`
