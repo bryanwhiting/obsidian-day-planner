@@ -878,7 +878,7 @@ export class TodayView extends ItemView {
       if (timeEl && block.task.startMin !== null) {
         const start = block.task.startMin;
         timeEl.textContent =
-          `${this.fmtClock(start)}–${this.fmtClock(start + pendingDuration)}`;
+          `${this.fmtClock(start)}–${this.fmtClock(start + pendingDuration)} (${formatTotal(pendingDuration)})`;
       }
     };
 
@@ -1290,7 +1290,7 @@ export class TodayView extends ItemView {
     if (task.startMin === null) return "";
     const start = task.startMin;
     const end = start + task.durationMin;
-    return `${this.fmtClock(start)}–${this.fmtClock(end)}`;
+    return `${this.fmtClock(start)}–${this.fmtClock(end)} (${formatTotal(task.durationMin)})`;
   }
 
   private positionNowLine(el: HTMLElement): void {
@@ -1395,7 +1395,12 @@ export class TodayView extends ItemView {
         fresh.subtasks.length > 0
           ? fresh.subtasks[fresh.subtasks.length - 1].lineNumber + 1
           : fresh.lineNumber + 1;
-      const subIndent = fresh.indent + "  ";
+      // Match the indent of any existing sub-task so we don't mix tabs and
+      // spaces; otherwise add one tab beneath the parent's own indent.
+      const subIndent =
+        fresh.subtasks.length > 0
+          ? (/^(\s*)/.exec(fresh.subtasks[fresh.subtasks.length - 1].rawLine)?.[1] ?? fresh.indent + "\t")
+          : fresh.indent + "\t";
       const newLine = `${subIndent}- [ ] ${trimmed}`;
       lines.splice(insertAt, 0, newLine);
       inserted = {

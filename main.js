@@ -2300,7 +2300,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       const timeEl = blockEl.querySelector(".dp-block-time");
       if (timeEl && block.task.startMin !== null) {
         const start = block.task.startMin;
-        timeEl.textContent = `${this.fmtClock(start)}\u2013${this.fmtClock(start + pendingDuration)}`;
+        timeEl.textContent = `${this.fmtClock(start)}\u2013${this.fmtClock(start + pendingDuration)} (${formatTotal(pendingDuration)})`;
       }
     };
     const onUp = (e) => {
@@ -2666,7 +2666,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       return "";
     const start = task.startMin;
     const end = start + task.durationMin;
-    return `${this.fmtClock(start)}\u2013${this.fmtClock(end)}`;
+    return `${this.fmtClock(start)}\u2013${this.fmtClock(end)} (${formatTotal(task.durationMin)})`;
   }
   positionNowLine(el) {
     const startMin = Number(el.dataset.startMin);
@@ -2742,6 +2742,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       return null;
     let inserted = null;
     await this.app.vault.process(file, (content) => {
+      var _a, _b;
       const lines = content.split("\n");
       const fresh = parseFileTasks(
         file.path,
@@ -2752,7 +2753,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (!fresh)
         return content;
       const insertAt = fresh.subtasks.length > 0 ? fresh.subtasks[fresh.subtasks.length - 1].lineNumber + 1 : fresh.lineNumber + 1;
-      const subIndent = fresh.indent + "  ";
+      const subIndent = fresh.subtasks.length > 0 ? (_b = (_a = /^(\s*)/.exec(fresh.subtasks[fresh.subtasks.length - 1].rawLine)) == null ? void 0 : _a[1]) != null ? _b : fresh.indent + "	" : fresh.indent + "	";
       const newLine = `${subIndent}- [ ] ${trimmed}`;
       lines.splice(insertAt, 0, newLine);
       inserted = {
