@@ -2596,7 +2596,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     const morningRange = `${this.formatHourLabel(settings.wakeHour)}-${this.formatHourLabel(settings.workStartHour)}`;
     const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
     const eveningRange = `${this.formatHourLabel(settings.workEndHour)}-${this.formatHourLabel(settings.sleepHour)}`;
-    const table = parent.createDiv({ cls: "dp-stat-table" });
+    const column = parent.createDiv({ cls: "dp-stat-col" });
+    const table = column.createDiv({ cls: "dp-stat-table" });
     this.renderStatRow(table, "Scheduled", totals.scheduledMin);
     this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
     if (planned > workdayMin) {
@@ -2604,17 +2605,73 @@ var TodayView = class extends import_obsidian4.ItemView {
       const cells = Array.from(table.children);
       cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
     }
+    const freeTotal = morningOpen + workOpen + eveningOpen;
     table.createDiv({ cls: "dp-st-row-divider" });
-    this.renderStatRow(table, `Morning (${morningRange})`, morningOpen);
-    this.renderStatRow(table, `Workday (${workRange})`, workOpen);
-    this.renderStatRow(table, `Evening (${eveningRange})`, eveningOpen);
+    this.renderStatRow(table, "Free Time", freeTotal);
+    this.renderStatRow(table, `Morning (${morningRange})`, morningOpen, false, true);
+    this.renderStatRow(table, `Workday (${workRange})`, workOpen, false, true);
+    this.renderStatRow(table, `Evening (${eveningRange})`, eveningOpen, false, true);
     this.renderStatRow(table, "Sleep", sleepDurationMin);
+    this.renderDayDotGrid(column, {
+      scheduledMin: totals.scheduledMin,
+      unscheduledMin: totals.unscheduledMin,
+      freeMin: freeTotal,
+      sleepMin: sleepDurationMin
+    });
   }
-  renderStatRow(table, label, mins, strong = false) {
-    const nameCls = strong ? "dp-st-name dp-st-strong" : "dp-st-name";
-    const valueCls = strong ? "dp-st-value dp-st-strong" : "dp-st-value";
-    table.createSpan({ cls: nameCls, text: label });
-    table.createSpan({ cls: valueCls, text: formatTotal(mins) });
+  renderDayDotGrid(parent, parts) {
+    const TOTAL_DOTS = 96;
+    const MIN_PER_DOT = 1440 / TOTAL_DOTS;
+    const order = [
+      { key: "sleep", mins: parts.sleepMin },
+      { key: "scheduled", mins: parts.scheduledMin },
+      {
+        key: "unscheduled",
+        mins: Math.min(parts.unscheduledMin, parts.freeMin)
+      },
+      {
+        key: "free",
+        mins: Math.max(0, parts.freeMin - parts.unscheduledMin)
+      }
+    ];
+    let used = 0;
+    const counts = {
+      sleep: 0,
+      scheduled: 0,
+      unscheduled: 0,
+      free: 0
+    };
+    for (let i = 0; i < order.length; i++) {
+      const isLast = i === order.length - 1;
+      const raw = order[i].mins / MIN_PER_DOT;
+      const n = isLast ? Math.max(0, TOTAL_DOTS - used) : Math.min(TOTAL_DOTS - used, Math.round(raw));
+      counts[order[i].key] = n;
+      used += n;
+    }
+    const grid = parent.createDiv({ cls: "dp-day-grid" });
+    const sequence = [
+      ["scheduled", counts.scheduled],
+      ["unscheduled", counts.unscheduled],
+      ["free", counts.free],
+      ["sleep", counts.sleep]
+    ];
+    for (const [kind, n] of sequence) {
+      for (let i = 0; i < n; i++) {
+        grid.createSpan({ cls: `dp-day-dot dp-day-dot-${kind}` });
+      }
+    }
+  }
+  renderStatRow(table, label, mins, strong = false, indent = false) {
+    const nameClasses = ["dp-st-name"];
+    const valueClasses = ["dp-st-value"];
+    if (strong) {
+      nameClasses.push("dp-st-strong");
+      valueClasses.push("dp-st-strong");
+    }
+    if (indent)
+      nameClasses.push("dp-st-indent");
+    table.createSpan({ cls: nameClasses.join(" "), text: label });
+    table.createSpan({ cls: valueClasses.join(" "), text: formatTotal(mins) });
   }
   renderProjectTable(parent, tasks, colorMap) {
     var _a;
