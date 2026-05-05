@@ -1211,19 +1211,17 @@ export class TodayView extends ItemView {
     const table = parent.createDiv({ cls: "dp-stat-table" });
     this.renderStatRow(table, "Scheduled", totals.scheduledMin);
     this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
+    if (planned > workdayMin) {
+      this.renderStatRow(table, "Overbooked", planned - workdayMin);
+      const cells = Array.from(table.children) as HTMLElement[];
+      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
+    }
 
     table.createDiv({ cls: "dp-st-row-divider" });
     this.renderStatRow(table, `Morning (${morningRange})`, morningOpen);
     this.renderStatRow(table, `Workday (${workRange})`, workOpen);
     this.renderStatRow(table, `Evening (${eveningRange})`, eveningOpen);
     this.renderStatRow(table, "Sleep", sleepDurationMin);
-
-    if (planned > workdayMin) {
-      table.createDiv({ cls: "dp-st-row-divider" });
-      this.renderStatRow(table, "Overbooked", planned - workdayMin);
-      const cells = Array.from(table.children) as HTMLElement[];
-      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
-    }
   }
 
   private renderStatRow(

@@ -2599,17 +2599,16 @@ var TodayView = class extends import_obsidian4.ItemView {
     const table = parent.createDiv({ cls: "dp-stat-table" });
     this.renderStatRow(table, "Scheduled", totals.scheduledMin);
     this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
+    if (planned > workdayMin) {
+      this.renderStatRow(table, "Overbooked", planned - workdayMin);
+      const cells = Array.from(table.children);
+      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
+    }
     table.createDiv({ cls: "dp-st-row-divider" });
     this.renderStatRow(table, `Morning (${morningRange})`, morningOpen);
     this.renderStatRow(table, `Workday (${workRange})`, workOpen);
     this.renderStatRow(table, `Evening (${eveningRange})`, eveningOpen);
     this.renderStatRow(table, "Sleep", sleepDurationMin);
-    if (planned > workdayMin) {
-      table.createDiv({ cls: "dp-st-row-divider" });
-      this.renderStatRow(table, "Overbooked", planned - workdayMin);
-      const cells = Array.from(table.children);
-      cells.slice(-2).forEach((el) => el.classList.add("dp-st-warn"));
-    }
   }
   renderStatRow(table, label, mins, strong = false) {
     const nameCls = strong ? "dp-st-name dp-st-strong" : "dp-st-name";
