@@ -198,6 +198,25 @@ export function removeOrderTag(rawLine: string, prefixes: TagPrefixes): string {
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
+export function setProjectTag(
+  rawLine: string,
+  project: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).project;
+  const newTag = `#${prefixes.project}/${project}`;
+  if (re.test(rawLine)) return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+
+export function removeProjectTag(
+  rawLine: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).project;
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
+}
+
 function appendTag(rawLine: string, tag: string): string {
   const trimmed = rawLine.replace(/[ \t]+$/, "");
   const sep = trimmed.endsWith(" ") ? "" : " ";

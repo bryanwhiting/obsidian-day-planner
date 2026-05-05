@@ -18,6 +18,8 @@ import {
   setOrderTag,
   removeOrderTag,
   setDurationTag,
+  setProjectTag,
+  removeProjectTag,
   setTaskTitle,
   snapToInterval,
   formatTotal,
@@ -1208,9 +1210,11 @@ export class TodayView extends ItemView {
     new TaskEditModal(this.app, {
       initialTitle: this.cleanBody(task.body),
       initialDurationMin: task.durationMin,
+      initialProject: task.project,
+      projects: this.collectProjectNames(),
       durations: QUICK_DURATIONS,
-      onSave: (title, durationMin) => {
-        void this.applyTaskEdit(file, task, title, durationMin);
+      onSave: (title, durationMin, project) => {
+        void this.applyTaskEdit(file, task, title, durationMin, project);
       },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
@@ -1218,11 +1222,32 @@ export class TodayView extends ItemView {
     }).open();
   }
 
+  private collectProjectNames(): string[] {
+    const prefix = `#${this.plugin.settings.prefixes.project}/`.toLowerCase();
+    const names = new Set<string>();
+    const cache = this.app.metadataCache as unknown as {
+      getTags?: () => Record<string, number>;
+    };
+    const tags = cache.getTags?.() ?? {};
+    for (const tag of Object.keys(tags)) {
+      if (tag.toLowerCase().startsWith(prefix)) {
+        const name = tag.slice(prefix.length);
+        if (name) names.add(name);
+      }
+    }
+    for (const pc of this.plugin.settings.projectColors) {
+      if (pc.project) names.add(pc.project);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }
+
   private async applyTaskEdit(
     file: TFile,
     task: ParsedTask,
     newTitle: string,
     newDurationMin: number | null,
+    // undefined = leave the project tag alone, "" = remove it, otherwise set
+    newProject: string | null | undefined,
   ): Promise<void> {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
@@ -1231,6 +1256,11 @@ export class TodayView extends ItemView {
       let updated = setTaskTitle(lines[task.lineNumber], newTitle, prefixes);
       if (newDurationMin !== null) {
         updated = setDurationTag(updated, newDurationMin, prefixes);
+      }
+      if (newProject !== undefined) {
+        updated = newProject
+          ? setProjectTag(updated, newProject, prefixes)
+          : removeProjectTag(updated, prefixes);
       }
       lines[task.lineNumber] = updated;
       return lines.join("\n");
@@ -1358,22 +1388,41 @@ class TitlePromptModal extends Modal {
 interface TaskEditOpts {
   initialTitle: string;
   initialDurationMin: number;
+  initialProject: string | null;
+  projects: string[];
   durations: { label: string; min: number }[];
   // durationMin is null when the user did not pick a new duration — leave the
   // existing #d/ tag (or its absence) alone.
-  onSave: (title: string, durationMin: number | null) => void;
+  // project is undefined when unchanged; "" means remove the tag; otherwise set.
+  onSave: (
+    title: string,
+    durationMin: number | null,
+    project: string | null | undefined,
+  ) => void;
   onShowInNote: () => void;
+}
+
+// Project tags only allow [\w-]; replace anything else with dashes so users
+// can type "My Project" and end up with #p/My-Project rather than a broken tag.
+function sanitizeProjectName(raw: string): string {
+  return raw
+    .trim()
+    .replace(/[^\w-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 class TaskEditModal extends Modal {
   private opts: TaskEditOpts;
   private selectedDurationMin: number;
   private durationChanged = false;
+  private datalistId: string;
 
   constructor(app: App, opts: TaskEditOpts) {
     super(app);
     this.opts = opts;
     this.selectedDurationMin = opts.initialDurationMin;
+    this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
   }
 
   onOpen(): void {
@@ -1388,11 +1437,44 @@ class TaskEditModal extends Modal {
     });
     input.value = this.opts.initialTitle;
 
-    const prompt = this.contentEl.createDiv({
+    const projLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Project",
+    });
+    projLabel.setAttribute("aria-hidden", "true");
+
+    const projRow = this.contentEl.createDiv({ cls: "dp-project-row" });
+    const projInput = projRow.createEl("input", {
+      type: "text",
+      cls: "dp-project-input",
+      attr: {
+        placeholder: "(none)",
+        list: this.datalistId,
+        autocomplete: "off",
+      },
+    });
+    projInput.value = this.opts.initialProject ?? "";
+    const datalist = projRow.createEl("datalist");
+    datalist.id = this.datalistId;
+    this.opts.projects.forEach((name) => {
+      datalist.createEl("option", { attr: { value: name } });
+    });
+    const clearBtn = projRow.createEl("button", {
+      cls: "dp-project-clear",
+      attr: { "aria-label": "Clear project" },
+    });
+    clearBtn.type = "button";
+    clearBtn.setText("×");
+    clearBtn.addEventListener("click", () => {
+      projInput.value = "";
+      projInput.focus();
+    });
+
+    const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "Duration",
     });
-    prompt.setAttribute("aria-hidden", "true");
+    durLabel.setAttribute("aria-hidden", "true");
 
     const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
     const buttons: HTMLButtonElement[] = [];
@@ -1412,20 +1494,31 @@ class TaskEditModal extends Modal {
       buttons.push(btn);
     });
 
+    const resolveProject = (): string | null | undefined => {
+      const raw = projInput.value.trim();
+      const initial = this.opts.initialProject ?? "";
+      if (raw === initial) return undefined;
+      if (!raw) return "";
+      return sanitizeProjectName(raw) || undefined;
+    };
+
     const submit = (): void => {
       this.opts.onSave(
         input.value.trim(),
         this.durationChanged ? this.selectedDurationMin : null,
+        resolveProject(),
       );
       this.close();
     };
 
-    input.addEventListener("keydown", (ev) => {
+    const enterToSubmit = (ev: KeyboardEvent): void => {
       if (ev.key === "Enter") {
         ev.preventDefault();
         submit();
       }
-    });
+    };
+    input.addEventListener("keydown", enterToSubmit);
+    projInput.addEventListener("keydown", enterToSubmit);
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {

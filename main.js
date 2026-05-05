@@ -468,6 +468,17 @@ function removeOrderTag(rawLine, prefixes) {
   const re = buildTagRegexes(prefixes).order;
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
+function setProjectTag(rawLine, project, prefixes) {
+  const re = buildTagRegexes(prefixes).project;
+  const newTag = `#${prefixes.project}/${project}`;
+  if (re.test(rawLine))
+    return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+function removeProjectTag(rawLine, prefixes) {
+  const re = buildTagRegexes(prefixes).project;
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
+}
 function appendTag(rawLine, tag) {
   const trimmed = rawLine.replace(/[ \t]+$/, "");
   const sep = trimmed.endsWith(" ") ? "" : " ";
@@ -2250,16 +2261,37 @@ var TodayView = class extends import_obsidian3.ItemView {
     new TaskEditModal(this.app, {
       initialTitle: this.cleanBody(task.body),
       initialDurationMin: task.durationMin,
+      initialProject: task.project,
+      projects: this.collectProjectNames(),
       durations: QUICK_DURATIONS,
-      onSave: (title, durationMin) => {
-        void this.applyTaskEdit(file, task, title, durationMin);
+      onSave: (title, durationMin, project) => {
+        void this.applyTaskEdit(file, task, title, durationMin, project);
       },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       }
     }).open();
   }
-  async applyTaskEdit(file, task, newTitle, newDurationMin) {
+  collectProjectNames() {
+    var _a, _b;
+    const prefix = `#${this.plugin.settings.prefixes.project}/`.toLowerCase();
+    const names = /* @__PURE__ */ new Set();
+    const cache = this.app.metadataCache;
+    const tags = (_b = (_a = cache.getTags) == null ? void 0 : _a.call(cache)) != null ? _b : {};
+    for (const tag of Object.keys(tags)) {
+      if (tag.toLowerCase().startsWith(prefix)) {
+        const name = tag.slice(prefix.length);
+        if (name)
+          names.add(name);
+      }
+    }
+    for (const pc of this.plugin.settings.projectColors) {
+      if (pc.project)
+        names.add(pc.project);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }
+  async applyTaskEdit(file, task, newTitle, newDurationMin, newProject) {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
@@ -2268,6 +2300,9 @@ var TodayView = class extends import_obsidian3.ItemView {
       let updated = setTaskTitle(lines[task.lineNumber], newTitle, prefixes);
       if (newDurationMin !== null) {
         updated = setDurationTag(updated, newDurationMin, prefixes);
+      }
+      if (newProject !== void 0) {
+        updated = newProject ? setProjectTag(updated, newProject, prefixes) : removeProjectTag(updated, prefixes);
       }
       lines[task.lineNumber] = updated;
       return lines.join("\n");
@@ -2361,14 +2396,19 @@ var TitlePromptModal = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
+function sanitizeProjectName(raw) {
+  return raw.trim().replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
 var TaskEditModal = class extends import_obsidian3.Modal {
   constructor(app, opts) {
     super(app);
     this.durationChanged = false;
     this.opts = opts;
     this.selectedDurationMin = opts.initialDurationMin;
+    this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
   }
   onOpen() {
+    var _a;
     this.modalEl.addClass("dp-title-modal");
     this.titleEl.setText("Edit task");
     this.contentEl.empty();
@@ -2378,11 +2418,42 @@ var TaskEditModal = class extends import_obsidian3.Modal {
       attr: { placeholder: "Task title\u2026" }
     });
     input.value = this.opts.initialTitle;
-    const prompt = this.contentEl.createDiv({
+    const projLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Project"
+    });
+    projLabel.setAttribute("aria-hidden", "true");
+    const projRow = this.contentEl.createDiv({ cls: "dp-project-row" });
+    const projInput = projRow.createEl("input", {
+      type: "text",
+      cls: "dp-project-input",
+      attr: {
+        placeholder: "(none)",
+        list: this.datalistId,
+        autocomplete: "off"
+      }
+    });
+    projInput.value = (_a = this.opts.initialProject) != null ? _a : "";
+    const datalist = projRow.createEl("datalist");
+    datalist.id = this.datalistId;
+    this.opts.projects.forEach((name) => {
+      datalist.createEl("option", { attr: { value: name } });
+    });
+    const clearBtn = projRow.createEl("button", {
+      cls: "dp-project-clear",
+      attr: { "aria-label": "Clear project" }
+    });
+    clearBtn.type = "button";
+    clearBtn.setText("\xD7");
+    clearBtn.addEventListener("click", () => {
+      projInput.value = "";
+      projInput.focus();
+    });
+    const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "Duration"
     });
-    prompt.setAttribute("aria-hidden", "true");
+    durLabel.setAttribute("aria-hidden", "true");
     const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
     const buttons = [];
     this.opts.durations.forEach((d) => {
@@ -2401,19 +2472,32 @@ var TaskEditModal = class extends import_obsidian3.Modal {
       });
       buttons.push(btn);
     });
+    const resolveProject = () => {
+      var _a2;
+      const raw = projInput.value.trim();
+      const initial = (_a2 = this.opts.initialProject) != null ? _a2 : "";
+      if (raw === initial)
+        return void 0;
+      if (!raw)
+        return "";
+      return sanitizeProjectName(raw) || void 0;
+    };
     const submit = () => {
       this.opts.onSave(
         input.value.trim(),
-        this.durationChanged ? this.selectedDurationMin : null
+        this.durationChanged ? this.selectedDurationMin : null,
+        resolveProject()
       );
       this.close();
     };
-    input.addEventListener("keydown", (ev) => {
+    const enterToSubmit = (ev) => {
       if (ev.key === "Enter") {
         ev.preventDefault();
         submit();
       }
-    });
+    };
+    input.addEventListener("keydown", enterToSubmit);
+    projInput.addEventListener("keydown", enterToSubmit);
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {
       cls: "dp-edit-show-btn",
