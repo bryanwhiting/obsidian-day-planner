@@ -1149,9 +1149,11 @@ export class TodayView extends ItemView {
   ): void {
     const totals = computeTotals(tasks);
     const total = totals.scheduledMin + totals.unscheduledMin;
+    const settings = this.plugin.settings;
+    const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
 
     const table = parent.createDiv({ cls: "dp-stat-table" });
-    table.createSpan({ cls: "dp-st-h", text: "Type" });
+    table.createSpan({ cls: "dp-st-h", text: `Workday (${workRange})` });
     table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
     this.renderStatRow(table, "Scheduled", totals.scheduledMin);
     this.renderStatRow(table, "Unscheduled", totals.unscheduledMin);
