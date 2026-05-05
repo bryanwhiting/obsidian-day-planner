@@ -2613,17 +2613,22 @@ var TodayView = class extends import_obsidian4.ItemView {
       Math.max(workEndMin, wakeMin),
       sleepMin
     );
-    const nonWorkOpen = beforeWork + afterWork;
-    const totFree = workOpen + nonWorkOpen;
+    const totFree = workOpen + beforeWork + afterWork;
     const sleepDurationMin = 24 * 60 - (sleepMin - wakeMin);
     const workRange = `${this.formatHourLabel(settings.workStartHour)}-${this.formatHourLabel(settings.workEndHour)}`;
+    const morningRange = `${this.formatHourLabel(settings.wakeHour)}-${this.formatHourLabel(settings.workStartHour)}`;
+    const eveningRange = `${this.formatHourLabel(settings.workEndHour)}-${this.formatHourLabel(settings.sleepHour)}`;
     const table = parent.createDiv({ cls: "dp-stat-table" });
     table.createSpan({ cls: "dp-st-h", text: "Availability" });
-    table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Free" });
+    table.createSpan({
+      cls: "dp-st-h dp-st-h-right",
+      text: `Free
+(${formatTotal(totFree)})`
+    });
+    this.renderStatRow(table, `Morning (${morningRange})`, beforeWork);
     this.renderStatRow(table, `Workday (${workRange})`, workOpen);
-    this.renderStatRow(table, "Other", nonWorkOpen);
+    this.renderStatRow(table, `Evening (${eveningRange})`, afterWork);
     this.renderStatRow(table, "Sleep", sleepDurationMin);
-    this.renderStatRow(table, "Tot Free", totFree, true);
   }
   renderStatRow(table, label, mins, strong = false) {
     const nameCls = strong ? "dp-st-name dp-st-strong" : "dp-st-name";
