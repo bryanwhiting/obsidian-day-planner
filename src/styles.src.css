@@ -2053,82 +2053,22 @@
     cursor: not-allowed;
   }
 
-  .dp-time-picker-modal .dp-time-picker-presets {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    margin-top: 4px;
-  }
-
-  .dp-time-picker-modal .dp-time-picker-preset {
-    padding: 8px 6px;
+  .dp-edit-subtask-time-input {
+    flex: 0 0 auto;
+    width: 90px;
+    padding: 2px 8px;
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: var(--color-ink);
     background: var(--color-paper);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-card);
-    cursor: pointer;
+    border: 1px solid var(--color-accent);
+    border-radius: 999px;
+    text-align: center;
   }
 
-  .dp-time-picker-modal .dp-time-picker-preset:hover {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-  }
-
-  .dp-time-picker-modal .dp-time-picker-preset.is-selected {
-    background: color-mix(in srgb, var(--color-accent) 15%, var(--color-paper));
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-  }
-
-  .dp-time-picker-modal .dp-time-picker-custom {
-    margin-top: 4px;
-  }
-
-  .dp-time-picker-modal .dp-time-picker-input {
-    width: 100%;
-    padding: 7px 10px;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--color-ink);
-    background: var(--color-paper);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-card);
-  }
-
-  .dp-time-picker-modal .dp-time-picker-input:focus {
+  .dp-edit-subtask-time-input:focus {
     outline: none;
-    border-color: var(--color-accent);
-  }
-
-  .dp-time-picker-modal .dp-time-picker-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .dp-time-picker-modal .dp-time-picker-clear,
-  .dp-time-picker-modal .dp-time-picker-save {
-    padding: 7px 14px;
-    font-family: var(--font-sans);
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: var(--radius-card);
-    cursor: pointer;
-  }
-
-  .dp-time-picker-modal .dp-time-picker-clear {
-    background: var(--color-paper);
-    color: var(--color-ink);
-    border: 1px solid var(--color-hairline);
-  }
-
-  .dp-time-picker-modal .dp-time-picker-clear:hover {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
   }
 
   .dp-edit-actions {

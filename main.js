@@ -3543,115 +3543,6 @@ function fmtClockShort(totalMin) {
     h12 = 12;
   return m === 0 ? `${h12}${ampm}` : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
 }
-function totalMinToHHMM(min) {
-  const h = Math.floor(min / 60).toString().padStart(2, "0");
-  const m = (min % 60).toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
-function parseHHMM(value) {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(value);
-  if (!m)
-    return null;
-  const h = parseInt(m[1], 10);
-  const mm = parseInt(m[2], 10);
-  if (h < 0 || h > 23 || mm < 0 || mm > 59)
-    return null;
-  return h * 60 + mm;
-}
-var TIME_PICKER_PRESETS_MIN = [
-  6 * 60,
-  7 * 60,
-  8 * 60,
-  9 * 60,
-  10 * 60,
-  11 * 60,
-  12 * 60,
-  13 * 60,
-  14 * 60,
-  15 * 60,
-  16 * 60,
-  17 * 60,
-  18 * 60,
-  19 * 60,
-  20 * 60,
-  21 * 60
-];
-var TimePickerModal = class extends import_obsidian4.Modal {
-  constructor(app, opts) {
-    super(app);
-    this.initialMin = opts.initialMin;
-    this.onPick = opts.onPick;
-  }
-  onOpen() {
-    this.modalEl.addClass("dp-time-picker-modal");
-    this.titleEl.setText("Set time");
-    this.contentEl.empty();
-    const presets = this.contentEl.createDiv({ cls: "dp-time-picker-presets" });
-    TIME_PICKER_PRESETS_MIN.forEach((min) => {
-      const btn = presets.createEl("button", {
-        cls: "dp-time-picker-preset",
-        text: fmtClockShort(min)
-      });
-      btn.type = "button";
-      if (min === this.initialMin)
-        btn.addClass("is-selected");
-      btn.addEventListener("click", () => {
-        this.onPick(min);
-        this.close();
-      });
-    });
-    const customLabel = this.contentEl.createDiv({
-      cls: "dp-prompt-step-label",
-      text: "Custom"
-    });
-    customLabel.setAttribute("aria-hidden", "true");
-    const customRow = this.contentEl.createDiv({
-      cls: "dp-time-picker-custom"
-    });
-    const input = customRow.createEl("input", {
-      type: "time",
-      cls: "dp-time-picker-input"
-    });
-    if (this.initialMin !== null) {
-      input.value = totalMinToHHMM(this.initialMin);
-    }
-    const submitCustom = () => {
-      const v = parseHHMM(input.value);
-      if (v === null) {
-        new import_obsidian4.Notice("Enter a valid time");
-        return;
-      }
-      this.onPick(v);
-      this.close();
-    };
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        submitCustom();
-      }
-    });
-    const actions = this.contentEl.createDiv({ cls: "dp-time-picker-actions" });
-    const clearBtn = actions.createEl("button", {
-      cls: "dp-time-picker-clear",
-      text: "Clear"
-    });
-    clearBtn.type = "button";
-    clearBtn.addEventListener("click", () => {
-      this.onPick(null);
-      this.close();
-    });
-    const saveBtn = actions.createEl("button", {
-      cls: "dp-time-picker-save mod-cta",
-      text: "Save"
-    });
-    saveBtn.type = "button";
-    saveBtn.addEventListener("click", submitCustom);
-    input.focus();
-  }
-  onClose() {
-    this.contentEl.empty();
-  }
-};
 var TaskEditModal = class extends import_obsidian4.Modal {
   constructor(app, opts) {
     super(app);
@@ -3871,17 +3762,56 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       timeChip.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const current = parseTime(sub.text, prefixes);
-        new TimePickerModal(this.app, {
-          initialMin: current,
-          onPick: (totalMin) => {
-            sub.rawLine = totalMin === null ? removeTimeTag(sub.rawLine, prefixes) : setTimeTag(sub.rawLine, totalMin, prefixes);
-            const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
-            if (m)
-              sub.text = m[1];
-            renderTimeChip();
-            void this.opts.onSetSubtaskTime(sub, totalMin);
+        const editor = row2.createEl("input", {
+          type: "text",
+          cls: "dp-edit-subtask-time-input",
+          attr: { placeholder: "e.g. 7p, 6:30p" }
+        });
+        editor.value = current === null ? "" : fmtClockShort(current);
+        timeChip.style.display = "none";
+        editor.focus();
+        editor.select();
+        let done = false;
+        const finish = (commit) => {
+          if (done)
+            return;
+          done = true;
+          const raw = editor.value.trim();
+          editor.remove();
+          timeChip.style.display = "";
+          if (!commit)
+            return;
+          let totalMin = null;
+          if (raw !== "") {
+            const cleaned = raw.toLowerCase().replace(/[\s:]/g, "");
+            const tagPrefix = `#${prefixes.time}/`;
+            const stripped = cleaned.startsWith(tagPrefix) ? cleaned.slice(tagPrefix.length) : cleaned;
+            const parsed = parseTime(`${tagPrefix}${stripped}`, prefixes);
+            if (parsed === null) {
+              new import_obsidian4.Notice("Invalid time, try e.g. 7p or 6:30p");
+              return;
+            }
+            totalMin = parsed;
           }
-        }).open();
+          if (totalMin === current)
+            return;
+          sub.rawLine = totalMin === null ? removeTimeTag(sub.rawLine, prefixes) : setTimeTag(sub.rawLine, totalMin, prefixes);
+          const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
+          if (m)
+            sub.text = m[1];
+          renderTimeChip();
+          void this.opts.onSetSubtaskTime(sub, totalMin);
+        };
+        editor.addEventListener("keydown", (kev) => {
+          if (kev.key === "Enter") {
+            kev.preventDefault();
+            finish(true);
+          } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(false);
+          }
+        });
+        editor.addEventListener("blur", () => finish(true));
       });
       textEl.addEventListener("click", (ev) => {
         ev.stopPropagation();
