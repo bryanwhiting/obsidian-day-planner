@@ -6396,7 +6396,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       });
     } else {
       const grid = sectionEl.createDiv({ cls: "dp-heatmap-grid-rows" });
-      const cellCols = section.buckets.map(() => "14px").join(" ");
+      const cellCols = section.buckets.map(() => "10px").join(" ");
       grid.style.gridTemplateColumns = `140px ${cellCols}`;
       grid.createDiv({ cls: "dp-heatmap-corner" });
       for (const b of section.buckets) {
