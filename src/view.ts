@@ -3704,10 +3704,11 @@ class TaskEditModal extends Modal {
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {
-      cls: "dp-edit-show-btn",
-      text: "Show in note",
+      cls: "dp-edit-icon-btn",
+      attr: { "aria-label": "Show in note", title: "Show in note" },
     });
     showBtn.type = "button";
+    setIcon(showBtn, "eye");
     showBtn.addEventListener("click", () => {
       if (this.opts.mode === "new") {
         // Persist the task first, then jump to it; the caller wires the
@@ -3722,32 +3723,63 @@ class TaskEditModal extends Modal {
     if (this.opts.mode === "edit") {
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
-        cls: "dp-edit-show-btn",
-        text: "Move to tomorrow",
+        cls: "dp-edit-icon-btn",
+        attr: { "aria-label": "Move to tomorrow", title: "Move to tomorrow" },
       });
       moveBtn.type = "button";
+      setIcon(moveBtn, "forward");
 
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
+
+      const canMoveToToday = !!this.opts.onMoveToToday;
+      const todayBtn = canMoveToToday
+        ? choices.createEl("button", {
+            cls: "dp-edit-move-icon",
+            attr: {
+              "aria-label": "Move to today (t)",
+              title: "Move to today (t)",
+            },
+          })
+        : null;
+      if (todayBtn) {
+        todayBtn.type = "button";
+        setIcon(todayBtn, "sun");
+      }
+
       const wholeBtn = choices.createEl("button", {
-        cls: "dp-edit-show-btn",
+        cls: "dp-edit-move-icon",
+        attr: {
+          "aria-label": "Move whole task (w)",
+          title: "Move whole task (w)",
+        },
       });
       wholeBtn.type = "button";
-      wholeBtn.createSpan({ text: "Move whole " });
-      wholeBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "w" });
+      setIcon(wholeBtn, "package");
+
       const incBtn = choices.createEl("button", {
-        cls: "dp-edit-show-btn",
+        cls: "dp-edit-move-icon",
+        attr: {
+          "aria-label": "Split — migrate incomplete (i)",
+          title: "Split — migrate incomplete (i)",
+        },
       });
       incBtn.type = "button";
-      incBtn.createSpan({ text: "Migrate incomplete " });
-      incBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "i" });
+      setIcon(incBtn, "split");
 
       let stageTwoActive = false;
       let keyHandler: ((ev: KeyboardEvent) => void) | null = null;
 
+      const setSubBtnsDisabled = (disabled: boolean): void => {
+        if (todayBtn) todayBtn.disabled = disabled;
+        wholeBtn.disabled = disabled;
+        incBtn.disabled = disabled;
+      };
+
       const exitStageTwo = (): void => {
         stageTwoActive = false;
         choices.style.display = "none";
+        choices.removeClass("is-open");
         moveBtn.style.display = "";
         if (keyHandler) {
           this.contentEl.removeEventListener("keydown", keyHandler, true);
@@ -3755,32 +3787,25 @@ class TaskEditModal extends Modal {
         }
       };
 
-      const runWhole = async (): Promise<void> => {
-        wholeBtn.disabled = true;
-        incBtn.disabled = true;
-        const moved = await this.opts.onMoveToTomorrowWhole!();
+      const runWith = async (
+        action: () => Promise<boolean>,
+      ): Promise<void> => {
+        setSubBtnsDisabled(true);
+        const moved = await action();
         if (moved) this.close();
-        else {
-          wholeBtn.disabled = false;
-          incBtn.disabled = false;
-        }
-      };
-      const runIncomplete = async (): Promise<void> => {
-        wholeBtn.disabled = true;
-        incBtn.disabled = true;
-        const moved = await this.opts.onMoveToTomorrowIncomplete!();
-        if (moved) this.close();
-        else {
-          wholeBtn.disabled = false;
-          incBtn.disabled = false;
-        }
+        else setSubBtnsDisabled(false);
       };
 
       moveBtn.addEventListener("click", () => {
         stageTwoActive = true;
         moveBtn.style.display = "none";
         choices.style.display = "";
-        wholeBtn.focus();
+        // Re-trigger the staggered pop-in animation each time the cluster
+        // opens by toggling the class across a forced reflow.
+        choices.removeClass("is-open");
+        void choices.offsetWidth;
+        choices.addClass("is-open");
+        (todayBtn ?? wholeBtn).focus();
         keyHandler = (ev: KeyboardEvent) => {
           if (!stageTwoActive) return;
           // Don't intercept while typing in inputs (title field, sub-task
@@ -3795,11 +3820,15 @@ class TaskEditModal extends Modal {
           if (ev.key === "w" || ev.key === "W") {
             ev.preventDefault();
             ev.stopPropagation();
-            void runWhole();
+            void runWith(this.opts.onMoveToTomorrowWhole!);
           } else if (ev.key === "i" || ev.key === "I") {
             ev.preventDefault();
             ev.stopPropagation();
-            void runIncomplete();
+            void runWith(this.opts.onMoveToTomorrowIncomplete!);
+          } else if ((ev.key === "t" || ev.key === "T") && todayBtn) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            void runWith(this.opts.onMoveToToday!);
           } else if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
@@ -3810,15 +3839,28 @@ class TaskEditModal extends Modal {
         this.contentEl.addEventListener("keydown", keyHandler, true);
       });
 
-      wholeBtn.addEventListener("click", () => void runWhole());
-      incBtn.addEventListener("click", () => void runIncomplete());
+      if (todayBtn) {
+        todayBtn.addEventListener(
+          "click",
+          () => void runWith(this.opts.onMoveToToday!),
+        );
+      }
+      wholeBtn.addEventListener(
+        "click",
+        () => void runWith(this.opts.onMoveToTomorrowWhole!),
+      );
+      incBtn.addEventListener(
+        "click",
+        () => void runWith(this.opts.onMoveToTomorrowIncomplete!),
+      );
     }
 
     const pomoBtn = actions.createEl("button", {
-      cls: "dp-edit-pomo-btn",
-      text: "Pomodoro",
+      cls: "dp-edit-icon-btn",
+      attr: { "aria-label": "Pomodoro", title: "Pomodoro" },
     });
     pomoBtn.type = "button";
+    setIcon(pomoBtn, "timer");
     pomoBtn.addEventListener("click", () => {
       if (this.opts.mode === "new") {
         submit("pomodoro");

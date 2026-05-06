@@ -2203,12 +2203,12 @@
   .dp-edit-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 8px;
     margin-top: 16px;
   }
 
   .dp-edit-show-btn,
-  .dp-edit-pomo-btn,
   .dp-edit-save-btn {
     padding: 7px 14px;
     font-family: var(--font-sans);
@@ -2220,37 +2220,141 @@
       color 120ms ease;
   }
 
-  .dp-edit-show-btn,
-  .dp-edit-pomo-btn {
+  .dp-edit-show-btn {
     background: var(--color-paper);
     color: var(--color-ink);
     border: 1px solid var(--color-hairline);
   }
 
-  .dp-edit-show-btn:hover,
-  .dp-edit-pomo-btn:hover {
+  .dp-edit-show-btn:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
   }
 
+  .dp-edit-icon-btn {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    box-sizing: border-box;
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: 999px;
+    color: var(--color-ink-muted);
+    line-height: 1;
+    transition: border-color 120ms ease, background-color 120ms ease,
+      color 120ms ease, transform 120ms ease;
+  }
+
+  .dp-edit-icon-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .dp-edit-icon-btn:active {
+    transform: translateY(0.5px);
+  }
+
+  .dp-edit-icon-btn .svg-icon {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2px;
+  }
+
   .dp-edit-move-wrap {
-    display: contents;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
   }
 
   .dp-edit-move-choices {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
-    gap: 8px;
+    gap: 6px;
+    padding: 6px;
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: 999px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    z-index: 10;
   }
 
-  .dp-edit-move-kbd {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 1px 5px;
-    margin-left: 4px;
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-tab);
-    color: var(--color-ink-muted);
+  /* Tiny pointer down toward the parent button. */
+  .dp-edit-move-choices::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 8px;
     background: var(--color-paper);
+    border-right: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline);
+    transform: translateX(-50%) translateY(-50%) rotate(45deg);
+  }
+
+  .dp-edit-move-icon {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    box-sizing: border-box;
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: 999px;
+    color: var(--color-ink-muted);
+    line-height: 1;
+    opacity: 0;
+    transform: translateY(10px) scale(0.6);
+    transition: border-color 120ms ease, color 120ms ease,
+      background-color 120ms ease;
+  }
+
+  .dp-edit-move-icon .svg-icon {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2px;
+  }
+
+  .dp-edit-move-icon:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-surface-hover);
+  }
+
+  .dp-edit-move-choices.is-open .dp-edit-move-icon {
+    animation: dp-move-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .dp-edit-move-choices.is-open .dp-edit-move-icon:nth-child(1) {
+    animation-delay: 0ms;
+  }
+
+  .dp-edit-move-choices.is-open .dp-edit-move-icon:nth-child(2) {
+    animation-delay: 60ms;
+  }
+
+  .dp-edit-move-choices.is-open .dp-edit-move-icon:nth-child(3) {
+    animation-delay: 120ms;
+  }
+
+  @keyframes dp-move-pop {
+    0% {
+      opacity: 0;
+      transform: translateY(10px) scale(0.6);
+    }
+    60% {
+      opacity: 1;
+      transform: translateY(-3px) scale(1.08);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   /* Mobile: pin the edit modal to the top of the screen at 50% height so

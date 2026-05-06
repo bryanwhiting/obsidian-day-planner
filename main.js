@@ -3804,8 +3804,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
-      onMoveToTomorrowWhole: () => this.moveTaskToTomorrow(file, task),
-      onMoveToTomorrowIncomplete: () => this.migrateIncompleteToTomorrow(file, task),
+      onMoveToTomorrowWhole: () => this.moveTaskWholeToDate(file, task, addDays(this.selectedDate, 1)),
+      onMoveToTomorrowIncomplete: () => this.migrateIncompleteToDate(file, task, addDays(this.selectedDate, 1)),
+      onMoveToToday: this.selectedDate.getTime() > startOfDay(new Date()).getTime() ? () => this.moveTaskWholeToDate(file, task, startOfDay(new Date())) : void 0,
       onStartPomodoro: () => this.enterPomodoro(file, task)
     }).open();
   }
@@ -3850,20 +3851,19 @@ var TodayView = class extends import_obsidian4.ItemView {
     return true;
   }
   // Carries the task title (with most tags) and any unfinished sub-tasks into
-  // tomorrow's note while keeping the completed sub-tasks on the source day as
-  // a record of partial progress. The source parent is checked off and stamped
-  // with a #tid/<id> tag; the new-day copy gets the same tag, so the two can
-  // be cross-referenced via search. The order tag (#o/) is stripped on the
-  // new copy because positioning is per-day.
-  async migrateIncompleteToTomorrow(file, task) {
+  // the daily note for `targetDate`, while keeping the completed sub-tasks on
+  // the source day as a record of partial progress. The source parent is
+  // checked off and stamped with a #tid/<id> tag; the new-day copy gets the
+  // same tag, so the two can be cross-referenced via search. The order tag
+  // (#o/) is stripped on the new copy because positioning is per-day.
+  async migrateIncompleteToDate(file, task, targetDate) {
     var _a;
     const fallback = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate
     };
-    const target = addDays(this.selectedDate, 1);
-    const targetFile = await ensureDailyNote(this.app, target, fallback);
+    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
       new import_obsidian4.Notice("Source and target are the same file.");
       return false;
@@ -5214,10 +5214,11 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     });
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const showBtn = actions.createEl("button", {
-      cls: "dp-edit-show-btn",
-      text: "Show in note"
+      cls: "dp-edit-icon-btn",
+      attr: { "aria-label": "Show in note", title: "Show in note" }
     });
     showBtn.type = "button";
+    (0, import_obsidian4.setIcon)(showBtn, "eye");
     showBtn.addEventListener("click", () => {
       if (this.opts.mode === "new") {
         submit("show");
@@ -5229,62 +5230,77 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     if (this.opts.mode === "edit") {
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
-        cls: "dp-edit-show-btn",
-        text: "Move to tomorrow"
+        cls: "dp-edit-icon-btn",
+        attr: { "aria-label": "Move to tomorrow", title: "Move to tomorrow" }
       });
       moveBtn.type = "button";
+      (0, import_obsidian4.setIcon)(moveBtn, "forward");
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
+      const canMoveToToday = !!this.opts.onMoveToToday;
+      const todayBtn = canMoveToToday ? choices.createEl("button", {
+        cls: "dp-edit-move-icon",
+        attr: {
+          "aria-label": "Move to today (t)",
+          title: "Move to today (t)"
+        }
+      }) : null;
+      if (todayBtn) {
+        todayBtn.type = "button";
+        (0, import_obsidian4.setIcon)(todayBtn, "sun");
+      }
       const wholeBtn = choices.createEl("button", {
-        cls: "dp-edit-show-btn"
+        cls: "dp-edit-move-icon",
+        attr: {
+          "aria-label": "Move whole task (w)",
+          title: "Move whole task (w)"
+        }
       });
       wholeBtn.type = "button";
-      wholeBtn.createSpan({ text: "Move whole " });
-      wholeBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "w" });
+      (0, import_obsidian4.setIcon)(wholeBtn, "package");
       const incBtn = choices.createEl("button", {
-        cls: "dp-edit-show-btn"
+        cls: "dp-edit-move-icon",
+        attr: {
+          "aria-label": "Split \u2014 migrate incomplete (i)",
+          title: "Split \u2014 migrate incomplete (i)"
+        }
       });
       incBtn.type = "button";
-      incBtn.createSpan({ text: "Migrate incomplete " });
-      incBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "i" });
+      (0, import_obsidian4.setIcon)(incBtn, "split");
       let stageTwoActive = false;
       let keyHandler = null;
+      const setSubBtnsDisabled = (disabled) => {
+        if (todayBtn)
+          todayBtn.disabled = disabled;
+        wholeBtn.disabled = disabled;
+        incBtn.disabled = disabled;
+      };
       const exitStageTwo = () => {
         stageTwoActive = false;
         choices.style.display = "none";
+        choices.removeClass("is-open");
         moveBtn.style.display = "";
         if (keyHandler) {
           this.contentEl.removeEventListener("keydown", keyHandler, true);
           keyHandler = null;
         }
       };
-      const runWhole = async () => {
-        wholeBtn.disabled = true;
-        incBtn.disabled = true;
-        const moved = await this.opts.onMoveToTomorrowWhole();
+      const runWith = async (action) => {
+        setSubBtnsDisabled(true);
+        const moved = await action();
         if (moved)
           this.close();
-        else {
-          wholeBtn.disabled = false;
-          incBtn.disabled = false;
-        }
-      };
-      const runIncomplete = async () => {
-        wholeBtn.disabled = true;
-        incBtn.disabled = true;
-        const moved = await this.opts.onMoveToTomorrowIncomplete();
-        if (moved)
-          this.close();
-        else {
-          wholeBtn.disabled = false;
-          incBtn.disabled = false;
-        }
+        else
+          setSubBtnsDisabled(false);
       };
       moveBtn.addEventListener("click", () => {
         stageTwoActive = true;
         moveBtn.style.display = "none";
         choices.style.display = "";
-        wholeBtn.focus();
+        choices.removeClass("is-open");
+        void choices.offsetWidth;
+        choices.addClass("is-open");
+        (todayBtn != null ? todayBtn : wholeBtn).focus();
         keyHandler = (ev) => {
           if (!stageTwoActive)
             return;
@@ -5295,11 +5311,15 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           if (ev.key === "w" || ev.key === "W") {
             ev.preventDefault();
             ev.stopPropagation();
-            void runWhole();
+            void runWith(this.opts.onMoveToTomorrowWhole);
           } else if (ev.key === "i" || ev.key === "I") {
             ev.preventDefault();
             ev.stopPropagation();
-            void runIncomplete();
+            void runWith(this.opts.onMoveToTomorrowIncomplete);
+          } else if ((ev.key === "t" || ev.key === "T") && todayBtn) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            void runWith(this.opts.onMoveToToday);
           } else if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
@@ -5309,14 +5329,27 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         };
         this.contentEl.addEventListener("keydown", keyHandler, true);
       });
-      wholeBtn.addEventListener("click", () => void runWhole());
-      incBtn.addEventListener("click", () => void runIncomplete());
+      if (todayBtn) {
+        todayBtn.addEventListener(
+          "click",
+          () => void runWith(this.opts.onMoveToToday)
+        );
+      }
+      wholeBtn.addEventListener(
+        "click",
+        () => void runWith(this.opts.onMoveToTomorrowWhole)
+      );
+      incBtn.addEventListener(
+        "click",
+        () => void runWith(this.opts.onMoveToTomorrowIncomplete)
+      );
     }
     const pomoBtn = actions.createEl("button", {
-      cls: "dp-edit-pomo-btn",
-      text: "Pomodoro"
+      cls: "dp-edit-icon-btn",
+      attr: { "aria-label": "Pomodoro", title: "Pomodoro" }
     });
     pomoBtn.type = "button";
+    (0, import_obsidian4.setIcon)(pomoBtn, "timer");
     pomoBtn.addEventListener("click", () => {
       if (this.opts.mode === "new") {
         submit("pomodoro");
