@@ -64,23 +64,9 @@ export function parseHabitsFile(content: string, prefix: string): Habit[] {
   return habits;
 }
 
-// Counts how many times the given habit tag appears anywhere in `content`.
-// Counts non-task lines too — the user can drop the bare tag in prose and the
-// click-handler writes a `- [x]` line; both should register as completion.
-export function countHabitOccurrences(
-  content: string,
-  prefix: string,
-  period: HabitPeriod,
-  slug: string,
-): number {
-  const re = buildHabitTagRegex(prefix, period, slug);
-  let count = 0;
-  for (const _ of content.matchAll(re)) count++;
-  return count;
-}
-
 // Appends `- [x] <slug> #<prefix>/<period>/<slug>` to `content`, ensuring the
-// file ends with exactly one newline.
+// file ends with exactly one newline. Used only when no task line for this
+// habit already exists; toggling an existing line uses `toggleHabitOnContent`.
 export function appendHabitLine(
   content: string,
   prefix: string,
@@ -93,13 +79,48 @@ export function appendHabitLine(
   return content + "\n" + line + "\n";
 }
 
-const CHECKED_TASK_RE = /^\s*- \[[xX]\]\s+/;
+// Captures `- [ ] body` / `- [x] body` style lines. Group 1 = indent, group 2
+// = checkbox char (space or x/X), group 3 = body. Other Obsidian checkbox
+// states (`/`, `-`, `!`, etc.) intentionally don't match — habits only care
+// about the unchecked / checked binary.
+const HABIT_TASK_LINE_RE = /^(\s*)- \[([ xX])\]\s+(.*)$/;
 
-// Removes the FIRST `- [x]` line containing the habit tag. Bare-tag lines in
-// prose are never deleted — the click-handler only writes `- [x]` lines, and
-// preserving prose-level tags protects user-authored text from accidental
-// deletion. If multiple matching lines exist, only the first is removed.
-export function removeHabitLine(
+export interface HabitTaskLine {
+  lineNumber: number;
+  checked: boolean;
+}
+
+// Finds every task line in `content` that contains the habit tag. Bare-tag
+// lines in prose are intentionally ignored — only `- [ ]` / `- [x]` lines
+// participate in habit completion / toggle.
+export function findHabitTaskLines(
+  content: string,
+  prefix: string,
+  period: HabitPeriod,
+  slug: string,
+): HabitTaskLine[] {
+  const tagRe = buildHabitTagRegex(prefix, period, slug);
+  const out: HabitTaskLine[] = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const tm = HABIT_TASK_LINE_RE.exec(lines[i]);
+    if (!tm) continue;
+    tagRe.lastIndex = 0;
+    if (!tagRe.test(lines[i])) continue;
+    out.push({ lineNumber: i, checked: tm[2] === "x" || tm[2] === "X" });
+  }
+  return out;
+}
+
+// Toggles the habit on `content`:
+//   - If a task line containing the habit tag exists, flip its checkbox in
+//     place (`[ ]` ↔ `[x]`). Never deletes the line.
+//   - Otherwise, append a new `- [x] <slug> #<prefix>/<period>/<slug>` line.
+// When multiple matching task lines exist, only the first is flipped — the
+// dashboard surfaces a duplicate indicator so the user can clean up by hand.
+// This protects pre-templated planned-ahead lines from being deleted on a
+// second click.
+export function toggleHabitOnContent(
   content: string,
   prefix: string,
   period: HabitPeriod,
@@ -108,13 +129,15 @@ export function removeHabitLine(
   const tagRe = buildHabitTagRegex(prefix, period, slug);
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    if (!CHECKED_TASK_RE.test(lines[i])) continue;
+    const tm = HABIT_TASK_LINE_RE.exec(lines[i]);
+    if (!tm) continue;
     tagRe.lastIndex = 0;
     if (!tagRe.test(lines[i])) continue;
-    lines.splice(i, 1);
+    const checked = tm[2] === "x" || tm[2] === "X";
+    lines[i] = `${tm[1]}- [${checked ? " " : "x"}] ${tm[3]}`;
     return lines.join("\n");
   }
-  return content;
+  return appendHabitLine(content, prefix, period, slug);
 }
 
 // Returns the half-open [start, end) bounds of the calendar week containing

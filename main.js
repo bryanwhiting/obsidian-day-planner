@@ -2480,13 +2480,6 @@ function parseHabitsFile(content, prefix) {
   }
   return habits;
 }
-function countHabitOccurrences(content, prefix, period, slug) {
-  const re = buildHabitTagRegex(prefix, period, slug);
-  let count = 0;
-  for (const _ of content.matchAll(re))
-    count++;
-  return count;
-}
 function appendHabitLine(content, prefix, period, slug) {
   const line = `- [x] ${slug} #${prefix}/${period}/${slug}`;
   if (content.length === 0)
@@ -2495,20 +2488,37 @@ function appendHabitLine(content, prefix, period, slug) {
     return content + line + "\n";
   return content + "\n" + line + "\n";
 }
-var CHECKED_TASK_RE = /^\s*- \[[xX]\]\s+/;
-function removeHabitLine(content, prefix, period, slug) {
+var HABIT_TASK_LINE_RE = /^(\s*)- \[([ xX])\]\s+(.*)$/;
+function findHabitTaskLines(content, prefix, period, slug) {
   const tagRe = buildHabitTagRegex(prefix, period, slug);
+  const out = [];
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    if (!CHECKED_TASK_RE.test(lines[i]))
+    const tm = HABIT_TASK_LINE_RE.exec(lines[i]);
+    if (!tm)
       continue;
     tagRe.lastIndex = 0;
     if (!tagRe.test(lines[i]))
       continue;
-    lines.splice(i, 1);
+    out.push({ lineNumber: i, checked: tm[2] === "x" || tm[2] === "X" });
+  }
+  return out;
+}
+function toggleHabitOnContent(content, prefix, period, slug) {
+  const tagRe = buildHabitTagRegex(prefix, period, slug);
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const tm = HABIT_TASK_LINE_RE.exec(lines[i]);
+    if (!tm)
+      continue;
+    tagRe.lastIndex = 0;
+    if (!tagRe.test(lines[i]))
+      continue;
+    const checked = tm[2] === "x" || tm[2] === "X";
+    lines[i] = `${tm[1]}- [${checked ? " " : "x"}] ${tm[3]}`;
     return lines.join("\n");
   }
-  return content;
+  return appendHabitLine(content, prefix, period, slug);
 }
 function weekRange(date, weekStart) {
   const d = startOfDay(date);
@@ -4438,29 +4448,43 @@ var TodayView = class extends import_obsidian4.ItemView {
       return [];
     const week = weekRange(displayDate, settings.habitWeekStart);
     const month = monthRange(displayDate);
-    const readWindow = async (start, end) => {
-      const parts = [];
+    const readWindowFiles = async (start, end) => {
+      const out2 = [];
       for (const d of enumerateDailyNoteDatesInRange(start, end)) {
         const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
         if (c)
-          parts.push(c);
+          out2.push(c);
       }
-      return parts.join("\n");
+      return out2;
     };
     const needWeek = habits.some((h) => h.period === "week");
     const needMonth = habits.some((h) => h.period === "month");
-    const weekContent = needWeek ? await readWindow(week.start, week.end) : "";
-    const monthContent = needMonth ? await readWindow(month.start, month.end) : "";
+    const weekFiles = needWeek ? await readWindowFiles(week.start, week.end) : [];
+    const monthFiles = needMonth ? await readWindowFiles(month.start, month.end) : [];
     const out = [];
     for (const h of habits) {
-      const haystack = h.period === "day" ? displayContent : h.period === "week" ? weekContent : monthContent;
-      const n = countHabitOccurrences(
-        haystack,
-        settings.habitPrefix,
-        h.period,
-        h.slug
-      );
-      out.push({ habit: h, isComplete: n > 0 });
+      const files = h.period === "day" ? [displayContent] : h.period === "week" ? weekFiles : monthFiles;
+      let checkedCount = 0;
+      let maxPerFile = 0;
+      for (const c of files) {
+        const lines = findHabitTaskLines(
+          c,
+          settings.habitPrefix,
+          h.period,
+          h.slug
+        );
+        for (const l of lines)
+          if (l.checked)
+            checkedCount++;
+        if (lines.length > maxPerFile)
+          maxPerFile = lines.length;
+      }
+      out.push({
+        habit: h,
+        isComplete: checkedCount > 0,
+        hasDuplicate: maxPerFile > 1,
+        maxPerFile
+      });
     }
     return out;
   }
@@ -4497,18 +4521,32 @@ var TodayView = class extends import_obsidian4.ItemView {
       visible.forEach((d, idx) => {
         if (idx > 0)
           wrap.appendText(", ");
-        const cls = "dp-habit" + (d.isComplete ? " is-done" : "");
-        const chip = wrap.createSpan({ cls, text: d.habit.slug });
+        const cls = "dp-habit" + (d.isComplete ? " is-done" : "") + (d.hasDuplicate ? " has-dup" : "");
+        const chip = wrap.createSpan({ cls });
+        chip.createSpan({ cls: "dp-habit-name", text: d.habit.slug });
+        if (d.hasDuplicate) {
+          chip.createSpan({
+            cls: "dp-habit-dup",
+            text: `\xB7${d.maxPerFile}`
+          });
+        }
+        const tooltipParts = [];
         if (d.habit.label)
-          chip.title = d.habit.label;
+          tooltipParts.push(d.habit.label);
+        if (d.hasDuplicate) {
+          tooltipParts.push(
+            `${d.maxPerFile} task lines for this habit in one daily note \u2014 clean up duplicates by hand`
+          );
+        }
+        if (tooltipParts.length > 0)
+          chip.title = tooltipParts.join("\n");
         chip.addEventListener("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
           void this.applyHabitToggle(
             displayFile,
             d.habit.period,
-            d.habit.slug,
-            d.isComplete
+            d.habit.slug
           );
         });
       });
@@ -4526,12 +4564,13 @@ var TodayView = class extends import_obsidian4.ItemView {
       });
     }
   }
-  // Toggles a habit on the displayed daily note: appends a new `- [x] <slug>
-  // #<prefix>/<period>/<slug>` line if currently incomplete, or removes the
-  // first matching `- [x]` line if currently complete. Creates the daily note
-  // if it doesn't exist (only on the toggle-on path; toggling off a missing
-  // file is a no-op).
-  async applyHabitToggle(file, period, slug, currentlyComplete) {
+  // Toggles a habit on the displayed daily note. The mutator finds the first
+  // `- [ ]` / `- [x]` task line containing the habit tag and flips its
+  // checkbox in place; if no such line exists, it appends a fresh `- [x]`
+  // line. The line is never deleted, which preserves user-templated
+  // planned-ahead habits across click/un-click cycles. Creates the daily
+  // note if missing.
+  async applyHabitToggle(file, period, slug) {
     const settings = this.plugin.settings;
     const fallback = {
       folder: settings.dailyNoteFolderFallback,
@@ -4539,20 +4578,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       template: settings.dailyNoteTemplate,
       dateLinkFormat: settings.dateLinkFormat
     };
-    let target;
-    if (file) {
-      target = file;
-    } else if (currentlyComplete) {
-      return;
-    } else {
-      target = await ensureDailyNote(this.app, this.selectedDate, fallback);
-    }
-    await this.app.vault.process(target, (content) => {
-      if (currentlyComplete) {
-        return removeHabitLine(content, settings.habitPrefix, period, slug);
-      }
-      return appendHabitLine(content, settings.habitPrefix, period, slug);
-    });
+    const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback);
+    await this.app.vault.process(
+      target,
+      (content) => toggleHabitOnContent(content, settings.habitPrefix, period, slug)
+    );
     this.plugin.habitsScanner.invalidate(target.path);
   }
   isPopout() {
@@ -6186,9 +6216,30 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     const dayCells = await this.buildDayHeatmap(habits, fallback, today, window2);
     const weekCells = await this.buildWeekHeatmap(habits, fallback, today, window2);
     const monthCells = await this.buildMonthHeatmap(habits, fallback, today, window2);
-    this.renderRow(root, "Day", dayCells);
-    this.renderRow(root, "Week", weekCells);
-    this.renderRow(root, "Month", monthCells);
+    const dayStart = addDays(today, -(window2 - 1));
+    const dayEndExclusive = addDays(today, 1);
+    this.renderRow(
+      root,
+      "Day",
+      formatDayRange(dayStart, dayEndExclusive),
+      dayCells
+    );
+    const thisWeek = weekRange(today, settings.habitWeekStart);
+    const weekStart = addDays(thisWeek.start, -7 * (window2 - 1));
+    this.renderRow(
+      root,
+      "Week",
+      formatDayRange(weekStart, thisWeek.end),
+      weekCells
+    );
+    const thisMonth = monthRange(today);
+    const monthStart = addMonths(thisMonth.start, -(window2 - 1));
+    this.renderRow(
+      root,
+      "Month",
+      formatMonthRange(monthStart, thisMonth.end),
+      monthCells
+    );
   }
   async loadHabits() {
     const path = this.plugin.settings.habitsFile;
@@ -6198,15 +6249,22 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     const content = await this.plugin.habitsScanner.getContent(f);
     return parseHabitsFile(content, this.plugin.settings.habitPrefix);
   }
-  renderRow(parent, title, cells) {
+  renderRow(parent, title, dateRange, cells) {
+    var _a;
     const row = parent.createDiv({ cls: "dp-heatmap-row" });
-    row.createDiv({ cls: "dp-heatmap-row-title", text: title });
+    const titleEl = row.createDiv({ cls: "dp-heatmap-row-title" });
+    titleEl.createSpan({ cls: "dp-heatmap-row-name", text: title });
+    titleEl.createSpan({ cls: "dp-heatmap-row-sep", text: " \xB7 " });
+    titleEl.createSpan({ cls: "dp-heatmap-row-range", text: dateRange });
     const grid = row.createDiv({ cls: "dp-heatmap-grid" });
     let totalReps = 0;
     let completedSum = 0;
     let totalPossible = 0;
+    const aggExercise = /* @__PURE__ */ new Map();
     for (const c of cells) {
-      const cell = grid.createDiv({ cls: "dp-heatmap-cell" });
+      const cell = grid.createDiv({
+        cls: `dp-heatmap-cell q${quintile(c.rate)}`
+      });
       cell.style.setProperty("--dp-heatmap-intensity", c.rate.toFixed(3));
       cell.setAttribute("aria-label", c.tooltip);
       cell.title = c.tooltip;
@@ -6214,17 +6272,41 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       totalReps += c.exerciseReps;
       completedSum += c.habitsCompleted;
       totalPossible += c.habitsTotal;
+      for (const [name, reps] of c.exerciseTotals) {
+        aggExercise.set(name, ((_a = aggExercise.get(name)) != null ? _a : 0) + reps);
+      }
     }
     const totals = row.createDiv({ cls: "dp-heatmap-totals" });
     totals.createSpan({
       cls: "dp-heatmap-total",
-      text: totalPossible > 0 ? `${completedSum}/${totalPossible}` : "\u2014"
+      text: totalPossible > 0 ? `${completedSum}/${totalPossible} habits` : "no habits"
     });
     totals.createSpan({ cls: "dp-heatmap-sep", text: " \u2022 " });
     totals.createSpan({
       cls: "dp-heatmap-total-reps",
-      text: `${totalReps} reps`
+      text: `${totalReps.toLocaleString()} reps`
     });
+    if (aggExercise.size > 0) {
+      const breakdown = row.createDiv({ cls: "dp-heatmap-breakdown" });
+      const sorted = Array.from(aggExercise.entries()).sort(
+        (a, b) => b[1] - a[1]
+      );
+      sorted.forEach(([name, reps], idx) => {
+        if (idx > 0) {
+          breakdown.createSpan({
+            cls: "dp-heatmap-breakdown-sep",
+            text: " \xB7 "
+          });
+        }
+        const item = breakdown.createSpan({ cls: "dp-heatmap-breakdown-item" });
+        item.createSpan({ cls: "dp-heatmap-breakdown-name", text: name });
+        item.appendText(" ");
+        item.createSpan({
+          cls: "dp-heatmap-breakdown-reps",
+          text: reps.toLocaleString()
+        });
+      });
+    }
   }
   async buildDayHeatmap(habits, fallback, today, count) {
     const dayHabits = habits.filter((h) => h.period === "day");
@@ -6233,7 +6315,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       const start = addDays(today, -i);
       const end = addDays(start, 1);
       const cell = await this.buildCell(start, end, dayHabits, fallback);
-      cell.label = start.toLocaleDateString(void 0, { weekday: "narrow" }).toUpperCase();
+      cell.label = start.getDate().toString();
       cell.tooltip = `${start.toLocaleDateString(void 0, { weekday: "short", month: "short", day: "numeric" })}
 ${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
       cells.push(cell);
@@ -6264,7 +6346,7 @@ ${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} rep
       const start = addMonths(thisMonth.start, -i);
       const end = addMonths(start, 1);
       const cell = await this.buildCell(start, end, monthHabits, fallback);
-      cell.label = start.toLocaleDateString(void 0, { month: "short" });
+      cell.label = start.toLocaleDateString(void 0, { month: "short" }).slice(0, 3);
       cell.tooltip = `${start.toLocaleDateString(void 0, { month: "long", year: "numeric" })}
 ${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
       cells.push(cell);
@@ -6272,6 +6354,7 @@ ${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} rep
     return cells;
   }
   async buildCell(start, end, habits, fallback) {
+    var _a;
     const dates = enumerateDailyNoteDatesInRange(start, end);
     const contents = [];
     for (const d of dates) {
@@ -6279,25 +6362,37 @@ ${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} rep
       if (c)
         contents.push(c);
     }
-    const combined = contents.join("\n");
     let completed = 0;
     for (const h of habits) {
-      const n = countHabitOccurrences(
-        combined,
-        this.plugin.settings.habitPrefix,
-        h.period,
-        h.slug
-      );
-      if (n > 0)
+      let hasChecked = false;
+      for (const c of contents) {
+        const lines = findHabitTaskLines(
+          c,
+          this.plugin.settings.habitPrefix,
+          h.period,
+          h.slug
+        );
+        if (lines.some((l) => l.checked)) {
+          hasChecked = true;
+          break;
+        }
+      }
+      if (hasChecked)
         completed++;
     }
     const total = habits.length;
     let reps = 0;
+    const exerciseTotals = /* @__PURE__ */ new Map();
     for (const c of contents) {
       const summaries = parseExercises(c, this.plugin.settings.prefixes);
       for (const s of summaries) {
-        for (const set of s.sets)
+        for (const set of s.sets) {
           reps += set.reps;
+          exerciseTotals.set(
+            s.name,
+            ((_a = exerciseTotals.get(s.name)) != null ? _a : 0) + set.reps
+          );
+        }
       }
     }
     return {
@@ -6308,10 +6403,50 @@ ${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} rep
       habitsCompleted: completed,
       habitsTotal: total,
       rate: total > 0 ? completed / total : 0,
-      exerciseReps: reps
+      exerciseReps: reps,
+      exerciseTotals
     };
   }
 };
+function quintile(rate) {
+  if (rate <= 0)
+    return 0;
+  if (rate < 0.25)
+    return 1;
+  if (rate < 0.5)
+    return 2;
+  if (rate < 0.75)
+    return 3;
+  return 4;
+}
+function formatDayRange(start, endExclusive) {
+  const last = addDays(endExclusive, -1);
+  const sameYear = start.getFullYear() === last.getFullYear();
+  const startStr = start.toLocaleDateString(void 0, {
+    month: "short",
+    day: "numeric",
+    ...sameYear ? {} : { year: "numeric" }
+  });
+  const endStr = last.toLocaleDateString(void 0, {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+  return `${startStr} \u2013 ${endStr}`;
+}
+function formatMonthRange(start, endExclusive) {
+  const last = addMonths(endExclusive, -1);
+  const sameYear = start.getFullYear() === last.getFullYear();
+  const startStr = start.toLocaleDateString(void 0, {
+    month: "short",
+    ...sameYear ? {} : { year: "numeric" }
+  });
+  const endStr = last.toLocaleDateString(void 0, {
+    month: "short",
+    year: "numeric"
+  });
+  return `${startStr} \u2013 ${endStr}`;
+}
 
 // src/main.ts
 var import_obsidian7 = require("obsidian");

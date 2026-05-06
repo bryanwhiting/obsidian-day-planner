@@ -3,7 +3,7 @@ import type TodayPlugin from "./main";
 import {
   Habit,
   parseHabitsFile,
-  countHabitOccurrences,
+  findHabitTaskLines,
   weekRange,
   monthRange,
   enumerateDailyNoteDatesInRange,
@@ -27,6 +27,7 @@ interface HeatmapCell {
   habitsTotal: number;
   rate: number;
   exerciseReps: number;
+  exerciseTotals: Map<string, number>;
 }
 
 export class HabitsStatsView extends ItemView {
@@ -108,9 +109,35 @@ export class HabitsStatsView extends ItemView {
     const weekCells = await this.buildWeekHeatmap(habits, fallback, today, window);
     const monthCells = await this.buildMonthHeatmap(habits, fallback, today, window);
 
-    this.renderRow(root, "Day", dayCells);
-    this.renderRow(root, "Week", weekCells);
-    this.renderRow(root, "Month", monthCells);
+    // Day row spans `count` days ending today (inclusive).
+    const dayStart = addDays(today, -(window - 1));
+    const dayEndExclusive = addDays(today, 1);
+    this.renderRow(
+      root,
+      "Day",
+      formatDayRange(dayStart, dayEndExclusive),
+      dayCells,
+    );
+
+    // Week row spans `count` weeks ending with the current week.
+    const thisWeek = weekRange(today, settings.habitWeekStart);
+    const weekStart = addDays(thisWeek.start, -7 * (window - 1));
+    this.renderRow(
+      root,
+      "Week",
+      formatDayRange(weekStart, thisWeek.end),
+      weekCells,
+    );
+
+    // Month row spans `count` months ending with the current month.
+    const thisMonth = monthRange(today);
+    const monthStart = addMonths(thisMonth.start, -(window - 1));
+    this.renderRow(
+      root,
+      "Month",
+      formatMonthRange(monthStart, thisMonth.end),
+      monthCells,
+    );
   }
 
   private async loadHabits(): Promise<Habit[]> {
@@ -124,16 +151,24 @@ export class HabitsStatsView extends ItemView {
   private renderRow(
     parent: HTMLElement,
     title: string,
+    dateRange: string,
     cells: HeatmapCell[],
   ): void {
     const row = parent.createDiv({ cls: "dp-heatmap-row" });
-    row.createDiv({ cls: "dp-heatmap-row-title", text: title });
+    const titleEl = row.createDiv({ cls: "dp-heatmap-row-title" });
+    titleEl.createSpan({ cls: "dp-heatmap-row-name", text: title });
+    titleEl.createSpan({ cls: "dp-heatmap-row-sep", text: " · " });
+    titleEl.createSpan({ cls: "dp-heatmap-row-range", text: dateRange });
+
     const grid = row.createDiv({ cls: "dp-heatmap-grid" });
     let totalReps = 0;
     let completedSum = 0;
     let totalPossible = 0;
+    const aggExercise = new Map<string, number>();
     for (const c of cells) {
-      const cell = grid.createDiv({ cls: "dp-heatmap-cell" });
+      const cell = grid.createDiv({
+        cls: `dp-heatmap-cell q${quintile(c.rate)}`,
+      });
       cell.style.setProperty("--dp-heatmap-intensity", c.rate.toFixed(3));
       cell.setAttribute("aria-label", c.tooltip);
       cell.title = c.tooltip;
@@ -141,17 +176,46 @@ export class HabitsStatsView extends ItemView {
       totalReps += c.exerciseReps;
       completedSum += c.habitsCompleted;
       totalPossible += c.habitsTotal;
+      for (const [name, reps] of c.exerciseTotals) {
+        aggExercise.set(name, (aggExercise.get(name) ?? 0) + reps);
+      }
     }
+
     const totals = row.createDiv({ cls: "dp-heatmap-totals" });
     totals.createSpan({
       cls: "dp-heatmap-total",
-      text: totalPossible > 0 ? `${completedSum}/${totalPossible}` : "—",
+      text:
+        totalPossible > 0
+          ? `${completedSum}/${totalPossible} habits`
+          : "no habits",
     });
     totals.createSpan({ cls: "dp-heatmap-sep", text: " • " });
     totals.createSpan({
       cls: "dp-heatmap-total-reps",
-      text: `${totalReps} reps`,
+      text: `${totalReps.toLocaleString()} reps`,
     });
+
+    if (aggExercise.size > 0) {
+      const breakdown = row.createDiv({ cls: "dp-heatmap-breakdown" });
+      const sorted = Array.from(aggExercise.entries()).sort(
+        (a, b) => b[1] - a[1],
+      );
+      sorted.forEach(([name, reps], idx) => {
+        if (idx > 0) {
+          breakdown.createSpan({
+            cls: "dp-heatmap-breakdown-sep",
+            text: " · ",
+          });
+        }
+        const item = breakdown.createSpan({ cls: "dp-heatmap-breakdown-item" });
+        item.createSpan({ cls: "dp-heatmap-breakdown-name", text: name });
+        item.appendText(" ");
+        item.createSpan({
+          cls: "dp-heatmap-breakdown-reps",
+          text: reps.toLocaleString(),
+        });
+      });
+    }
   }
 
   private async buildDayHeatmap(
@@ -166,9 +230,7 @@ export class HabitsStatsView extends ItemView {
       const start = addDays(today, -i);
       const end = addDays(start, 1);
       const cell = await this.buildCell(start, end, dayHabits, fallback);
-      cell.label = start
-        .toLocaleDateString(undefined, { weekday: "narrow" })
-        .toUpperCase();
+      cell.label = start.getDate().toString();
       cell.tooltip = `${start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}\n${cell.habitsCompleted}/${cell.habitsTotal} habits · ${cell.exerciseReps} reps`;
       cells.push(cell);
     }
@@ -209,7 +271,9 @@ export class HabitsStatsView extends ItemView {
       const start = addMonths(thisMonth.start, -i);
       const end = addMonths(start, 1);
       const cell = await this.buildCell(start, end, monthHabits, fallback);
-      cell.label = start.toLocaleDateString(undefined, { month: "short" });
+      cell.label = start
+        .toLocaleDateString(undefined, { month: "short" })
+        .slice(0, 3);
       cell.tooltip = `${start.toLocaleDateString(undefined, { month: "long", year: "numeric" })}\n${cell.habitsCompleted}/${cell.habitsTotal} habits · ${cell.exerciseReps} reps`;
       cells.push(cell);
     }
@@ -228,23 +292,36 @@ export class HabitsStatsView extends ItemView {
       const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
       if (c) contents.push(c);
     }
-    const combined = contents.join("\n");
     let completed = 0;
     for (const h of habits) {
-      const n = countHabitOccurrences(
-        combined,
-        this.plugin.settings.habitPrefix,
-        h.period,
-        h.slug,
-      );
-      if (n > 0) completed++;
+      let hasChecked = false;
+      for (const c of contents) {
+        const lines = findHabitTaskLines(
+          c,
+          this.plugin.settings.habitPrefix,
+          h.period,
+          h.slug,
+        );
+        if (lines.some((l) => l.checked)) {
+          hasChecked = true;
+          break;
+        }
+      }
+      if (hasChecked) completed++;
     }
     const total = habits.length;
     let reps = 0;
+    const exerciseTotals = new Map<string, number>();
     for (const c of contents) {
       const summaries = parseExercises(c, this.plugin.settings.prefixes);
       for (const s of summaries) {
-        for (const set of s.sets) reps += set.reps;
+        for (const set of s.sets) {
+          reps += set.reps;
+          exerciseTotals.set(
+            s.name,
+            (exerciseTotals.get(s.name) ?? 0) + set.reps,
+          );
+        }
       }
     }
     return {
@@ -256,6 +333,54 @@ export class HabitsStatsView extends ItemView {
       habitsTotal: total,
       rate: total > 0 ? completed / total : 0,
       exerciseReps: reps,
+      exerciseTotals,
     };
   }
+}
+
+// Maps a 0..1 rate to one of five quintile buckets used for cell coloring.
+// rate=0 maps to q0 (empty); any positive rate gets at least q1 so a lone
+// completion is visible.
+function quintile(rate: number): number {
+  if (rate <= 0) return 0;
+  if (rate < 0.25) return 1;
+  if (rate < 0.5) return 2;
+  if (rate < 0.75) return 3;
+  return 4;
+}
+
+// Renders a date range like "Apr 27 – May 6" or "Apr 27, 2025 – May 6, 2026"
+// when the years differ. `endExclusive` is the half-open upper bound; we show
+// the last inclusive day for human readability.
+function formatDayRange(start: Date, endExclusive: Date): string {
+  const last = addDays(endExclusive, -1);
+  const sameYear = start.getFullYear() === last.getFullYear();
+  const startStr = start.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const endStr = last.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${startStr} – ${endStr}`;
+}
+
+// Renders a month range like "Aug – May 2026" or "Aug 2025 – May 2026" when
+// the years differ. Always shows the year on the end label so the reader can
+// anchor the range.
+function formatMonthRange(start: Date, endExclusive: Date): string {
+  const last = addMonths(endExclusive, -1);
+  const sameYear = start.getFullYear() === last.getFullYear();
+  const startStr = start.toLocaleDateString(undefined, {
+    month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  const endStr = last.toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+  });
+  return `${startStr} – ${endStr}`;
 }

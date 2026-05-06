@@ -453,8 +453,29 @@
 
   .dp-habit.is-done {
     color: var(--color-ink-faint);
-    text-decoration: line-through;
     border-bottom-color: transparent;
+  }
+
+  /* Strikethrough only the name span — leaves any duplicate badge readable so
+   * the warning glyph isn't crossed out alongside the slug. */
+  .dp-habit.is-done .dp-habit-name {
+    text-decoration: line-through;
+  }
+
+  .dp-habit-dup {
+    margin-left: 1px;
+    color: var(--color-warn);
+    font-weight: 600;
+  }
+
+  .dp-habit.has-dup {
+    /* Doubled underline cues a duplicate without being too loud. */
+    border-bottom-style: double;
+    border-bottom-color: color-mix(in srgb, var(--color-warn) 60%, transparent);
+  }
+
+  .dp-habit.has-dup:hover {
+    border-bottom-color: var(--color-warn);
   }
 
   .dp-habit-allcomplete {
@@ -504,16 +525,32 @@
   .dp-heatmap-row {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
   }
 
   .dp-heatmap-row-title {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
-    color: var(--color-ink-muted);
-    letter-spacing: var(--tracking-eyebrow);
+    color: var(--color-ink);
+    letter-spacing: 0.02em;
+  }
+
+  .dp-heatmap-row-name {
+    font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+    color: var(--color-ink);
+  }
+
+  .dp-heatmap-row-sep {
+    color: var(--color-ink-faint);
+    user-select: none;
+  }
+
+  .dp-heatmap-row-range {
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
   }
 
   .dp-heatmap-grid {
@@ -523,49 +560,104 @@
     gap: 3px;
   }
 
+  /* Discrete five-tier scale (q0–q4) so cells are unambiguously distinct
+   * even at low completion rates. q0 = no completions; q1+ all use the
+   * accent color at increasing strength so any positive rate is visible. */
   .dp-heatmap-cell {
     --dp-heatmap-intensity: 0;
     aspect-ratio: 1 / 1;
     border-radius: var(--radius-tab);
-    background-color: color-mix(
-      in srgb,
-      var(--color-accent) calc(var(--dp-heatmap-intensity) * 100%),
-      var(--color-paper-2)
-    );
+    background-color: var(--color-paper-2);
     border: 1px solid var(--color-hairline);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 500;
+    font-size: 10px;
+    font-weight: 600;
     cursor: default;
+    color: var(--color-ink-faint);
+    transition: transform 80ms ease;
+  }
+
+  .dp-heatmap-cell:hover {
+    transform: translateY(-1px);
+  }
+
+  .dp-heatmap-cell.q0 {
+    background-color: var(--color-paper-2);
+    color: var(--color-ink-faint);
+    border-color: var(--color-hairline);
+  }
+
+  .dp-heatmap-cell.q1 {
+    background-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-paper-2));
+    color: var(--color-ink);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-hairline));
+  }
+
+  .dp-heatmap-cell.q2 {
+    background-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-paper-2));
+    color: var(--color-ink);
+    border-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-hairline));
+  }
+
+  .dp-heatmap-cell.q3 {
+    background-color: color-mix(in srgb, var(--color-accent) 80%, var(--color-paper-2));
+    color: var(--color-on-accent);
+    border-color: var(--color-accent);
+  }
+
+  .dp-heatmap-cell.q4 {
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+    border-color: var(--color-accent);
   }
 
   .dp-heatmap-cell-label {
     pointer-events: none;
-    color: var(--color-ink-muted);
-    mix-blend-mode: difference;
-    opacity: 0.8;
+    color: inherit;
   }
 
   .dp-heatmap-totals {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 11px;
     color: var(--color-ink-muted);
     font-variant-numeric: tabular-nums;
   }
 
   .dp-heatmap-total {
     color: var(--color-ink);
-    font-weight: 500;
+    font-weight: 600;
   }
 
   .dp-heatmap-total-reps {
-    color: var(--color-ink-muted);
+    color: var(--color-ink);
+    font-weight: 500;
   }
 
   .dp-heatmap-sep {
+    color: var(--color-ink-faint);
+    user-select: none;
+  }
+
+  .dp-heatmap-breakdown {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+  }
+
+  .dp-heatmap-breakdown-name {
+    color: var(--color-ink);
+  }
+
+  .dp-heatmap-breakdown-reps {
+    color: var(--color-ink-muted);
+  }
+
+  .dp-heatmap-breakdown-sep {
     color: var(--color-ink-faint);
     user-select: none;
   }

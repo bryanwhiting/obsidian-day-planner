@@ -75,12 +75,11 @@ import {
   Habit,
   HabitPeriod,
   parseHabitsFile,
-  countHabitOccurrences,
+  findHabitTaskLines,
+  toggleHabitOnContent,
   weekRange,
   monthRange,
   enumerateDailyNoteDatesInRange,
-  appendHabitLine,
-  removeHabitLine,
 } from "./habits";
 
 export const VIEW_TYPE_TODAY = "today-view";
@@ -97,7 +96,20 @@ interface DragPayload {
 
 interface HabitDisplay {
   habit: Habit;
+  // True when at least one `- [x]` task line containing the habit tag exists
+  // in the relevant window (today's daily note for `day`, this week's notes
+  // for `week`, this month's for `month`). Bare-tag-in-prose lines and
+  // unchecked `- [ ]` lines are NOT enough — pre-templated planned-ahead
+  // habits stay marked incomplete until the user actually checks them.
   isComplete: boolean;
+  // True when at least one file in the window has 2+ task lines for this
+  // habit. Cross-file repetition (a weekly habit tracked across multiple
+  // days) is intentionally NOT a duplicate — only same-file dups warrant
+  // attention.
+  hasDuplicate: boolean;
+  // Highest per-file task-line count across the window. Shown in the UI
+  // next to the duplicate badge so the user knows how many copies to remove.
+  maxPerFile: number;
 }
 
 const TRANSPARENT_PIXEL =
@@ -2306,37 +2318,57 @@ export class TodayView extends ItemView {
     const week = weekRange(displayDate, settings.habitWeekStart);
     const month = monthRange(displayDate);
 
-    const readWindow = async (start: Date, end: Date): Promise<string> => {
-      const parts: string[] = [];
+    // Read each daily note in the window separately so we can detect
+    // per-file duplicates (a single note containing 2+ task lines for the
+    // same habit). Concatenating would conflate cross-file repetition with
+    // intra-file duplicates.
+    const readWindowFiles = async (
+      start: Date,
+      end: Date,
+    ): Promise<string[]> => {
+      const out: string[] = [];
       for (const d of enumerateDailyNoteDatesInRange(start, end)) {
         const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
-        if (c) parts.push(c);
+        if (c) out.push(c);
       }
-      return parts.join("\n");
+      return out;
     };
 
     const needWeek = habits.some((h) => h.period === "week");
     const needMonth = habits.some((h) => h.period === "month");
-    const weekContent = needWeek ? await readWindow(week.start, week.end) : "";
-    const monthContent = needMonth
-      ? await readWindow(month.start, month.end)
-      : "";
+    const weekFiles = needWeek
+      ? await readWindowFiles(week.start, week.end)
+      : [];
+    const monthFiles = needMonth
+      ? await readWindowFiles(month.start, month.end)
+      : [];
 
     const out: HabitDisplay[] = [];
     for (const h of habits) {
-      const haystack =
+      const files: string[] =
         h.period === "day"
-          ? displayContent
+          ? [displayContent]
           : h.period === "week"
-            ? weekContent
-            : monthContent;
-      const n = countHabitOccurrences(
-        haystack,
-        settings.habitPrefix,
-        h.period,
-        h.slug,
-      );
-      out.push({ habit: h, isComplete: n > 0 });
+            ? weekFiles
+            : monthFiles;
+      let checkedCount = 0;
+      let maxPerFile = 0;
+      for (const c of files) {
+        const lines = findHabitTaskLines(
+          c,
+          settings.habitPrefix,
+          h.period,
+          h.slug,
+        );
+        for (const l of lines) if (l.checked) checkedCount++;
+        if (lines.length > maxPerFile) maxPerFile = lines.length;
+      }
+      out.push({
+        habit: h,
+        isComplete: checkedCount > 0,
+        hasDuplicate: maxPerFile > 1,
+        maxPerFile,
+      });
     }
     return out;
   }
@@ -2383,9 +2415,26 @@ export class TodayView extends ItemView {
 
       visible.forEach((d, idx) => {
         if (idx > 0) wrap.appendText(", ");
-        const cls = "dp-habit" + (d.isComplete ? " is-done" : "");
-        const chip = wrap.createSpan({ cls, text: d.habit.slug });
-        if (d.habit.label) chip.title = d.habit.label;
+        const cls =
+          "dp-habit" +
+          (d.isComplete ? " is-done" : "") +
+          (d.hasDuplicate ? " has-dup" : "");
+        const chip = wrap.createSpan({ cls });
+        chip.createSpan({ cls: "dp-habit-name", text: d.habit.slug });
+        if (d.hasDuplicate) {
+          chip.createSpan({
+            cls: "dp-habit-dup",
+            text: `·${d.maxPerFile}`,
+          });
+        }
+        const tooltipParts: string[] = [];
+        if (d.habit.label) tooltipParts.push(d.habit.label);
+        if (d.hasDuplicate) {
+          tooltipParts.push(
+            `${d.maxPerFile} task lines for this habit in one daily note — clean up duplicates by hand`,
+          );
+        }
+        if (tooltipParts.length > 0) chip.title = tooltipParts.join("\n");
         chip.addEventListener("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
@@ -2393,7 +2442,6 @@ export class TodayView extends ItemView {
             displayFile,
             d.habit.period,
             d.habit.slug,
-            d.isComplete,
           );
         });
       });
@@ -2413,16 +2461,16 @@ export class TodayView extends ItemView {
     }
   }
 
-  // Toggles a habit on the displayed daily note: appends a new `- [x] <slug>
-  // #<prefix>/<period>/<slug>` line if currently incomplete, or removes the
-  // first matching `- [x]` line if currently complete. Creates the daily note
-  // if it doesn't exist (only on the toggle-on path; toggling off a missing
-  // file is a no-op).
+  // Toggles a habit on the displayed daily note. The mutator finds the first
+  // `- [ ]` / `- [x]` task line containing the habit tag and flips its
+  // checkbox in place; if no such line exists, it appends a fresh `- [x]`
+  // line. The line is never deleted, which preserves user-templated
+  // planned-ahead habits across click/un-click cycles. Creates the daily
+  // note if missing.
   private async applyHabitToggle(
     file: TFile | null,
     period: HabitPeriod,
     slug: string,
-    currentlyComplete: boolean,
   ): Promise<void> {
     const settings = this.plugin.settings;
     const fallback: DailyNoteFallback = {
@@ -2431,20 +2479,12 @@ export class TodayView extends ItemView {
       template: settings.dailyNoteTemplate,
       dateLinkFormat: settings.dateLinkFormat,
     };
-    let target: TFile;
-    if (file) {
-      target = file;
-    } else if (currentlyComplete) {
-      return;
-    } else {
-      target = await ensureDailyNote(this.app, this.selectedDate, fallback);
-    }
-    await this.app.vault.process(target, (content) => {
-      if (currentlyComplete) {
-        return removeHabitLine(content, settings.habitPrefix, period, slug);
-      }
-      return appendHabitLine(content, settings.habitPrefix, period, slug);
-    });
+    const target = file
+      ? file
+      : await ensureDailyNote(this.app, this.selectedDate, fallback);
+    await this.app.vault.process(target, (content) =>
+      toggleHabitOnContent(content, settings.habitPrefix, period, slug),
+    );
     this.plugin.habitsScanner.invalidate(target.path);
   }
 
