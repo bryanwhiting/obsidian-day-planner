@@ -147,6 +147,28 @@ export function formatExerciseSummary(summary: ExerciseSummary): string {
   return summary.name;
 }
 
+// Scans a file for the first `#<intentionTag>` occurrence and returns the
+// trailing text on that line (trimmed). Returns null if the tag is absent or
+// the tag is bare with no following text. The lookahead guards against
+// substrings like `#intentional` or nested tags like `#intention/foo`.
+export function parseIntention(
+  content: string,
+  intentionTag: string,
+): string | null {
+  const tag = intentionTag.replace(/^#+/, "").trim();
+  if (!tag) return null;
+  const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`#${esc}(?![A-Za-z0-9_/])\\s*([^\\n]*)`);
+  for (const line of content.split("\n")) {
+    const m = re.exec(line);
+    if (!m) continue;
+    const text = m[1].trim();
+    if (text.length === 0) continue;
+    return text;
+  }
+  return null;
+}
+
 export function formatExerciseLine(summaries: ExerciseSummary[]): string {
   return summaries.map(formatExerciseSummary).join(" • ");
 }

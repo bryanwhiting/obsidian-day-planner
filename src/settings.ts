@@ -60,6 +60,10 @@ export interface TodaySettings {
   // calendar block. Notes render as a dot in the timeline gutter instead of a
   // block. Default: "note", matching #note. Set to "tc/note" for #tc/note, etc.
   noteTag: string;
+  // Bare hashtag (no leading "#") that flags an "intention" line for the day.
+  // The text following the tag on the line is shown next to the daily-note
+  // path in the dashboard header. Default: "intention", matching #intention.
+  intentionTag: string;
   timelineHeightDesktop: string;
   timelineHeightMobile: string;
   pomodoroWorkMin: number;
@@ -105,6 +109,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   projectColors: [],
   contextTags: [],
   noteTag: "note",
+  intentionTag: "intention",
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
   pomodoroWorkMin: 25,
@@ -1082,6 +1087,32 @@ export class TodaySettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.noteTag)
           .onChange(async (v) => {
             this.plugin.settings.noteTag = v.trim().replace(/^#+/, "");
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    const intentionDesc = document.createDocumentFragment();
+    intentionDesc.append(
+      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your intention for the day and shown next to the daily-note path in the dashboard header. Enter the bare tag without the leading ",
+      makeCode("#"),
+      " — e.g. ",
+      makeCode("intention"),
+      " matches ",
+      makeCode("#intention be present"),
+      ". If multiple ",
+      makeCode("#intention"),
+      " lines exist, only the first is shown.",
+    );
+
+    new Setting(containerEl)
+      .setName("Intention tag")
+      .setDesc(intentionDesc)
+      .addText((t) =>
+        t
+          .setPlaceholder("intention")
+          .setValue(this.plugin.settings.intentionTag)
+          .onChange(async (v) => {
+            this.plugin.settings.intentionTag = v.trim().replace(/^#+/, "");
             await this.plugin.saveSettings();
           }),
       );

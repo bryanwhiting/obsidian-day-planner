@@ -18,6 +18,7 @@ import {
   TagPrefixes,
   parseFileTasks,
   parseExercises,
+  parseIntention,
   parseTime,
   formatExerciseLine,
   setTimeTag,
@@ -414,6 +415,9 @@ export class TodayView extends ItemView {
         )
       : [];
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
+    const intention = displayFile
+      ? parseIntention(fileContent, this.plugin.settings.intentionTag)
+      : null;
 
     const activeFile = this.app.workspace.getActiveFile();
     const showOpenActiveLink =
@@ -447,6 +451,7 @@ export class TodayView extends ItemView {
       true,
       colorMap,
       showOpenActiveLink ? activeFile : null,
+      intention,
     );
 
     this.renderTimelineHints(root);
@@ -676,13 +681,14 @@ export class TodayView extends ItemView {
     isPrimary: boolean,
     colorMap: Map<string, string>,
     openActiveTarget: TFile | null = null,
+    intention: string | null = null,
   ): void {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed) section.addClass("is-summaries-collapsed");
 
     const header = section.createDiv({ cls: "dp-header" });
     if (!isPrimary && title) header.createDiv({ cls: "dp-title", text: title });
-    if (subtitle || openActiveTarget) {
+    if (subtitle || openActiveTarget || intention) {
       const sub = header.createDiv({ cls: "dp-subtitle" });
       if (subtitle) {
         if (file) {
@@ -699,8 +705,13 @@ export class TodayView extends ItemView {
           sub.createSpan({ text: subtitle });
         }
       }
-      if (openActiveTarget) {
+      if (intention) {
         if (subtitle) sub.createSpan({ cls: "dp-subtitle-sep", text: "•" });
+        sub.createSpan({ cls: "dp-intention", text: intention });
+      }
+      if (openActiveTarget) {
+        if (subtitle || intention)
+          sub.createSpan({ cls: "dp-subtitle-sep", text: "•" });
         const link = sub.createEl("a", {
           cls: "dp-subtitle-link",
           text: "Open Active Note",

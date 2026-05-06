@@ -398,6 +398,12 @@
     text-decoration: none;
   }
 
+  .dp-intention {
+    font-style: italic;
+    color: var(--color-ink-muted);
+    letter-spacing: 0.02em;
+  }
+
   .dp-workout {
     text-align: center;
     font-family: var(--font-mono);

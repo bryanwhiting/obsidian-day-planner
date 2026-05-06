@@ -424,6 +424,23 @@ function formatExerciseSummary(summary) {
     return `${summary.name} (${pending})`;
   return summary.name;
 }
+function parseIntention(content, intentionTag) {
+  const tag = intentionTag.replace(/^#+/, "").trim();
+  if (!tag)
+    return null;
+  const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`#${esc}(?![A-Za-z0-9_/])\\s*([^\\n]*)`);
+  for (const line of content.split("\n")) {
+    const m = re.exec(line);
+    if (!m)
+      continue;
+    const text = m[1].trim();
+    if (text.length === 0)
+      continue;
+    return text;
+  }
+  return null;
+}
 function formatExerciseLine(summaries) {
   return summaries.map(formatExerciseSummary).join(" \u2022 ");
 }
@@ -1103,6 +1120,7 @@ var DEFAULT_SETTINGS = {
   projectColors: [],
   contextTags: [],
   noteTag: "note",
+  intentionTag: "intention",
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
   pomodoroWorkMin: 25,
@@ -1821,6 +1839,24 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName("Note tag").setDesc(desc).addText(
       (t) => t.setPlaceholder("note").setValue(this.plugin.settings.noteTag).onChange(async (v) => {
         this.plugin.settings.noteTag = v.trim().replace(/^#+/, "");
+        await this.plugin.saveSettings();
+      })
+    );
+    const intentionDesc = document.createDocumentFragment();
+    intentionDesc.append(
+      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your intention for the day and shown next to the daily-note path in the dashboard header. Enter the bare tag without the leading ",
+      makeCode("#"),
+      " \u2014 e.g. ",
+      makeCode("intention"),
+      " matches ",
+      makeCode("#intention be present"),
+      ". If multiple ",
+      makeCode("#intention"),
+      " lines exist, only the first is shown."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Intention tag").setDesc(intentionDesc).addText(
+      (t) => t.setPlaceholder("intention").setValue(this.plugin.settings.intentionTag).onChange(async (v) => {
+        this.plugin.settings.intentionTag = v.trim().replace(/^#+/, "");
         await this.plugin.saveSettings();
       })
     );
@@ -2795,6 +2831,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       this.plugin.settings.defaultDurationMin
     ) : [];
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
+    const intention = displayFile ? parseIntention(fileContent, this.plugin.settings.intentionTag) : null;
     const activeFile = this.app.workspace.getActiveFile();
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
     this.renderDateNav(root);
@@ -2820,7 +2857,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       habitDisplays,
       true,
       colorMap,
-      showOpenActiveLink ? activeFile : null
+      showOpenActiveLink ? activeFile : null,
+      intention
     );
     this.renderTimelineHints(root);
     root.scrollTop = prevRootScroll;
@@ -3017,14 +3055,14 @@ var TodayView = class extends import_obsidian4.ItemView {
       day: "numeric"
     });
   }
-  renderSection(parent, title, subtitle, file, path, tasks, exercises, habitDisplays, isPrimary, colorMap, openActiveTarget = null) {
+  renderSection(parent, title, subtitle, file, path, tasks, exercises, habitDisplays, isPrimary, colorMap, openActiveTarget = null, intention = null) {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed)
       section.addClass("is-summaries-collapsed");
     const header = section.createDiv({ cls: "dp-header" });
     if (!isPrimary && title)
       header.createDiv({ cls: "dp-title", text: title });
-    if (subtitle || openActiveTarget) {
+    if (subtitle || openActiveTarget || intention) {
       const sub = header.createDiv({ cls: "dp-subtitle" });
       if (subtitle) {
         if (file) {
@@ -3041,8 +3079,13 @@ var TodayView = class extends import_obsidian4.ItemView {
           sub.createSpan({ text: subtitle });
         }
       }
-      if (openActiveTarget) {
+      if (intention) {
         if (subtitle)
+          sub.createSpan({ cls: "dp-subtitle-sep", text: "\u2022" });
+        sub.createSpan({ cls: "dp-intention", text: intention });
+      }
+      if (openActiveTarget) {
+        if (subtitle || intention)
           sub.createSpan({ cls: "dp-subtitle-sep", text: "\u2022" });
         const link = sub.createEl("a", {
           cls: "dp-subtitle-link",

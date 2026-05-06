@@ -2,6 +2,8 @@
 
 ## 2026-05-06
 
+- [feat]: Surface a daily "intention" next to the daily-note path in the dashboard header. Configurable bare hashtag (default `#intention`); the rest of the line after the tag becomes the intention, and the first match wins. The user asked: "let's add an intention. again, this is a tag. so if the file has `#intention blah blah` on it, the intention is `blah blah`. And that will sit next to the daily/YYYY-MM-DD.md link. If there are two intentions, just take the first. The `#intention` is a configurable tag".
+
 ### Habits tracker: source file, dashboard line, click-toggle, stats pane
 
 - **Requested:** "let's add a habits tracker. The plugin should read
