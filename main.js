@@ -333,7 +333,6 @@ var DEFAULT_PREFIXES = {
   time: "t",
   order: "o",
   project: "p",
-  subproject: "sp",
   exercise: "x"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
@@ -349,11 +348,11 @@ function buildTagRegexes(prefixes) {
       "i"
     ),
     order: new RegExp(`#${esc(prefixes.order)}\\/(\\d+)\\b`),
-    // The subproject regex must be tested before the project regex when both
-    // share an `sp` / `p` overlap; we expose them separately and order
-    // matters in cleanBody-style replacements.
-    project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`),
-    subproject: new RegExp(`#${esc(prefixes.subproject)}\\/([\\w-]+)`),
+    // Project tag supports an optional `/<subproject>` segment, e.g.
+    // `#tp/silvermine/back-end`. Group 1 is the project, group 2 the subproject.
+    project: new RegExp(
+      `#${esc(prefixes.project)}\\/([\\w-]+)(?:\\/([\\w-]+))?`
+    ),
     exercise: new RegExp(
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g"
@@ -450,13 +449,12 @@ function parseOrder(body, prefixes) {
   return m ? parseInt(m[1], 10) : null;
 }
 function parseProject(body, prefixes) {
-  const stripped = body.replace(buildTagRegexes(prefixes).subproject, "");
-  const m = buildTagRegexes(prefixes).project.exec(stripped);
+  const m = buildTagRegexes(prefixes).project.exec(body);
   return m ? m[1] : null;
 }
 function parseSubproject(body, prefixes) {
-  const m = buildTagRegexes(prefixes).subproject.exec(body);
-  return m ? m[1] : null;
+  const m = buildTagRegexes(prefixes).project.exec(body);
+  return m && m[2] ? m[2] : null;
 }
 function parseDescription(body) {
   const m = DESCRIPTION_RE.exec(body);
@@ -620,7 +618,7 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   const body = m[3];
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -658,7 +656,7 @@ function setTaskDescription(rawLine, newDescription, prefixes) {
     return rawLine;
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
@@ -952,8 +950,6 @@ function keyLabel(key) {
       return "Order";
     case "project":
       return "Project";
-    case "subproject":
-      return "Sub-project";
     case "exercise":
       return "Exercise";
   }
@@ -1045,7 +1041,6 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       "time",
       "order",
       "project",
-      "subproject",
       "exercise"
     ];
     const changes = [];
@@ -1272,15 +1267,6 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       (t) => t.setValue(this.plugin.settings.prefixes.project).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.project = v;
-          await this.plugin.saveSettings();
-          this.display();
-        }
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("Sub-project tag prefix").setDesc(buildSubprojectPrefixDesc()).addText(
-      (t) => t.setValue(this.plugin.settings.prefixes.subproject).onChange(async (v) => {
-        if (/^[a-zA-Z]+$/.test(v)) {
-          this.plugin.settings.prefixes.subproject = v;
           await this.plugin.saveSettings();
           this.display();
         }
@@ -1585,18 +1571,11 @@ function buildProjectPrefixDesc() {
     makeCode("#p/sally"),
     " or ",
     makeCode("#p/work-1"),
-    " \u2014 and the timeline block plus the row in the Project totals table will share the same color. Names can use letters, digits, dashes, and underscores."
-  );
-  return f;
-}
-function buildSubprojectPrefixDesc() {
-  const f = document.createDocumentFragment();
-  f.append(
-    "Optional finer grouping under a project. Default prefix ",
-    makeCode("sp"),
-    ". Example: ",
-    makeCode("#sp/back-end"),
-    ". The sub-project name is shown next to the project label."
+    " \u2014 and the timeline block plus the row in the Project totals table will share the same color. Add an optional sub-project segment with ",
+    makeCode("#p/<name>/<sub>"),
+    " (e.g. ",
+    makeCode("#p/silvermine/back-end"),
+    "); sub-projects are shown next to the project label and broken out under the project's row in the totals table. Names can use letters, digits, dashes, and underscores."
   );
   return f;
 }
@@ -2484,7 +2463,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (block.task.subproject) {
         projWrap.createSpan({
           cls: "dp-block-subproject",
-          text: `/ ${block.task.subproject}`
+          text: `/${block.task.subproject}`
         });
       }
       row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
@@ -2733,7 +2712,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         if (task.subproject) {
           projGroup.createSpan({
             cls: "dp-card-subproject",
-            text: `/ ${task.subproject}`
+            text: `/${task.subproject}`
           });
         }
       }
@@ -3009,24 +2988,35 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   renderProjectTable(parent, tasks, colorMap) {
     var _a;
-    const totals = /* @__PURE__ */ new Map();
+    const projects = /* @__PURE__ */ new Map();
     let unassignedMin = 0;
     for (const t of tasks) {
-      if (t.project) {
-        totals.set(t.project, ((_a = totals.get(t.project)) != null ? _a : 0) + t.durationMin);
-      } else {
+      if (!t.project) {
         unassignedMin += t.durationMin;
+        continue;
+      }
+      let agg = projects.get(t.project);
+      if (!agg) {
+        agg = { total: 0, subs: /* @__PURE__ */ new Map() };
+        projects.set(t.project, agg);
+      }
+      agg.total += t.durationMin;
+      if (t.subproject) {
+        agg.subs.set(
+          t.subproject,
+          ((_a = agg.subs.get(t.subproject)) != null ? _a : 0) + t.durationMin
+        );
       }
     }
-    if (totals.size === 0 && unassignedMin === 0)
+    if (projects.size === 0 && unassignedMin === 0)
       return;
-    const sorted = [...totals.entries()].sort(
-      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+    const sorted = [...projects.entries()].sort(
+      (a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0])
     );
     const table = parent.createDiv({ cls: "dp-stat-table" });
     table.createSpan({ cls: "dp-st-h", text: "Project" });
     table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
-    for (const [name, mins] of sorted) {
+    for (const [name, agg] of sorted) {
       const nameCell = table.createDiv({ cls: "dp-st-name" });
       const swatch = nameCell.createSpan({ cls: "dp-st-swatch" });
       const color = colorMap.get(name);
@@ -3038,7 +3028,17 @@ var TodayView = class extends import_obsidian4.ItemView {
         (0, import_obsidian4.setIcon)(ic, projIconName);
       }
       nameCell.createSpan({ text: name });
-      table.createSpan({ cls: "dp-st-value", text: formatTotal(mins) });
+      if (agg.subs.size > 0) {
+        const subs = [...agg.subs.entries()].sort(
+          (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+        );
+        const breakdown = subs.map(([sub, mins]) => `${sub} ${formatCompactDuration(mins)}`).join(", ");
+        nameCell.createSpan({
+          cls: "dp-st-subprojects",
+          text: ` (${breakdown})`
+        });
+      }
+      table.createSpan({ cls: "dp-st-value", text: formatTotal(agg.total) });
     }
     if (unassignedMin > 0) {
       const nameCell = table.createDiv({ cls: "dp-st-name dp-st-unassigned" });
@@ -3085,7 +3085,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   cleanBody(body) {
     var _a;
     const p = this.plugin.settings.prefixes;
-    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.subproject}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "");
+    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
       if (!tag)

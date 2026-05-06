@@ -779,7 +779,7 @@ export class TodayView extends ItemView {
       if (block.task.subproject) {
         projWrap.createSpan({
           cls: "dp-block-subproject",
-          text: `/ ${block.task.subproject}`,
+          text: `/${block.task.subproject}`,
         });
       }
       row.createSpan({ cls: "dp-block-sep", text: "·" });
@@ -1065,7 +1065,7 @@ export class TodayView extends ItemView {
         if (task.subproject) {
           projGroup.createSpan({
             cls: "dp-card-subproject",
-            text: `/ ${task.subproject}`,
+            text: `/${task.subproject}`,
           });
         }
       }
@@ -1391,24 +1391,39 @@ export class TodayView extends ItemView {
     tasks: ParsedTask[],
     colorMap: Map<string, string>,
   ): void {
-    const totals = new Map<string, number>();
+    interface ProjectAgg {
+      total: number;
+      subs: Map<string, number>;
+    }
+    const projects = new Map<string, ProjectAgg>();
     let unassignedMin = 0;
     for (const t of tasks) {
-      if (t.project) {
-        totals.set(t.project, (totals.get(t.project) ?? 0) + t.durationMin);
-      } else {
+      if (!t.project) {
         unassignedMin += t.durationMin;
+        continue;
+      }
+      let agg = projects.get(t.project);
+      if (!agg) {
+        agg = { total: 0, subs: new Map() };
+        projects.set(t.project, agg);
+      }
+      agg.total += t.durationMin;
+      if (t.subproject) {
+        agg.subs.set(
+          t.subproject,
+          (agg.subs.get(t.subproject) ?? 0) + t.durationMin,
+        );
       }
     }
-    if (totals.size === 0 && unassignedMin === 0) return;
-    const sorted = [...totals.entries()].sort(
-      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+    if (projects.size === 0 && unassignedMin === 0) return;
+    const sorted = [...projects.entries()].sort(
+      (a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]),
     );
 
     const table = parent.createDiv({ cls: "dp-stat-table" });
     table.createSpan({ cls: "dp-st-h", text: "Project" });
     table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
-    for (const [name, mins] of sorted) {
+    for (const [name, agg] of sorted) {
       const nameCell = table.createDiv({ cls: "dp-st-name" });
       const swatch = nameCell.createSpan({ cls: "dp-st-swatch" });
       const color = colorMap.get(name);
@@ -1419,7 +1434,19 @@ export class TodayView extends ItemView {
         setIcon(ic, projIconName);
       }
       nameCell.createSpan({ text: name });
-      table.createSpan({ cls: "dp-st-value", text: formatTotal(mins) });
+      if (agg.subs.size > 0) {
+        const subs = [...agg.subs.entries()].sort(
+          (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+        );
+        const breakdown = subs
+          .map(([sub, mins]) => `${sub} ${formatCompactDuration(mins)}`)
+          .join(", ");
+        nameCell.createSpan({
+          cls: "dp-st-subprojects",
+          text: ` (${breakdown})`,
+        });
+      }
+      table.createSpan({ cls: "dp-st-value", text: formatTotal(agg.total) });
     }
     if (unassignedMin > 0) {
       const nameCell = table.createDiv({ cls: "dp-st-name dp-st-unassigned" });
@@ -1474,8 +1501,7 @@ export class TodayView extends ItemView {
       .replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "")
-      .replace(new RegExp(`#${p.subproject}\\/[\\w-]+`, "g"), "")
-      .replace(new RegExp(`#${p.project}\\/[\\w-]+`, "g"), "")
+      .replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "")
       .replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "")
       .replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {

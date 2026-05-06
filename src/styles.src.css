@@ -539,6 +539,15 @@
     font-style: italic;
   }
 
+  .dp-st-subprojects {
+    margin-left: 4px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--color-ink-faint);
+    letter-spacing: 0.01em;
+  }
+
   .dp-st-value.dp-st-unassigned {
     color: var(--color-ink-muted);
   }

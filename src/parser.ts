@@ -27,7 +27,6 @@ export interface TagPrefixes {
   time: string;
   order: string;
   project: string;
-  subproject: string;
   exercise: string;
 }
 
@@ -36,7 +35,6 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
   time: "t",
   order: "o",
   project: "p",
-  subproject: "sp",
   exercise: "x",
 };
 
@@ -67,11 +65,11 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
       "i",
     ),
     order: new RegExp(`#${esc(prefixes.order)}\\/(\\d+)\\b`),
-    // The subproject regex must be tested before the project regex when both
-    // share an `sp` / `p` overlap; we expose them separately and order
-    // matters in cleanBody-style replacements.
-    project: new RegExp(`#${esc(prefixes.project)}\\/([\\w-]+)`),
-    subproject: new RegExp(`#${esc(prefixes.subproject)}\\/([\\w-]+)`),
+    // Project tag supports an optional `/<subproject>` segment, e.g.
+    // `#tp/silvermine/back-end`. Group 1 is the project, group 2 the subproject.
+    project: new RegExp(
+      `#${esc(prefixes.project)}\\/([\\w-]+)(?:\\/([\\w-]+))?`,
+    ),
     exercise: new RegExp(
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g",
@@ -184,10 +182,7 @@ export function parseProject(
   body: string,
   prefixes: TagPrefixes,
 ): string | null {
-  // Strip subproject tags first so e.g. `#sp/back-end` with prefix `p` doesn't
-  // get half-matched as project `sp`.
-  const stripped = body.replace(buildTagRegexes(prefixes).subproject, "");
-  const m = buildTagRegexes(prefixes).project.exec(stripped);
+  const m = buildTagRegexes(prefixes).project.exec(body);
   return m ? m[1] : null;
 }
 
@@ -195,8 +190,8 @@ export function parseSubproject(
   body: string,
   prefixes: TagPrefixes,
 ): string | null {
-  const m = buildTagRegexes(prefixes).subproject.exec(body);
-  return m ? m[1] : null;
+  const m = buildTagRegexes(prefixes).project.exec(body);
+  return m && m[2] ? m[2] : null;
 }
 
 export function parseDescription(body: string): string | null {
@@ -344,6 +339,8 @@ export function removeOrderTag(rawLine: string, prefixes: TagPrefixes): string {
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
+// `project` may include an optional `/subproject` segment (e.g.
+// `silvermine/back-end`). Both segments are validated against [\w-].
 export function setProjectTag(
   rawLine: string,
   project: string,
@@ -360,25 +357,6 @@ export function removeProjectTag(
   prefixes: TagPrefixes,
 ): string {
   const re = buildTagRegexes(prefixes).project;
-  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
-}
-
-export function setSubprojectTag(
-  rawLine: string,
-  subproject: string,
-  prefixes: TagPrefixes,
-): string {
-  const re = buildTagRegexes(prefixes).subproject;
-  const newTag = `#${prefixes.subproject}/${subproject}`;
-  if (re.test(rawLine)) return rawLine.replace(re, newTag);
-  return appendTag(rawLine, newTag);
-}
-
-export function removeSubprojectTag(
-  rawLine: string,
-  prefixes: TagPrefixes,
-): string {
-  const re = buildTagRegexes(prefixes).subproject;
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
@@ -421,7 +399,7 @@ export function setTaskTitle(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -471,7 +449,7 @@ export function setTaskDescription(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.subproject)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {

@@ -207,8 +207,6 @@ function keyLabel(key: keyof TagPrefixes): string {
       return "Order";
     case "project":
       return "Project";
-    case "subproject":
-      return "Sub-project";
     case "exercise":
       return "Exercise";
   }

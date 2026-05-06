@@ -133,7 +133,6 @@ export class TodaySettingTab extends PluginSettingTab {
       "time",
       "order",
       "project",
-      "subproject",
       "exercise",
     ];
     const changes: PrefixChange[] = [];
@@ -484,21 +483,6 @@ export class TodaySettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl)
-      .setName("Sub-project tag prefix")
-      .setDesc(buildSubprojectPrefixDesc())
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.prefixes.subproject)
-          .onChange(async (v) => {
-            if (/^[a-zA-Z]+$/.test(v)) {
-              this.plugin.settings.prefixes.subproject = v;
-              await this.plugin.saveSettings();
-              this.display();
-            }
-          }),
-      );
-
     const prefix = this.plugin.settings.prefixes.project;
 
     const desc = document.createDocumentFragment();
@@ -839,19 +823,11 @@ function buildProjectPrefixDesc(): DocumentFragment {
     makeCode("#p/sally"),
     " or ",
     makeCode("#p/work-1"),
-    " — and the timeline block plus the row in the Project totals table will share the same color. Names can use letters, digits, dashes, and underscores.",
-  );
-  return f;
-}
-
-function buildSubprojectPrefixDesc(): DocumentFragment {
-  const f = document.createDocumentFragment();
-  f.append(
-    "Optional finer grouping under a project. Default prefix ",
-    makeCode("sp"),
-    ". Example: ",
-    makeCode("#sp/back-end"),
-    ". The sub-project name is shown next to the project label.",
+    " — and the timeline block plus the row in the Project totals table will share the same color. Add an optional sub-project segment with ",
+    makeCode("#p/<name>/<sub>"),
+    " (e.g. ",
+    makeCode("#p/silvermine/back-end"),
+    "); sub-projects are shown next to the project label and broken out under the project's row in the totals table. Names can use letters, digits, dashes, and underscores.",
   );
   return f;
 }
