@@ -804,10 +804,11 @@
     --dp-color: var(--color-ink-faint);
     position: absolute;
     left: 0;
-    right: 0;
+    right: auto;
+    max-width: 100%;
     height: 18px;
     margin-top: -9px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
     /* Match the block's padding-left so the note time aligns with the
@@ -861,7 +862,7 @@
   }
 
   .dp-note-strip-title {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     font-weight: 500;
