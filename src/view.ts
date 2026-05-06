@@ -4384,7 +4384,7 @@ class TaskEditModal extends Modal {
       const deleteBtn = actions.createEl("button", {
         cls: "dp-edit-delete-btn",
         text: "Delete",
-        attr: { "aria-label": "Delete task (x)", title: "Delete task (x)" },
+        attr: { "aria-label": "Delete task (x)" },
       });
       deleteBtn.type = "button";
       deleteBtn.addEventListener("click", () => void runDelete());
@@ -4392,7 +4392,7 @@ class TaskEditModal extends Modal {
 
     const showBtn = actions.createEl("button", {
       cls: "dp-edit-icon-btn",
-      attr: { "aria-label": "Show in note", title: "Show in note" },
+      attr: { "aria-label": "Show in note (s)" },
     });
     showBtn.type = "button";
     setIcon(showBtn, "eye");
@@ -4407,16 +4407,18 @@ class TaskEditModal extends Modal {
       this.opts.onShowInNote!();
     });
 
+    let editModeMoveBtn: HTMLButtonElement | null = null;
     if (this.opts.mode === "edit") {
       const moveChoices = this.opts.moveChoices ?? [];
       const calendarPick = this.opts.moveCalendarPick;
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Move to…", title: "Move to…" },
+        attr: { "aria-label": "Move to… (m)" },
       });
       moveBtn.type = "button";
       setIcon(moveBtn, "forward");
+      editModeMoveBtn = moveBtn;
 
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
@@ -4435,7 +4437,6 @@ class TaskEditModal extends Modal {
           cls: "dp-edit-move-choice",
           attr: {
             "aria-label": `Move to ${choice.label} (${choice.hotkey})`,
-            title: `Move to ${choice.label} (${choice.hotkey})`,
           },
         });
         btn.type = "button";
@@ -4457,7 +4458,6 @@ class TaskEditModal extends Modal {
           cls: "dp-edit-move-choice is-calendar",
           attr: {
             "aria-label": `Pick date (${calendarPick.hotkey})`,
-            title: `Pick date (${calendarPick.hotkey})`,
           },
         });
         calBtn.type = "button";
@@ -4601,7 +4601,7 @@ class TaskEditModal extends Modal {
 
     const pomoBtn = actions.createEl("button", {
       cls: "dp-edit-icon-btn",
-      attr: { "aria-label": "Pomodoro", title: "Pomodoro" },
+      attr: { "aria-label": "Pomodoro (p)" },
     });
     pomoBtn.type = "button";
     setIcon(pomoBtn, "timer");
@@ -4617,7 +4617,7 @@ class TaskEditModal extends Modal {
     if (this.opts.mode === "edit" && this.opts.onUnschedule) {
       const unschedBtn = actions.createEl("button", {
         cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Unschedule (u)", title: "Unschedule (u)" },
+        attr: { "aria-label": "Unschedule (u)" },
       });
       unschedBtn.type = "button";
       setIcon(unschedBtn, "calendar-x");
@@ -4627,7 +4627,7 @@ class TaskEditModal extends Modal {
     if (this.opts.mode === "edit" && this.opts.onDuplicate) {
       const dupBtn = actions.createEl("button", {
         cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Duplicate (y)", title: "Duplicate (y)" },
+        attr: { "aria-label": "Duplicate (y)" },
       });
       dupBtn.type = "button";
       setIcon(dupBtn, "copy");
@@ -4642,8 +4642,10 @@ class TaskEditModal extends Modal {
     saveBtn.addEventListener("click", () => submit());
 
     // Modal-level hotkeys (edit mode):
-    //   i → focus title          s → focus description
-    //   p → focus project        d → focus selected duration button
+    //   i → focus title          o → focus description
+    //   d → focus selected duration button
+    //   s → show in note         m → open move popover
+    //   p → pomodoro             y → duplicate
     //   x → delete (with confirm)
     //   u → unschedule (strip #t/)
     // Attached to `modalEl` so events from the default-focused close button
@@ -4692,18 +4694,24 @@ class TaskEditModal extends Modal {
           input.value = input.value + " ";
         }
         focusInputAtEnd(input);
-      } else if (k === "s") {
+      } else if (k === "o") {
         ev.preventDefault();
         focusInputAtEnd(descInput);
-      } else if (k === "p") {
-        ev.preventDefault();
-        focusInputAtEnd(projInput);
       } else if (k === "d") {
         ev.preventDefault();
         const selected = buttons.find((b) =>
           b.classList.contains("is-selected"),
         );
         (selected ?? buttons[0])?.focus();
+      } else if (k === "s") {
+        ev.preventDefault();
+        showBtn.click();
+      } else if (k === "m" && editModeMoveBtn) {
+        ev.preventDefault();
+        editModeMoveBtn.click();
+      } else if (k === "p") {
+        ev.preventDefault();
+        pomoBtn.click();
       } else if (k === "x" && this.opts.onDelete) {
         ev.preventDefault();
         void runDelete();
