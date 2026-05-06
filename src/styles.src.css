@@ -570,7 +570,7 @@
    * so cells across all rows align perfectly. */
   .dp-heatmap-grid-rows {
     display: inline-grid;
-    column-gap: 3px;
+    column-gap: 8px;
     row-gap: 3px;
     align-items: center;
   }
@@ -638,8 +638,8 @@
   /* Discrete five-tier scale (q0–q4) so cells are unambiguously distinct
    * even at low completion counts. q0 = no completions; q1+ all use the
    * accent color at increasing strength so any positive count is visible.
-   * Saturations skew strong from the start (q1 = 50%) since habit data is
-   * sparse and a single completion should still pop. */
+   * Saturations skew strong from the start (q1 = 75%) so a single completion
+   * pops on light themes where 50% accent + paper-2 reads as near-white. */
   .dp-heatmap-cell {
     width: 10px;
     height: 10px;
@@ -668,15 +668,15 @@
   }
 
   .dp-heatmap-cell.q1 {
-    background-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-paper-2));
+    background-color: color-mix(in srgb, var(--color-accent) 75%, var(--color-paper-2));
   }
 
   .dp-heatmap-cell.q2 {
-    background-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-paper-2));
+    background-color: color-mix(in srgb, var(--color-accent) 88%, var(--color-paper-2));
   }
 
   .dp-heatmap-cell.q3 {
-    background-color: color-mix(in srgb, var(--color-accent) 85%, var(--color-paper-2));
+    background-color: color-mix(in srgb, var(--color-accent) 95%, var(--color-paper-2));
   }
 
   .dp-heatmap-cell.q4 {
