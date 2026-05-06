@@ -23,7 +23,11 @@ import {
   formatCompactDuration,
   timeDisplayToTagBody,
 } from "./parser";
-import { buildDateSuggestions, buildDateLinkInsert } from "./dailyNote";
+import {
+  buildDateSuggestions,
+  buildDateLinkInsert,
+  applyDailyNoteTemplateIfEmpty,
+} from "./dailyNote";
 import { moment } from "obsidian";
 
 let polyfillInstalled = false;
@@ -65,6 +69,24 @@ export default class TodayPlugin extends Plugin {
 
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
+
+    // When Obsidian (or any other plugin) creates a daily-note file empty —
+    // most commonly when the user clicks an unresolved wiki link to a future
+    // date — drop our template into it. The handler is a no-op for files
+    // outside the daily folder, files whose names don't parse against the
+    // daily-note format, and files that already have content (so our own
+    // ensureDailyNote path, which writes content up front, isn't disturbed).
+    this.registerEvent(
+      this.app.vault.on("create", (af) => {
+        if (!(af instanceof TFile)) return;
+        void applyDailyNoteTemplateIfEmpty(this.app, af, {
+          folder: this.settings.dailyNoteFolderFallback,
+          format: this.settings.dailyNoteFormatFallback,
+          template: this.settings.dailyNoteTemplate,
+          dateLinkFormat: this.settings.dateLinkFormat,
+        });
+      }),
+    );
   }
 
   async onunload(): Promise<void> {}

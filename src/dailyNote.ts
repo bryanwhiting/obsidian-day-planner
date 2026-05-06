@@ -70,6 +70,45 @@ export async function ensureDailyNote(
   return file;
 }
 
+// Backstop for when Obsidian (or any other plugin) creates a daily-note file
+// behind our back — most commonly when the user clicks an unresolved wiki
+// link to "daily/2026-05-08" and Obsidian writes an empty file. We listen for
+// vault create events and, if the new file lives in the configured daily
+// folder, has a basename that parses against the daily-note format, and is
+// still empty, write the expanded template into it. The empty-content guard
+// keeps us from overwriting any other plugin (or our own ensureDailyNote
+// path, which writes content up front so this handler is a no-op there).
+export async function applyDailyNoteTemplateIfEmpty(
+  app: App,
+  file: TFile,
+  fallback: DailyNoteFallback,
+): Promise<void> {
+  if (file.extension !== "md") return;
+  const opts = readDailyNotesOptions(app);
+  const folder = stripSlashes((opts.folder ?? fallback.folder).trim());
+  const format = (opts.format || fallback.format).trim() || "YYYY-MM-DD";
+  const fileFolder = stripSlashes(file.parent?.path ?? "");
+  if (fileFolder !== folder) return;
+  if (!parseFilenameDate(file.basename, format)) return;
+  const existing = await app.vault.read(file);
+  if (existing.length > 0) return;
+  const template = await readTemplateContent(app, fallback.template);
+  if (!template) return;
+  const expanded = expandDateTemplate(
+    template,
+    file.basename,
+    app,
+    format,
+    folder,
+    fallback.dateLinkFormat ?? "",
+  );
+  await app.vault.modify(file, expanded);
+}
+
+function stripSlashes(s: string): string {
+  return s.replace(/^\/+|\/+$/g, "");
+}
+
 async function readTemplateContent(
   app: App,
   templatePath: string | undefined,

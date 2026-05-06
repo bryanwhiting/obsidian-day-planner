@@ -2159,6 +2159,37 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
     new import_obsidian3.Notice(`Created ${resolved.path}`);
   return file;
 }
+async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
+  var _a, _b, _c, _d;
+  if (file.extension !== "md")
+    return;
+  const opts = readDailyNotesOptions(app);
+  const folder = stripSlashes(((_a = opts.folder) != null ? _a : fallback.folder).trim());
+  const format = (opts.format || fallback.format).trim() || "YYYY-MM-DD";
+  const fileFolder = stripSlashes((_c = (_b = file.parent) == null ? void 0 : _b.path) != null ? _c : "");
+  if (fileFolder !== folder)
+    return;
+  if (!parseFilenameDate(file.basename, format))
+    return;
+  const existing = await app.vault.read(file);
+  if (existing.length > 0)
+    return;
+  const template = await readTemplateContent(app, fallback.template);
+  if (!template)
+    return;
+  const expanded = expandDateTemplate(
+    template,
+    file.basename,
+    app,
+    format,
+    folder,
+    (_d = fallback.dateLinkFormat) != null ? _d : ""
+  );
+  await app.vault.modify(file, expanded);
+}
+function stripSlashes(s) {
+  return s.replace(/^\/+|\/+$/g, "");
+}
 async function readTemplateContent(app, templatePath) {
   const raw = (templatePath != null ? templatePath : "").trim();
   if (!raw)
@@ -5721,6 +5752,18 @@ var TodayPlugin = class extends import_obsidian5.Plugin {
     });
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
+    this.registerEvent(
+      this.app.vault.on("create", (af) => {
+        if (!(af instanceof import_obsidian5.TFile))
+          return;
+        void applyDailyNoteTemplateIfEmpty(this.app, af, {
+          folder: this.settings.dailyNoteFolderFallback,
+          format: this.settings.dailyNoteFormatFallback,
+          template: this.settings.dailyNoteTemplate,
+          dateLinkFormat: this.settings.dateLinkFormat
+        });
+      })
+    );
   }
   async onunload() {
   }

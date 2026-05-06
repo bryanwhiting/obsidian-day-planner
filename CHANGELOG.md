@@ -2,6 +2,23 @@
 
 ## 2026-05-06
 
+### Apply daily-note template when files are created via link-following
+
+- **Requested:** "when i click the hyperlink to the date that doesn't
+  exist, it's not rendering the template. it renders the template when i
+  click the arrows or the calendar on the plugin, but when i click on a
+  link inside my obsidian vault it doesn't create the template. let's
+  make sure that if a date file is created afresh inside of daily/ folder
+  that it loads the template."
+- **Done:** Added `applyDailyNoteTemplateIfEmpty` in `src/dailyNote.ts`
+  and registered a `vault.on("create")` listener in `TodayPlugin.onload`
+  (`src/main.ts`). When any new `.md` file lands in the configured daily
+  folder with a basename that parses against the daily-note format and
+  is empty, the listener writes the expanded template into it. The empty
+  guard means our existing `ensureDailyNote` path (which writes content
+  up front) is left alone, and any other plugin that fills the file
+  first wins.
+
 ### Daily-note template: bare `<@today>` is wall-clock; add `<@…-rel>` parsed from filename
 
 - **Requested:** Pick semantics (A) — bare `<@today>` resolves to real
