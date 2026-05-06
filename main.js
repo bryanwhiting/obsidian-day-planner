@@ -1011,7 +1011,11 @@ var DEFAULT_SETTINGS = {
   contextTags: [],
   noteTag: "note",
   timelineHeightDesktop: "",
-  timelineHeightMobile: ""
+  timelineHeightMobile: "",
+  pomodoroWorkMin: 25,
+  pomodoroBreakMin: 5,
+  pomodoroAutoStart: true,
+  pomodoroAutoCycle: true
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1062,6 +1066,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     }
     containerEl.empty();
     this.renderDefaultsSection(containerEl);
+    this.renderPomodoroSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
     this.renderNotesSection(containerEl);
@@ -1181,6 +1186,45 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           this.plugin.settings.prefixes.exercise = v;
           await this.plugin.saveSettings();
         }
+      })
+    );
+  }
+  renderPomodoroSection(containerEl) {
+    new import_obsidian2.Setting(containerEl).setName("Pomodoro").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Work duration (minutes)").setDesc("Length of one focus interval.").addText(
+      (t) => t.setValue(this.plugin.settings.pomodoroWorkMin.toString()).onChange(async (v) => {
+        this.plugin.settings.pomodoroWorkMin = clampInt(
+          v,
+          1,
+          240,
+          this.plugin.settings.pomodoroWorkMin
+        );
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Rest duration (minutes)").setDesc("Length of one break between focus intervals.").addText(
+      (t) => t.setValue(this.plugin.settings.pomodoroBreakMin.toString()).onChange(async (v) => {
+        this.plugin.settings.pomodoroBreakMin = clampInt(
+          v,
+          1,
+          60,
+          this.plugin.settings.pomodoroBreakMin
+        );
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Auto-start timer").setDesc("Begin counting down as soon as focus mode opens.").addToggle(
+      (t) => t.setValue(this.plugin.settings.pomodoroAutoStart).onChange(async (v) => {
+        this.plugin.settings.pomodoroAutoStart = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Auto-cycle work and rest").setDesc(
+      "When a phase ends, automatically roll into the next one. If off, the timer waits for a click."
+    ).addToggle(
+      (t) => t.setValue(this.plugin.settings.pomodoroAutoCycle).onChange(async (v) => {
+        this.plugin.settings.pomodoroAutoCycle = v;
+        await this.plugin.saveSettings();
       })
     );
   }
@@ -1944,6 +1988,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.unscheduledCollapsed = import_obsidian4.Platform.isMobile;
     this.overrideFilePath = null;
     this.hasRendered = false;
+    this.pomodoroState = null;
+    this.pomodoroTickHandle = null;
     this.plugin = plugin;
   }
   getViewType() {
@@ -2008,6 +2054,11 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   async render() {
     const root = this.containerEl.children[1];
+    if (this.pomodoroState) {
+      const handled = await this.renderPomodoro(root);
+      if (handled)
+        return;
+    }
     const prevRootScroll = root.scrollTop;
     const prevTimelineScrolls = Array.from(
       root.querySelectorAll(".dp-timeline-wrap")
@@ -3338,7 +3389,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
-      onMoveToTomorrow: () => this.moveTaskToTomorrow(file, task)
+      onMoveToTomorrow: () => this.moveTaskToTomorrow(file, task),
+      onStartPomodoro: () => this.enterPomodoro(file, task)
     }).open();
   }
   // Moves a task line (and its sub-task lines) from `file` to tomorrow's daily
@@ -3465,6 +3517,171 @@ var TodayView = class extends import_obsidian4.ItemView {
       lines[lineNumber] = setTaskChecked(lines[lineNumber], checked);
       return lines.join("\n");
     });
+  }
+  enterPomodoro(file, task) {
+    this.pomodoroState = {
+      filePath: file.path,
+      taskLineNumber: task.lineNumber,
+      taskBodySnapshot: this.cleanBody(task.body),
+      startedAt: Date.now(),
+      phase: "work",
+      paused: !this.plugin.settings.pomodoroAutoStart,
+      pausedRemainingMs: this.plugin.settings.pomodoroAutoStart ? null : this.plugin.settings.pomodoroWorkMin * 6e4
+    };
+    if (this.pomodoroTickHandle === null) {
+      this.pomodoroTickHandle = window.setInterval(
+        () => this.scheduleRender(),
+        1e3
+      );
+      this.registerInterval(this.pomodoroTickHandle);
+    }
+    this.scheduleRender();
+  }
+  exitPomodoro() {
+    this.pomodoroState = null;
+    if (this.pomodoroTickHandle !== null) {
+      window.clearInterval(this.pomodoroTickHandle);
+      this.pomodoroTickHandle = null;
+    }
+    this.scheduleRender();
+  }
+  // Returns true if the pomodoro UI handled the render, false if the caller
+  // should fall through to the normal timeline render (task gone, etc.).
+  async renderPomodoro(root) {
+    const state = this.pomodoroState;
+    if (!state)
+      return false;
+    const file = this.app.vault.getAbstractFileByPath(state.filePath);
+    if (!(file instanceof import_obsidian4.TFile)) {
+      this.exitPomodoro();
+      return false;
+    }
+    const content = await this.app.vault.read(file);
+    const tasks = parseFileTasks(
+      file.path,
+      content,
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin
+    );
+    let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
+    if (!task || this.cleanBody(task.body) !== state.taskBodySnapshot) {
+      task = tasks.find(
+        (t) => this.cleanBody(t.body) === state.taskBodySnapshot
+      );
+      if (task)
+        state.taskLineNumber = task.lineNumber;
+    }
+    if (!task) {
+      this.exitPomodoro();
+      return false;
+    }
+    const workMs = this.plugin.settings.pomodoroWorkMin * 6e4;
+    const breakMs = this.plugin.settings.pomodoroBreakMin * 6e4;
+    const phaseMs = state.phase === "work" ? workMs : breakMs;
+    let remainingMs;
+    if (state.paused && state.pausedRemainingMs !== null) {
+      remainingMs = state.pausedRemainingMs;
+    } else {
+      remainingMs = phaseMs - (Date.now() - state.startedAt);
+    }
+    if (remainingMs <= 0 && !state.paused) {
+      if (this.plugin.settings.pomodoroAutoCycle) {
+        const nextPhase = state.phase === "work" ? "rest" : "work";
+        new import_obsidian4.Notice(nextPhase === "rest" ? "Break time" : "Back to focus");
+        state.phase = nextPhase;
+        state.startedAt = Date.now();
+        const nextMs = nextPhase === "work" ? workMs : breakMs;
+        remainingMs = nextMs;
+      } else {
+        remainingMs = 0;
+        state.paused = true;
+        state.pausedRemainingMs = 0;
+      }
+    }
+    root.empty();
+    root.addClass("today-root");
+    if (!root.hasAttribute("tabindex"))
+      root.setAttribute("tabindex", "-1");
+    const wrap = root.createDiv({ cls: "dp-pomo" });
+    const exit = wrap.createEl("button", {
+      cls: "dp-pomo-exit",
+      attr: { "aria-label": "Exit focus mode" }
+    });
+    (0, import_obsidian4.setIcon)(exit, "x");
+    exit.addEventListener("click", () => this.exitPomodoro());
+    wrap.createDiv({
+      cls: "dp-pomo-phase",
+      text: state.phase === "work" ? "Focus" : "Break"
+    });
+    const totalSec = Math.max(0, Math.ceil(remainingMs / 1e3));
+    const mm = Math.floor(totalSec / 60);
+    const ss = totalSec % 60;
+    wrap.createDiv({
+      cls: "dp-pomo-timer",
+      text: `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`
+    });
+    wrap.createDiv({
+      cls: "dp-pomo-title",
+      text: this.cleanBody(task.body) || "(untitled)"
+    });
+    const nextSub = task.subtasks.find((s) => !s.checked);
+    if (nextSub) {
+      const card = wrap.createDiv({ cls: "dp-pomo-subtask" });
+      card.createSpan({
+        cls: "dp-pomo-subtask-check",
+        attr: { "aria-hidden": "true" }
+      });
+      card.createSpan({
+        cls: "dp-pomo-subtask-text",
+        text: this.cleanBody(nextSub.text) || "(untitled)"
+      });
+      card.addEventListener("click", async () => {
+        await this.applyLineChecked(file, nextSub.lineNumber, true);
+        this.scheduleRender();
+      });
+    } else if (task.subtasks.length > 0) {
+      wrap.createDiv({
+        cls: "dp-pomo-subtask-empty",
+        text: "All sub-tasks done."
+      });
+    }
+    const actions = wrap.createDiv({ cls: "dp-pomo-actions" });
+    const expired = remainingMs <= 0 && state.paused;
+    const pauseBtn = actions.createEl("button", {
+      cls: "dp-pomo-pause-btn",
+      text: expired ? state.phase === "work" ? "Start break" : "Start next pomo" : state.paused ? "Start" : "Pause"
+    });
+    pauseBtn.type = "button";
+    pauseBtn.addEventListener("click", () => {
+      var _a;
+      if (expired) {
+        state.phase = state.phase === "work" ? "rest" : "work";
+        state.startedAt = Date.now();
+        state.paused = false;
+        state.pausedRemainingMs = null;
+      } else if (state.paused) {
+        const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
+        state.startedAt = Date.now() - (phaseMs - remain);
+        state.paused = false;
+        state.pausedRemainingMs = null;
+      } else {
+        const elapsed = Date.now() - state.startedAt;
+        state.paused = true;
+        state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
+      }
+      this.scheduleRender();
+    });
+    const completeBtn = actions.createEl("button", {
+      cls: "dp-pomo-complete-btn mod-cta",
+      text: "Complete"
+    });
+    completeBtn.type = "button";
+    completeBtn.addEventListener("click", async () => {
+      completeBtn.disabled = true;
+      await this.applyLineChecked(file, task.lineNumber, true);
+      this.exitPomodoro();
+    });
+    return true;
   }
   async applySubtaskText(file, lineNumber, newText) {
     const trimmed = newText.trim();
@@ -4076,6 +4293,15 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           this.close();
         else
           moveBtn.disabled = false;
+      });
+      const pomoBtn = actions.createEl("button", {
+        cls: "dp-edit-pomo-btn",
+        text: "Pomodoro"
+      });
+      pomoBtn.type = "button";
+      pomoBtn.addEventListener("click", () => {
+        this.close();
+        this.opts.onStartPomodoro();
       });
     }
     const saveBtn = actions.createEl("button", {

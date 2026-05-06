@@ -2201,6 +2201,7 @@
   }
 
   .dp-edit-show-btn,
+  .dp-edit-pomo-btn,
   .dp-edit-save-btn {
     padding: 7px 14px;
     font-family: var(--font-sans);
@@ -2212,13 +2213,143 @@
       color 120ms ease;
   }
 
-  .dp-edit-show-btn {
+  .dp-edit-show-btn,
+  .dp-edit-pomo-btn {
     background: var(--color-paper);
     color: var(--color-ink);
     border: 1px solid var(--color-hairline);
   }
 
-  .dp-edit-show-btn:hover {
+  .dp-edit-show-btn:hover,
+  .dp-edit-pomo-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .today-root .dp-pomo {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    min-height: 80vh;
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  .today-root .dp-pomo-exit {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--color-ink-muted);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--radius-card);
+  }
+
+  .today-root .dp-pomo-exit:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-ink);
+  }
+
+  .today-root .dp-pomo-phase {
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+  }
+
+  .today-root .dp-pomo-timer {
+    font-family: var(--font-mono);
+    font-size: 96px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .today-root .dp-pomo-title {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+    max-width: 32ch;
+    line-height: 1.25;
+  }
+
+  .today-root .dp-pomo-subtask {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    background: var(--color-paper);
+    cursor: pointer;
+    min-width: 280px;
+    max-width: 480px;
+    transition: border-color 120ms ease, background-color 120ms ease;
+  }
+
+  .today-root .dp-pomo-subtask:hover {
+    border-color: var(--color-accent);
+    background: var(--color-surface-hover);
+  }
+
+  .today-root .dp-pomo-subtask-check {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    border-radius: 50%;
+    border: 2px solid var(--color-hairline);
+  }
+
+  .today-root .dp-pomo-subtask:hover .dp-pomo-subtask-check {
+    border-color: var(--color-accent);
+  }
+
+  .today-root .dp-pomo-subtask-text {
+    font-size: 15px;
+    color: var(--color-ink);
+    text-align: left;
+  }
+
+  .today-root .dp-pomo-subtask-empty {
+    font-size: 13px;
+    color: var(--color-ink-faint);
+    font-style: italic;
+  }
+
+  .today-root .dp-pomo-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .today-root .dp-pomo-pause-btn,
+  .today-root .dp-pomo-complete-btn {
+    padding: 10px 20px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: var(--radius-card);
+    cursor: pointer;
+    transition: border-color 120ms ease, background-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .today-root .dp-pomo-pause-btn {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    border: 1px solid var(--color-hairline);
+  }
+
+  .today-root .dp-pomo-pause-btn:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
   }

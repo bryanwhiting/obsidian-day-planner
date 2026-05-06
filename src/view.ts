@@ -97,6 +97,16 @@ export class TodayView extends ItemView {
   private unscheduledCollapsed: boolean = Platform.isMobile;
   private overrideFilePath: string | null = null;
   private hasRendered: boolean = false;
+  private pomodoroState: {
+    filePath: string;
+    taskLineNumber: number;
+    taskBodySnapshot: string;
+    startedAt: number;
+    phase: "work" | "rest";
+    paused: boolean;
+    pausedRemainingMs: number | null;
+  } | null = null;
+  private pomodoroTickHandle: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: TodayPlugin) {
     super(leaf);
@@ -171,6 +181,12 @@ export class TodayView extends ItemView {
 
   async render(): Promise<void> {
     const root = this.containerEl.children[1] as HTMLElement;
+
+    if (this.pomodoroState) {
+      const handled = await this.renderPomodoro(root);
+      if (handled) return;
+    }
+
     const prevRootScroll = root.scrollTop;
     const prevTimelineScrolls = Array.from(
       root.querySelectorAll<HTMLElement>(".dp-timeline-wrap"),
@@ -1717,6 +1733,7 @@ export class TodayView extends ItemView {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
       onMoveToTomorrow: () => this.moveTaskToTomorrow(file, task),
+      onStartPomodoro: () => this.enterPomodoro(file, task),
     }).open();
   }
 
@@ -1883,6 +1900,196 @@ export class TodayView extends ItemView {
     });
   }
 
+  private enterPomodoro(file: TFile, task: ParsedTask): void {
+    this.pomodoroState = {
+      filePath: file.path,
+      taskLineNumber: task.lineNumber,
+      taskBodySnapshot: this.cleanBody(task.body),
+      startedAt: Date.now(),
+      phase: "work",
+      paused: !this.plugin.settings.pomodoroAutoStart,
+      pausedRemainingMs: this.plugin.settings.pomodoroAutoStart
+        ? null
+        : this.plugin.settings.pomodoroWorkMin * 60_000,
+    };
+    if (this.pomodoroTickHandle === null) {
+      this.pomodoroTickHandle = window.setInterval(
+        () => this.scheduleRender(),
+        1000,
+      );
+      this.registerInterval(this.pomodoroTickHandle);
+    }
+    this.scheduleRender();
+  }
+
+  private exitPomodoro(): void {
+    this.pomodoroState = null;
+    if (this.pomodoroTickHandle !== null) {
+      window.clearInterval(this.pomodoroTickHandle);
+      this.pomodoroTickHandle = null;
+    }
+    this.scheduleRender();
+  }
+
+  // Returns true if the pomodoro UI handled the render, false if the caller
+  // should fall through to the normal timeline render (task gone, etc.).
+  private async renderPomodoro(root: HTMLElement): Promise<boolean> {
+    const state = this.pomodoroState;
+    if (!state) return false;
+
+    const file = this.app.vault.getAbstractFileByPath(state.filePath);
+    if (!(file instanceof TFile)) {
+      this.exitPomodoro();
+      return false;
+    }
+
+    const content = await this.app.vault.read(file);
+    const tasks = parseFileTasks(
+      file.path,
+      content,
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin,
+    );
+
+    let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
+    if (!task || this.cleanBody(task.body) !== state.taskBodySnapshot) {
+      task = tasks.find(
+        (t) => this.cleanBody(t.body) === state.taskBodySnapshot,
+      );
+      if (task) state.taskLineNumber = task.lineNumber;
+    }
+    if (!task) {
+      this.exitPomodoro();
+      return false;
+    }
+
+    const workMs = this.plugin.settings.pomodoroWorkMin * 60_000;
+    const breakMs = this.plugin.settings.pomodoroBreakMin * 60_000;
+    const phaseMs = state.phase === "work" ? workMs : breakMs;
+
+    let remainingMs: number;
+    if (state.paused && state.pausedRemainingMs !== null) {
+      remainingMs = state.pausedRemainingMs;
+    } else {
+      remainingMs = phaseMs - (Date.now() - state.startedAt);
+    }
+
+    if (remainingMs <= 0 && !state.paused) {
+      if (this.plugin.settings.pomodoroAutoCycle) {
+        const nextPhase: "work" | "rest" =
+          state.phase === "work" ? "rest" : "work";
+        new Notice(nextPhase === "rest" ? "Break time" : "Back to focus");
+        state.phase = nextPhase;
+        state.startedAt = Date.now();
+        const nextMs = nextPhase === "work" ? workMs : breakMs;
+        remainingMs = nextMs;
+      } else {
+        remainingMs = 0;
+        state.paused = true;
+        state.pausedRemainingMs = 0;
+      }
+    }
+
+    root.empty();
+    root.addClass("today-root");
+    if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
+
+    const wrap = root.createDiv({ cls: "dp-pomo" });
+
+    const exit = wrap.createEl("button", {
+      cls: "dp-pomo-exit",
+      attr: { "aria-label": "Exit focus mode" },
+    });
+    setIcon(exit, "x");
+    exit.addEventListener("click", () => this.exitPomodoro());
+
+    wrap.createDiv({
+      cls: "dp-pomo-phase",
+      text: state.phase === "work" ? "Focus" : "Break",
+    });
+
+    const totalSec = Math.max(0, Math.ceil(remainingMs / 1000));
+    const mm = Math.floor(totalSec / 60);
+    const ss = totalSec % 60;
+    wrap.createDiv({
+      cls: "dp-pomo-timer",
+      text: `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`,
+    });
+
+    wrap.createDiv({
+      cls: "dp-pomo-title",
+      text: this.cleanBody(task.body) || "(untitled)",
+    });
+
+    const nextSub = task.subtasks.find((s) => !s.checked);
+    if (nextSub) {
+      const card = wrap.createDiv({ cls: "dp-pomo-subtask" });
+      card.createSpan({
+        cls: "dp-pomo-subtask-check",
+        attr: { "aria-hidden": "true" },
+      });
+      card.createSpan({
+        cls: "dp-pomo-subtask-text",
+        text: this.cleanBody(nextSub.text) || "(untitled)",
+      });
+      card.addEventListener("click", async () => {
+        await this.applyLineChecked(file, nextSub.lineNumber, true);
+        this.scheduleRender();
+      });
+    } else if (task.subtasks.length > 0) {
+      wrap.createDiv({
+        cls: "dp-pomo-subtask-empty",
+        text: "All sub-tasks done.",
+      });
+    }
+
+    const actions = wrap.createDiv({ cls: "dp-pomo-actions" });
+
+    const expired = remainingMs <= 0 && state.paused;
+    const pauseBtn = actions.createEl("button", {
+      cls: "dp-pomo-pause-btn",
+      text: expired
+        ? state.phase === "work"
+          ? "Start break"
+          : "Start next pomo"
+        : state.paused
+          ? "Start"
+          : "Pause",
+    });
+    pauseBtn.type = "button";
+    pauseBtn.addEventListener("click", () => {
+      if (expired) {
+        state.phase = state.phase === "work" ? "rest" : "work";
+        state.startedAt = Date.now();
+        state.paused = false;
+        state.pausedRemainingMs = null;
+      } else if (state.paused) {
+        const remain = state.pausedRemainingMs ?? phaseMs;
+        state.startedAt = Date.now() - (phaseMs - remain);
+        state.paused = false;
+        state.pausedRemainingMs = null;
+      } else {
+        const elapsed = Date.now() - state.startedAt;
+        state.paused = true;
+        state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
+      }
+      this.scheduleRender();
+    });
+
+    const completeBtn = actions.createEl("button", {
+      cls: "dp-pomo-complete-btn mod-cta",
+      text: "Complete",
+    });
+    completeBtn.type = "button";
+    completeBtn.addEventListener("click", async () => {
+      completeBtn.disabled = true;
+      await this.applyLineChecked(file, task.lineNumber, true);
+      this.exitPomodoro();
+    });
+
+    return true;
+  }
+
   private async applySubtaskText(
     file: TFile,
     lineNumber: number,
@@ -1998,6 +2205,7 @@ interface TaskEditOpts {
   onReorderSubtasks?: (ordered: ParsedSubtask[]) => Promise<void>;
   onShowInNote?: () => void;
   onMoveToTomorrow?: () => Promise<boolean>;
+  onStartPomodoro?: () => void;
 }
 
 // Wires a custom autocomplete popover onto a project input. The popover lists
@@ -2625,6 +2833,16 @@ class TaskEditModal extends Modal {
         const moved = await this.opts.onMoveToTomorrow!();
         if (moved) this.close();
         else moveBtn.disabled = false;
+      });
+
+      const pomoBtn = actions.createEl("button", {
+        cls: "dp-edit-pomo-btn",
+        text: "Pomodoro",
+      });
+      pomoBtn.type = "button";
+      pomoBtn.addEventListener("click", () => {
+        this.close();
+        this.opts.onStartPomodoro!();
       });
     }
 

@@ -39,6 +39,10 @@ export interface TodaySettings {
   noteTag: string;
   timelineHeightDesktop: string;
   timelineHeightMobile: string;
+  pomodoroWorkMin: number;
+  pomodoroBreakMin: number;
+  pomodoroAutoStart: boolean;
+  pomodoroAutoCycle: boolean;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -61,6 +65,10 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   noteTag: "note",
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
+  pomodoroWorkMin: 25,
+  pomodoroBreakMin: 5,
+  pomodoroAutoStart: true,
+  pomodoroAutoCycle: true,
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -123,6 +131,7 @@ export class TodaySettingTab extends PluginSettingTab {
     containerEl.empty();
 
     this.renderDefaultsSection(containerEl);
+    this.renderPomodoroSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
     this.renderNotesSection(containerEl);
@@ -285,6 +294,70 @@ export class TodaySettingTab extends PluginSettingTab {
               this.plugin.settings.prefixes.exercise = v;
               await this.plugin.saveSettings();
             }
+          }),
+      );
+  }
+
+  private renderPomodoroSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Pomodoro").setHeading();
+
+    new Setting(containerEl)
+      .setName("Work duration (minutes)")
+      .setDesc("Length of one focus interval.")
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.pomodoroWorkMin.toString())
+          .onChange(async (v) => {
+            this.plugin.settings.pomodoroWorkMin = clampInt(
+              v,
+              1,
+              240,
+              this.plugin.settings.pomodoroWorkMin,
+            );
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Rest duration (minutes)")
+      .setDesc("Length of one break between focus intervals.")
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.pomodoroBreakMin.toString())
+          .onChange(async (v) => {
+            this.plugin.settings.pomodoroBreakMin = clampInt(
+              v,
+              1,
+              60,
+              this.plugin.settings.pomodoroBreakMin,
+            );
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Auto-start timer")
+      .setDesc("Begin counting down as soon as focus mode opens.")
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.pomodoroAutoStart)
+          .onChange(async (v) => {
+            this.plugin.settings.pomodoroAutoStart = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Auto-cycle work and rest")
+      .setDesc(
+        "When a phase ends, automatically roll into the next one. If off, the timer waits for a click.",
+      )
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.pomodoroAutoCycle)
+          .onChange(async (v) => {
+            this.plugin.settings.pomodoroAutoCycle = v;
+            await this.plugin.saveSettings();
           }),
       );
   }
