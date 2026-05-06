@@ -810,6 +810,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    /* Match the block's padding-left so the note time aligns with the
+     * block time column. Right padding mirrors the block's right edge. */
+    padding: 0 7px 0 8px;
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 11.5px;
@@ -818,11 +821,13 @@
     overflow: hidden;
     cursor: pointer;
     pointer-events: auto;
+    border-radius: var(--radius-tab);
+    transition: background-color 100ms ease;
     z-index: 2;
   }
 
-  .dp-note-strip:hover .dp-note-strip-title {
-    color: var(--dp-color);
+  .dp-note-strip:hover {
+    background: color-mix(in srgb, var(--dp-color) 14%, transparent);
   }
 
   .dp-note-strip.is-done {
@@ -833,8 +838,13 @@
     text-decoration: line-through;
   }
 
+  /* Dot sits in the block's accent-stripe column (absolute, outside flex
+   * flow) so it doesn't push the time off alignment with the blocks above. */
   .dp-note-strip-dot {
-    flex: 0 0 auto;
+    position: absolute;
+    left: 1px;
+    top: 50%;
+    transform: translateY(-50%);
     width: 6px;
     height: 6px;
     border-radius: 50%;
