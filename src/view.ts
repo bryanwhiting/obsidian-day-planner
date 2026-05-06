@@ -240,6 +240,7 @@ export class TodayView extends ItemView {
       activeFile !== null &&
       (!displayFile || activeFile.path !== displayFile.path);
 
+    this.renderReturnControl(root);
     this.renderDateNav(root);
 
     const colorMap = resolveProjectColors(
@@ -1900,6 +1901,73 @@ export class TodayView extends ItemView {
     });
   }
 
+  private isPopout(): boolean {
+    const win = this.containerEl.ownerDocument?.defaultView;
+    return !!win && win !== window;
+  }
+
+  private async popOutLeaf(): Promise<void> {
+    await this.app.workspace.moveLeafToPopout(this.leaf);
+  }
+
+  // Move this view back to the main Obsidian window. Pomodoro state and the
+  // selected date are transferred to the new view instance so the session
+  // doesn't reset on the trip back.
+  private async returnLeafToMain(): Promise<void> {
+    const pomo = this.pomodoroState;
+    const selectedDate = this.selectedDate;
+
+    let target: WorkspaceLeaf | null = null;
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY)) {
+      const win = leaf.view.containerEl.ownerDocument?.defaultView;
+      if (win === window) {
+        target = leaf;
+        break;
+      }
+    }
+    if (!target) target = this.app.workspace.getRightLeaf(false);
+    if (!target) return;
+
+    await target.setViewState({ type: VIEW_TYPE_TODAY, active: true });
+    this.app.workspace.revealLeaf(target);
+
+    if (target.view instanceof TodayView) {
+      target.view.selectedDate = selectedDate;
+      if (pomo) target.view.adoptPomodoroState(pomo);
+      target.view.scheduleRender();
+    }
+
+    if (this.pomodoroTickHandle !== null) {
+      window.clearInterval(this.pomodoroTickHandle);
+      this.pomodoroTickHandle = null;
+    }
+    this.pomodoroState = null;
+    this.leaf.detach();
+  }
+
+  // Picks up an in-flight pomodoro session from a sibling TodayView instance
+  // (used when bouncing between the main window and a popout).
+  adoptPomodoroState(state: NonNullable<TodayView["pomodoroState"]>): void {
+    this.pomodoroState = state;
+    if (this.pomodoroTickHandle === null) {
+      this.pomodoroTickHandle = window.setInterval(
+        () => this.scheduleRender(),
+        1000,
+      );
+      this.registerInterval(this.pomodoroTickHandle);
+    }
+  }
+
+  private renderReturnControl(parent: HTMLElement): void {
+    if (!this.isPopout()) return;
+    const btn = parent.createEl("button", {
+      cls: "dp-popout-return",
+      text: "Return to main",
+    });
+    btn.type = "button";
+    btn.addEventListener("click", () => void this.returnLeafToMain());
+  }
+
   private enterPomodoro(file: TFile, task: ParsedTask): void {
     this.pomodoroState = {
       filePath: file.path,
@@ -1927,6 +1995,10 @@ export class TodayView extends ItemView {
     if (this.pomodoroTickHandle !== null) {
       window.clearInterval(this.pomodoroTickHandle);
       this.pomodoroTickHandle = null;
+    }
+    if (this.plugin.settings.pomodoroAutoReturn && this.isPopout()) {
+      void this.returnLeafToMain();
+      return;
     }
     this.scheduleRender();
   }
@@ -1996,7 +2068,23 @@ export class TodayView extends ItemView {
 
     const wrap = root.createDiv({ cls: "dp-pomo" });
 
-    const exit = wrap.createEl("button", {
+    const topBar = wrap.createDiv({ cls: "dp-pomo-topbar" });
+    if (this.isPopout()) {
+      const back = topBar.createEl("button", {
+        cls: "dp-popout-return",
+        text: "Return to main",
+      });
+      back.type = "button";
+      back.addEventListener("click", () => void this.returnLeafToMain());
+    } else {
+      const popout = topBar.createEl("button", {
+        cls: "dp-pomo-popout",
+        attr: { "aria-label": "Open in new window" },
+      });
+      setIcon(popout, "picture-in-picture-2");
+      popout.addEventListener("click", () => void this.popOutLeaf());
+    }
+    const exit = topBar.createEl("button", {
       cls: "dp-pomo-exit",
       attr: { "aria-label": "Exit focus mode" },
     });

@@ -43,6 +43,7 @@ export interface TodaySettings {
   pomodoroBreakMin: number;
   pomodoroAutoStart: boolean;
   pomodoroAutoCycle: boolean;
+  pomodoroAutoReturn: boolean;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -69,6 +70,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   pomodoroBreakMin: 5,
   pomodoroAutoStart: true,
   pomodoroAutoCycle: true,
+  pomodoroAutoReturn: true,
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -357,6 +359,20 @@ export class TodaySettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.pomodoroAutoCycle)
           .onChange(async (v) => {
             this.plugin.settings.pomodoroAutoCycle = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Auto-return to main window")
+      .setDesc(
+        "When the focus view exits inside a popped-out window, move the Today view back to the main Obsidian window.",
+      )
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.pomodoroAutoReturn)
+          .onChange(async (v) => {
+            this.plugin.settings.pomodoroAutoReturn = v;
             await this.plugin.saveSettings();
           }),
       );
