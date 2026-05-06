@@ -3,7 +3,9 @@ import type TodayPlugin from "./main";
 import {
   Habit,
   HabitPeriod,
+  ExerciseGoal,
   parseHabitsFile,
+  parseExerciseGoals,
   findHabitTaskLines,
   weekRange,
   monthRange,
@@ -39,12 +41,26 @@ interface HabitRow {
   hits: number; // number of cells with at least one completion
 }
 
+interface GoalCell {
+  bucket: Bucket;
+  reps: number;
+  target: number;
+  met: boolean;
+}
+
+interface GoalRow {
+  goal: ExerciseGoal;
+  cells: GoalCell[];
+  metCount: number;
+}
+
 interface PeriodSection {
   name: string;
   period: HabitPeriod;
   dateRange: string;
   buckets: Bucket[];
   rows: HabitRow[];
+  goalRows: GoalRow[];
   totalReps: number;
   exerciseTotals: Map<string, number>;
 }
@@ -112,8 +128,8 @@ export class HabitsStatsView extends ItemView {
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });
     heading.createEl("h3", { text: "Habit stats" });
 
-    const habits = await this.loadHabits();
-    if (habits.length === 0) {
+    const { habits, goals } = await this.loadHabitsAndGoals();
+    if (habits.length === 0 && goals.length === 0) {
       root.createDiv({
         cls: "dp-habit-stats-empty",
         text: `No habits found. Add tags like #${settings.habitPrefix}/day/<slug> to ${settings.habitsFile}.`,
@@ -133,6 +149,7 @@ export class HabitsStatsView extends ItemView {
       "day",
       dayBuckets,
       habits,
+      goals,
       fallback,
     );
     const weekSection = await this.buildSection(
@@ -140,6 +157,7 @@ export class HabitsStatsView extends ItemView {
       "week",
       weekBuckets,
       habits,
+      goals,
       fallback,
     );
     const monthSection = await this.buildSection(
@@ -147,6 +165,7 @@ export class HabitsStatsView extends ItemView {
       "month",
       monthBuckets,
       habits,
+      goals,
       fallback,
     );
 
@@ -155,12 +174,19 @@ export class HabitsStatsView extends ItemView {
     this.renderSection(root, monthSection);
   }
 
-  private async loadHabits(): Promise<Habit[]> {
+  private async loadHabitsAndGoals(): Promise<{
+    habits: Habit[];
+    goals: ExerciseGoal[];
+  }> {
     const path = this.plugin.settings.habitsFile;
     const f = this.app.vault.getAbstractFileByPath(path);
-    if (!(f instanceof TFile)) return [];
+    if (!(f instanceof TFile)) return { habits: [], goals: [] };
     const content = await this.plugin.habitsScanner.getContent(f);
-    return parseHabitsFile(content, this.plugin.settings.habitPrefix);
+    const settings = this.plugin.settings;
+    return {
+      habits: parseHabitsFile(content, settings.habitPrefix),
+      goals: parseExerciseGoals(content, settings.prefixes.exercise),
+    };
   }
 
   private buildDayBuckets(today: Date, count: number): Bucket[] {
@@ -233,10 +259,12 @@ export class HabitsStatsView extends ItemView {
     period: HabitPeriod,
     buckets: Bucket[],
     allHabits: Habit[],
+    allGoals: ExerciseGoal[],
     fallback: DailyNoteFallback,
   ): Promise<PeriodSection> {
     const settings = this.plugin.settings;
     const habits = allHabits.filter((h) => h.period === period);
+    const goals = allGoals.filter((g) => g.period === period);
 
     // Prefetch every unique daily-note in the union of bucket ranges so we
     // don't repeat resolveDailyNote() per habit. The scanner cache then
@@ -279,11 +307,15 @@ export class HabitsStatsView extends ItemView {
       rows.push({ habit: h, cells, totalChecked, hits });
     }
 
-    // Reps + per-exercise breakdown across the entire window.
+    // Reps + per-exercise breakdown across the entire window. Also tracks a
+    // per-date map of done-set reps by exercise name so the goal grid below
+    // can attribute reps to each bucket without re-parsing the content.
     let totalReps = 0;
     const exerciseTotals = new Map<string, number>();
-    for (const c of contentByTime.values()) {
+    const doneRepsByDate = new Map<number, Map<string, number>>();
+    for (const [t, c] of contentByTime) {
       const summaries = parseExercises(c, settings.prefixes);
+      const doneByName = new Map<string, number>();
       for (const s of summaries) {
         for (const set of s.sets) {
           totalReps += set.reps;
@@ -291,8 +323,32 @@ export class HabitsStatsView extends ItemView {
             s.name,
             (exerciseTotals.get(s.name) ?? 0) + set.reps,
           );
+          if (set.done) {
+            doneByName.set(s.name, (doneByName.get(s.name) ?? 0) + set.reps);
+          }
         }
       }
+      if (doneByName.size > 0) doneRepsByDate.set(t, doneByName);
+    }
+
+    // Per-goal cells: count completed reps for the goal's exercise name in
+    // each bucket's date range, compare against the target.
+    const goalRows: GoalRow[] = [];
+    for (const g of goals) {
+      const cells: GoalCell[] = [];
+      let metCount = 0;
+      for (const b of buckets) {
+        let reps = 0;
+        for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
+          const m = doneRepsByDate.get(startOfDay(d).getTime());
+          if (!m) continue;
+          reps += m.get(g.name) ?? 0;
+        }
+        const met = reps >= g.target;
+        cells.push({ bucket: b, reps, target: g.target, met });
+        if (met) metCount++;
+      }
+      goalRows.push({ goal: g, cells, metCount });
     }
 
     return {
@@ -301,6 +357,7 @@ export class HabitsStatsView extends ItemView {
       dateRange: formatBucketsRange(buckets, period),
       buckets,
       rows,
+      goalRows,
       totalReps,
       exerciseTotals,
     };
@@ -317,11 +374,14 @@ export class HabitsStatsView extends ItemView {
       text: section.dateRange,
     });
 
-    if (section.rows.length === 0) {
+    if (section.rows.length === 0 && section.goalRows.length === 0) {
       sectionEl.createDiv({
         cls: "dp-heatmap-no-habits",
         text: `No ${section.name.toLowerCase()} habits.`,
       });
+    } else if (section.rows.length === 0) {
+      // No habits but goals exist — skip the habits grid entirely so the goal
+      // grid can render flush against the section header.
     } else {
       // Grid uses explicit fixed widths for the label column and each cell
       // track so the layout is predictable across browsers and doesn't get
@@ -417,6 +477,48 @@ export class HabitsStatsView extends ItemView {
           text: reps.toLocaleString(),
         });
       });
+    }
+
+    // Workout-goal grid: same shape as the habit grid, but each row is an
+    // exercise goal and each cell is filled if the bucket's completed reps
+    // hit the target. Rendered below the reps total so the user reads
+    // "what I did" before "did I hit my goal".
+    if (section.goalRows.length > 0) {
+      const grid = sectionEl.createDiv({
+        cls: "dp-heatmap-grid-rows dp-heatmap-grid-goals",
+      });
+      const cellCols = section.buckets.map(() => "12px").join(" ");
+      grid.style.gridTemplateColumns = `140px ${cellCols}`;
+
+      for (const row of section.goalRows) {
+        const labelEl = grid.createDiv({ cls: "dp-heatmap-habit-label" });
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-name",
+          text: row.goal.name,
+        });
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-target",
+          text: `≥${row.goal.target}`,
+        });
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-summary",
+          text: `${row.metCount}/${row.cells.length}`,
+        });
+        if (row.goal.label) labelEl.title = row.goal.label;
+        for (const cell of row.cells) {
+          const cellEl = grid.createDiv({
+            cls:
+              "dp-heatmap-cell q" +
+              (cell.met ? "4" : "0") +
+              (cell.bucket.isCurrent ? " is-current" : ""),
+          });
+          const pct =
+            cell.target > 0
+              ? Math.round((cell.reps / cell.target) * 100)
+              : 0;
+          cellEl.title = `${row.goal.name} · ${cell.bucket.tooltip}\n${cell.reps}/${cell.target} reps (${pct}%)`;
+        }
+      }
     }
   }
 }

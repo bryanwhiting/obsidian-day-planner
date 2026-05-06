@@ -647,6 +647,23 @@
     flex: 0 0 auto;
   }
 
+  /* Goal target chip in the workout grid (e.g. ≥25). Sits between the
+   * exercise name and the met-count summary so the reader knows the
+   * threshold each cell is judged against. */
+  .dp-heatmap-habit-target {
+    font-size: 9.5px;
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
+  }
+
+  /* Workout-goal grid sits below the reps-total line in each section. A
+   * small top margin separates it from the totals; without this it visually
+   * fuses with the text and reads as one block. */
+  .dp-heatmap-grid-goals {
+    margin-top: 4px;
+  }
+
   .dp-heatmap-no-habits {
     font-family: var(--font-mono);
     font-size: 10.5px;

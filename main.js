@@ -2458,6 +2458,31 @@ function buildHabitTagRegex(prefix, period, slug) {
     "g"
   );
 }
+function parseExerciseGoals(content, exercisePrefix) {
+  var _a;
+  const re = new RegExp(
+    `#${escapeRegex2(exercisePrefix)}-(day|week|month)\\/([\\w-]+)\\/(\\d+)(?![\\w-])(.*)$`
+  );
+  const goals = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const line of content.split("\n")) {
+    const m = re.exec(line);
+    if (!m)
+      continue;
+    const period = m[1];
+    const name = m[2];
+    const target = parseInt(m[3], 10);
+    if (!Number.isFinite(target) || target <= 0)
+      continue;
+    const label = ((_a = m[4]) != null ? _a : "").trim();
+    const key = `${period}/${name}`;
+    if (seen.has(key))
+      continue;
+    seen.add(key);
+    goals.push({ period, name, target, label });
+  }
+  return goals;
+}
 function parseHabitsFile(content, prefix) {
   var _a;
   const re = new RegExp(
@@ -6205,8 +6230,8 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     };
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });
     heading.createEl("h3", { text: "Habit stats" });
-    const habits = await this.loadHabits();
-    if (habits.length === 0) {
+    const { habits, goals } = await this.loadHabitsAndGoals();
+    if (habits.length === 0 && goals.length === 0) {
       root.createDiv({
         cls: "dp-habit-stats-empty",
         text: `No habits found. Add tags like #${settings.habitPrefix}/day/<slug> to ${settings.habitsFile}.`
@@ -6223,6 +6248,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       "day",
       dayBuckets,
       habits,
+      goals,
       fallback
     );
     const weekSection = await this.buildSection(
@@ -6230,6 +6256,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       "week",
       weekBuckets,
       habits,
+      goals,
       fallback
     );
     const monthSection = await this.buildSection(
@@ -6237,19 +6264,24 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       "month",
       monthBuckets,
       habits,
+      goals,
       fallback
     );
     this.renderSection(root, daySection);
     this.renderSection(root, weekSection);
     this.renderSection(root, monthSection);
   }
-  async loadHabits() {
+  async loadHabitsAndGoals() {
     const path = this.plugin.settings.habitsFile;
     const f = this.app.vault.getAbstractFileByPath(path);
     if (!(f instanceof import_obsidian5.TFile))
-      return [];
+      return { habits: [], goals: [] };
     const content = await this.plugin.habitsScanner.getContent(f);
-    return parseHabitsFile(content, this.plugin.settings.habitPrefix);
+    const settings = this.plugin.settings;
+    return {
+      habits: parseHabitsFile(content, settings.habitPrefix),
+      goals: parseExerciseGoals(content, settings.prefixes.exercise)
+    };
   }
   buildDayBuckets(today, count) {
     const out = [];
@@ -6311,10 +6343,11 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     }
     return out;
   }
-  async buildSection(name, period, buckets, allHabits, fallback) {
-    var _a;
+  async buildSection(name, period, buckets, allHabits, allGoals, fallback) {
+    var _a, _b, _c;
     const settings = this.plugin.settings;
     const habits = allHabits.filter((h) => h.period === period);
+    const goals = allGoals.filter((g) => g.period === period);
     const dateMap = /* @__PURE__ */ new Map();
     for (const b of buckets) {
       for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
@@ -6358,8 +6391,10 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     }
     let totalReps = 0;
     const exerciseTotals = /* @__PURE__ */ new Map();
-    for (const c of contentByTime.values()) {
+    const doneRepsByDate = /* @__PURE__ */ new Map();
+    for (const [t, c] of contentByTime) {
       const summaries = parseExercises(c, settings.prefixes);
+      const doneByName = /* @__PURE__ */ new Map();
       for (const s of summaries) {
         for (const set of s.sets) {
           totalReps += set.reps;
@@ -6367,8 +6402,32 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
             s.name,
             ((_a = exerciseTotals.get(s.name)) != null ? _a : 0) + set.reps
           );
+          if (set.done) {
+            doneByName.set(s.name, ((_b = doneByName.get(s.name)) != null ? _b : 0) + set.reps);
+          }
         }
       }
+      if (doneByName.size > 0)
+        doneRepsByDate.set(t, doneByName);
+    }
+    const goalRows = [];
+    for (const g of goals) {
+      const cells = [];
+      let metCount = 0;
+      for (const b of buckets) {
+        let reps = 0;
+        for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
+          const m = doneRepsByDate.get(startOfDay(d).getTime());
+          if (!m)
+            continue;
+          reps += (_c = m.get(g.name)) != null ? _c : 0;
+        }
+        const met = reps >= g.target;
+        cells.push({ bucket: b, reps, target: g.target, met });
+        if (met)
+          metCount++;
+      }
+      goalRows.push({ goal: g, cells, metCount });
     }
     return {
       name,
@@ -6376,6 +6435,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       dateRange: formatBucketsRange(buckets, period),
       buckets,
       rows,
+      goalRows,
       totalReps,
       exerciseTotals
     };
@@ -6389,11 +6449,12 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       cls: "dp-heatmap-row-range",
       text: section.dateRange
     });
-    if (section.rows.length === 0) {
+    if (section.rows.length === 0 && section.goalRows.length === 0) {
       sectionEl.createDiv({
         cls: "dp-heatmap-no-habits",
         text: `No ${section.name.toLowerCase()} habits.`
       });
+    } else if (section.rows.length === 0) {
     } else {
       const grid = sectionEl.createDiv({ cls: "dp-heatmap-grid-rows" });
       const cellCols = section.buckets.map(() => "12px").join(" ");
@@ -6466,6 +6527,38 @@ ${cell.checkedCount} ${word}`;
           text: reps.toLocaleString()
         });
       });
+    }
+    if (section.goalRows.length > 0) {
+      const grid = sectionEl.createDiv({
+        cls: "dp-heatmap-grid-rows dp-heatmap-grid-goals"
+      });
+      const cellCols = section.buckets.map(() => "12px").join(" ");
+      grid.style.gridTemplateColumns = `140px ${cellCols}`;
+      for (const row of section.goalRows) {
+        const labelEl = grid.createDiv({ cls: "dp-heatmap-habit-label" });
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-name",
+          text: row.goal.name
+        });
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-target",
+          text: `\u2265${row.goal.target}`
+        });
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-summary",
+          text: `${row.metCount}/${row.cells.length}`
+        });
+        if (row.goal.label)
+          labelEl.title = row.goal.label;
+        for (const cell of row.cells) {
+          const cellEl = grid.createDiv({
+            cls: "dp-heatmap-cell q" + (cell.met ? "4" : "0") + (cell.bucket.isCurrent ? " is-current" : "")
+          });
+          const pct = cell.target > 0 ? Math.round(cell.reps / cell.target * 100) : 0;
+          cellEl.title = `${row.goal.name} \xB7 ${cell.bucket.tooltip}
+${cell.reps}/${cell.target} reps (${pct}%)`;
+        }
+      }
     }
   }
 };

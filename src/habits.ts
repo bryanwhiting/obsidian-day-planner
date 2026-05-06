@@ -40,6 +40,47 @@ export function buildHabitTagRegex(
   );
 }
 
+// An exercise goal sourced from the habits file. Tags look like
+// `#<exercise>-<period>/<name>/<target>` (e.g. `#x-day/Pushups/25`,
+// `#x-week/Push-ups/50`). The dashboard compares completed reps in the
+// daily-note range against `target` to decide whether the goal was met.
+export interface ExerciseGoal {
+  period: HabitPeriod;
+  name: string;
+  target: number;
+  // Empty if the source line had no trailing description.
+  label: string;
+}
+
+// Parses exercise-goal lines out of the habits-source file. The hyphen in the
+// prefix segment (`x-day` instead of `x/day`) keeps these from colliding with
+// the existing `#x/<name>/<reps>` exercise-set tags used inside daily notes.
+// Duplicate (period, name) pairs collapse to the first occurrence.
+export function parseExerciseGoals(
+  content: string,
+  exercisePrefix: string,
+): ExerciseGoal[] {
+  const re = new RegExp(
+    `#${escapeRegex(exercisePrefix)}-(day|week|month)\\/([\\w-]+)\\/(\\d+)(?![\\w-])(.*)$`,
+  );
+  const goals: ExerciseGoal[] = [];
+  const seen = new Set<string>();
+  for (const line of content.split("\n")) {
+    const m = re.exec(line);
+    if (!m) continue;
+    const period = m[1] as HabitPeriod;
+    const name = m[2];
+    const target = parseInt(m[3], 10);
+    if (!Number.isFinite(target) || target <= 0) continue;
+    const label = (m[4] ?? "").trim();
+    const key = `${period}/${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    goals.push({ period, name, target, label });
+  }
+  return goals;
+}
+
 // Parses the habits-source file. Each line that contains a habit tag becomes
 // one Habit. Text after the tag on the same line is the human label; lines
 // without a tag are silently skipped. Duplicate (period, slug) pairs collapse
