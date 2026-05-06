@@ -179,9 +179,17 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
       }
     }
     if (!best) return null;
-    // Require non-whitespace earlier on the line so a column-0 "##" stays a
-    // markdown heading rather than opening the picker.
-    if (!/\S/.test(before.slice(0, best.idx))) return null;
+    // For "#"-starting triggers, require non-whitespace earlier on the line so
+    // a column-0 "##" stays a markdown heading rather than opening the picker.
+    // Other triggers (e.g. "@") have no markdown ambiguity, so allow them to
+    // fire at the start of a line — this matters for plain notes and task
+    // lines where the user might begin a sentence with "@today".
+    if (
+      best.trigger.startsWith("#") &&
+      !/\S/.test(before.slice(0, best.idx))
+    ) {
+      return null;
+    }
     const query = before.slice(best.idx + best.trigger.length);
     if (/[\s#]/.test(query)) return null;
     return {

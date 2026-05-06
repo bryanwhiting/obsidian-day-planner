@@ -1,0 +1,59 @@
+# Changelog
+
+## 2026-05-06
+
+### Settings layout: move #ta into Pomodoro, split Task ID into its own section
+
+- **Requested:** "in the settings, move the #ta into the top of the Pomo
+  section. Create a new section for Task ID"
+- **Done:** Moved the "Actual time tag prefix" (`#ta`) row from the end of
+  the Defaults section to the top of the Pomodoro section. Lifted "Task ID
+  tag prefix" and "Task ID length" out of Defaults into a new "Task ID"
+  section that renders between Pomodoro and Autocomplete
+  (`src/settings.ts`).
+
+### Note that autocomplete triggers are mainly a mobile convenience
+
+- **Requested:** "on the autocomplete description, add 'These are mostly
+  conveniences for mobile where typing is slow'."
+- **Done:** Appended that sentence to the Autocomplete intro paragraph
+  (`src/settings.ts`).
+
+### `@`-trigger date autocomplete inserting daily-note links
+
+- **Requested:** A new `@` autocomplete that handles relative dates —
+  `@today`, `@yesterday`, `@tomorrow`, `@Nd` — inserting a link to the
+  matching daily note. Optional moment.js display format (default
+  `ddd, MMM D, YYYY` → "Mon, Mar 5, 2026"). Wiki vs. markdown form per
+  vault settings. Must work in tasks (`- [ ] @today …`) and in plain files,
+  including at the start of a line.
+- **Done:** Added `dateTrigger` to `AutocompleteSettings` (default `@`) and
+  `dateLinkFormat` to `TodaySettings` (default `ddd, MMM D, YYYY`). New
+  `buildDateSuggestions` and `buildDateLinkInsert` helpers in
+  `src/dailyNote.ts` honor `app.vault.getConfig('useMarkdownLinks')` to
+  pick wiki vs. markdown form. Wired into both the in-editor
+  `EditorSuggest` (`src/main.ts`) and the modal title-input rule list
+  (`src/view.ts`). Trigger detection now prefers the longer trigger when
+  two overlap (so `#@` keeps winning over its own `@` suffix), and the
+  column-0 "must have leading non-whitespace" rule now only applies to
+  `#`-starting triggers — `@today` at the start of a line fires the
+  picker. Settings UI exposes the trigger field and the date-link format.
+
+### Daily-note template: substitute `<@today>` etc. on note creation
+
+- **Requested:** "the templating parser should look for `<@yesterday>`,
+  and if so, it will fill in the template value." Followed by:
+  introduce `-rel` variants (`<@today-rel>`, `<@yesterday-rel>`) that
+  resolve against the new file's filename so relative relationships
+  survive when notes are pre-created for future dates.
+- **Done (partial):** Added `resolveDateKeyword` and `expandDateTemplate`
+  in `src/dailyNote.ts`. `ensureDailyNote` now passes the template through
+  the expander, replacing `<@today>`, `<@yesterday>`, `<@tomorrow>`, and
+  `<@Nd>` with daily-note links resolved against the note's own date.
+  `DailyNoteFallback` gained a `dateLinkFormat?: string` field; the five
+  `ensureDailyNote` call sites in `src/view.ts` now pass it.
+- **Open:** Awaiting clarification on `-rel` semantics — specifically
+  whether the bare `<@today>` form should switch to wall-clock today
+  (with `-rel` becoming the file-relative variant), or whether `-rel` is
+  an explicit alias for the file-relative behavior already implemented.
+  Not yet committed.

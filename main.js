@@ -2134,6 +2134,7 @@ async function resolveDailyNote(app, date, fallback) {
   };
 }
 async function ensureDailyNote(app, date, fallback, notify = true) {
+  var _a;
   const resolved = await resolveDailyNote(app, date, fallback);
   if (resolved.file)
     return resolved.file;
@@ -2143,7 +2144,15 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
     if (!existing)
       await app.vault.createFolder(folder);
   }
-  const initialContent = await readTemplateContent(app, fallback.template);
+  const rawTemplate = await readTemplateContent(app, fallback.template);
+  const initialContent = expandDateTemplate(
+    rawTemplate,
+    date,
+    app,
+    fallback.format,
+    fallback.folder,
+    (_a = fallback.dateLinkFormat) != null ? _a : ""
+  );
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify)
     new import_obsidian3.Notice(`Created ${resolved.path}`);
@@ -2205,6 +2214,32 @@ function sameDay(a, b) {
 }
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function resolveDateKeyword(kw, refDate) {
+  const k = kw.trim().toLowerCase();
+  if (k === "today")
+    return refDate;
+  if (k === "tomorrow")
+    return addDays(refDate, 1);
+  if (k === "yesterday")
+    return addDays(refDate, -1);
+  const m = k.match(/^(\d+)d$/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 365)
+      return addDays(refDate, n);
+  }
+  return null;
+}
+function expandDateTemplate(content, refDate, app, fileFormat, folder, displayFormat) {
+  if (!content)
+    return content;
+  return content.replace(/<@([A-Za-z0-9]+)>/g, (match, kw) => {
+    const date = resolveDateKeyword(kw, refDate);
+    if (!date)
+      return match;
+    return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
+  });
 }
 function buildDateSuggestions(query, today = new Date()) {
   const q = query.trim().toLowerCase();
@@ -5753,8 +5788,9 @@ var InlineSuggest = class extends import_obsidian5.EditorSuggest {
     }
     if (!best)
       return null;
-    if (!/\S/.test(before.slice(0, best.idx)))
+    if (best.trigger.startsWith("#") && !/\S/.test(before.slice(0, best.idx))) {
       return null;
+    }
     const query = before.slice(best.idx + best.trigger.length);
     if (/[\s#]/.test(query))
       return null;

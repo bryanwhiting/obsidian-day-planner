@@ -15,6 +15,9 @@ export interface DailyNoteFallback {
   folder: string;
   format: string;
   template?: string;
+  // Moment.js format used for the visible alias on date links written by the
+  // template parser. Empty/absent → no alias; the link uses just the basename.
+  dateLinkFormat?: string;
 }
 
 export async function resolveDailyNote(
@@ -49,7 +52,15 @@ export async function ensureDailyNote(
     const existing = app.vault.getAbstractFileByPath(folder);
     if (!existing) await app.vault.createFolder(folder);
   }
-  const initialContent = await readTemplateContent(app, fallback.template);
+  const rawTemplate = await readTemplateContent(app, fallback.template);
+  const initialContent = expandDateTemplate(
+    rawTemplate,
+    date,
+    app,
+    fallback.format,
+    fallback.folder,
+    fallback.dateLinkFormat ?? "",
+  );
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify) new Notice(`Created ${resolved.path}`);
   return file;
@@ -136,6 +147,44 @@ export function startOfDay(d: Date): Date {
 export interface DateSuggestion {
   keyword: string;
   date: Date;
+}
+
+// Resolves a single date keyword (today / tomorrow / yesterday / Nd) to a
+// concrete Date relative to `refDate`. Returns null for anything else. Used by
+// both the @-trigger picker (when matching exact keywords) and the template
+// parser (which expects exact, not prefix, matches).
+export function resolveDateKeyword(kw: string, refDate: Date): Date | null {
+  const k = kw.trim().toLowerCase();
+  if (k === "today") return refDate;
+  if (k === "tomorrow") return addDays(refDate, 1);
+  if (k === "yesterday") return addDays(refDate, -1);
+  const m = k.match(/^(\d+)d$/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 365) return addDays(refDate, n);
+  }
+  return null;
+}
+
+// Substitutes <@today>, <@tomorrow>, <@yesterday>, <@Nd> placeholders inside
+// `content` with daily-note links. All offsets are computed relative to
+// `refDate` — i.e. inside the daily note for 2026-05-08, <@yesterday> resolves
+// to 2026-05-07 — so a template can use "Yesterday: <@yesterday>" and have it
+// always link to the previous day.
+export function expandDateTemplate(
+  content: string,
+  refDate: Date,
+  app: App,
+  fileFormat: string,
+  folder: string,
+  displayFormat: string,
+): string {
+  if (!content) return content;
+  return content.replace(/<@([A-Za-z0-9]+)>/g, (match, kw: string) => {
+    const date = resolveDateKeyword(kw, refDate);
+    if (!date) return match;
+    return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
+  });
 }
 
 // Resolves the relative-date keywords supported by the @-trigger autocomplete
