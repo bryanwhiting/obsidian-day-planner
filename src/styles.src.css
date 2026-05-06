@@ -2219,6 +2219,26 @@
     color: var(--color-accent);
   }
 
+  .dp-edit-move-wrap {
+    display: contents;
+  }
+
+  .dp-edit-move-choices {
+    display: flex;
+    gap: 8px;
+  }
+
+  .dp-edit-move-kbd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-tab);
+    color: var(--color-ink-muted);
+    background: var(--color-paper);
+  }
+
   .today-root .dp-pomo {
     position: relative;
     display: flex;

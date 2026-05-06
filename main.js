@@ -333,7 +333,8 @@ var DEFAULT_PREFIXES = {
   time: "t",
   order: "o",
   project: "p",
-  exercise: "x"
+  exercise: "x",
+  taskId: "tid"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 var DESCRIPTION_RE = /\{([^{}]*)\}/;
@@ -356,7 +357,8 @@ function buildTagRegexes(prefixes) {
     exercise: new RegExp(
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g"
-    )
+    ),
+    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]{6})\\b`)
   };
 }
 function parseExercises(content, prefixes) {
@@ -585,6 +587,25 @@ function removeProjectTag(rawLine, prefixes) {
   const re = buildTagRegexes(prefixes).project;
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
+function parseTaskId(body, prefixes) {
+  const m = buildTagRegexes(prefixes).taskId.exec(body);
+  return m ? m[1] : null;
+}
+function setTaskIdTag(rawLine, id, prefixes) {
+  const re = buildTagRegexes(prefixes).taskId;
+  const newTag = `#${prefixes.taskId}/${id}`;
+  if (re.test(rawLine))
+    return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+function generateTaskId() {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let id = "";
+  for (let i = 0; i < 6; i++) {
+    id += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return id;
+}
 function appendTag(rawLine, tag) {
   const trimmed = rawLine.replace(/[ \t]+$/, "");
   const sep = trimmed.endsWith(" ") ? "" : " ";
@@ -618,7 +639,7 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   const body = m[3];
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -656,7 +677,7 @@ function setTaskDescription(rawLine, newDescription, prefixes) {
     return rawLine;
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
@@ -988,6 +1009,8 @@ function keyLabel(key) {
       return "Project";
     case "exercise":
       return "Exercise";
+    case "taskId":
+      return "Task ID";
   }
 }
 
@@ -1085,7 +1108,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       "time",
       "order",
       "project",
-      "exercise"
+      "exercise",
+      "taskId"
     ];
     const changes = [];
     for (const key of keys) {
@@ -1185,6 +1209,14 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       (t) => t.setValue(this.plugin.settings.prefixes.exercise).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.exercise = v;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Task ID tag prefix").setDesc(buildTaskIdDesc()).addText(
+      (t) => t.setValue(this.plugin.settings.prefixes.taskId).onChange(async (v) => {
+        if (/^[a-zA-Z]+$/.test(v)) {
+          this.plugin.settings.prefixes.taskId = v;
           await this.plugin.saveSettings();
         }
       })
@@ -1680,6 +1712,21 @@ function buildExerciseDesc() {
     " (25 pushups), ",
     makeCode("#x/bench/10/135"),
     " (10 reps at 135 lbs). The plugin sums reps per exercise (and per weight bucket when weighted) and renders a one-line summary at the top of the section."
+  );
+  return f;
+}
+function buildTaskIdDesc() {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Cross-references a task across days. Default prefix ",
+    makeCode("tid"),
+    ". When you migrate a task's incomplete sub-tasks to the next day from the edit modal (",
+    makeCode("Move to tomorrow \u2192 Migrate incomplete"),
+    "), the plugin marks the original parent as completed, generates a 6-character ID, and stamps ",
+    makeCode("#tid/<id>"),
+    " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
+    makeCode("#tid/a3xK9p"),
+    ". The migrate-incomplete flow lets you check off the work you finished today while carrying the task title and unfinished sub-tasks (without the completed ones) into tomorrow's note \u2014 useful for showing partial progress while continuing the task. If all sub-tasks are already done, the original is still marked complete and a fresh empty parent is queued for tomorrow, so you can keep working on it."
   );
   return f;
 }
@@ -3597,7 +3644,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
-      onMoveToTomorrow: () => this.moveTaskToTomorrow(file, task),
+      onMoveToTomorrowWhole: () => this.moveTaskToTomorrow(file, task),
+      onMoveToTomorrowIncomplete: () => this.migrateIncompleteToTomorrow(file, task),
       onStartPomodoro: () => this.enterPomodoro(file, task)
     }).open();
   }
@@ -3640,6 +3688,71 @@ var TodayView = class extends import_obsidian4.ItemView {
       return lines.join("\n");
     });
     new import_obsidian4.Notice(`Moved to ${targetFile.path}`);
+    return true;
+  }
+  // Carries the task title (with most tags) and any unfinished sub-tasks into
+  // tomorrow's note while keeping the completed sub-tasks on the source day as
+  // a record of partial progress. The source parent is checked off and stamped
+  // with a #tid/<id> tag; the new-day copy gets the same tag, so the two can
+  // be cross-referenced via search. The order tag (#o/) is stripped on the
+  // new copy because positioning is per-day.
+  async migrateIncompleteToTomorrow(file, task) {
+    var _a;
+    const fallback = {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback,
+      template: this.plugin.settings.dailyNoteTemplate
+    };
+    const target = addDays(this.selectedDate, 1);
+    const targetFile = await ensureDailyNote(this.app, target, fallback);
+    if (targetFile.path === file.path) {
+      new import_obsidian4.Notice("Source and target are the same file.");
+      return false;
+    }
+    const prefixes = this.plugin.settings.prefixes;
+    const fresh = parseFileTasks(
+      file.path,
+      await this.app.vault.read(file),
+      prefixes,
+      this.plugin.settings.defaultDurationMin
+    );
+    let current = (_a = fresh.find((t) => t.lineNumber === task.lineNumber)) != null ? _a : fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
+    if (!current) {
+      new import_obsidian4.Notice("Couldn't locate the task to migrate.");
+      return false;
+    }
+    const existingId = parseTaskId(current.body, prefixes);
+    const taskId = existingId != null ? existingId : generateTaskId();
+    const orderRe = new RegExp(
+      `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`
+    );
+    let newParentLine = current.rawLine.replace(orderRe, "");
+    newParentLine = setTaskChecked(newParentLine, false);
+    newParentLine = setTaskIdTag(newParentLine, taskId, prefixes);
+    const uncheckedSubLines = current.subtasks.filter((s) => !s.checked).map((s) => s.rawLine);
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (current.lineNumber < lines.length) {
+        let parent = lines[current.lineNumber];
+        parent = setTaskChecked(parent, true);
+        parent = setTaskIdTag(parent, taskId, prefixes);
+        lines[current.lineNumber] = parent;
+      }
+      const removeNumbers = current.subtasks.filter((s) => !s.checked).map((s) => s.lineNumber).sort((a, b) => b - a);
+      for (const n of removeNumbers) {
+        if (n < lines.length)
+          lines.splice(n, 1);
+      }
+      return lines.join("\n");
+    });
+    await this.app.vault.process(targetFile, (content) => {
+      const lines = content.split("\n");
+      const lastIdx = findLastTaskLine(content);
+      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      lines.splice(insertAt, 0, newParentLine, ...uncheckedSubLines);
+      return lines.join("\n");
+    });
+    new import_obsidian4.Notice(`Migrated to ${targetFile.path}`);
     return true;
   }
   // Inserts a new sub-task line below the parent's existing sub-tasks (or
@@ -4635,19 +4748,90 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       this.opts.onShowInNote();
     });
     if (this.opts.mode === "edit") {
-      const moveBtn = actions.createEl("button", {
+      const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
+      const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-show-btn",
         text: "Move to tomorrow"
       });
       moveBtn.type = "button";
-      moveBtn.addEventListener("click", async () => {
-        moveBtn.disabled = true;
-        const moved = await this.opts.onMoveToTomorrow();
+      const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
+      choices.style.display = "none";
+      const wholeBtn = choices.createEl("button", {
+        cls: "dp-edit-show-btn"
+      });
+      wholeBtn.type = "button";
+      wholeBtn.createSpan({ text: "Move whole " });
+      wholeBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "w" });
+      const incBtn = choices.createEl("button", {
+        cls: "dp-edit-show-btn"
+      });
+      incBtn.type = "button";
+      incBtn.createSpan({ text: "Migrate incomplete " });
+      incBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "i" });
+      let stageTwoActive = false;
+      let keyHandler = null;
+      const exitStageTwo = () => {
+        stageTwoActive = false;
+        choices.style.display = "none";
+        moveBtn.style.display = "";
+        if (keyHandler) {
+          this.contentEl.removeEventListener("keydown", keyHandler, true);
+          keyHandler = null;
+        }
+      };
+      const runWhole = async () => {
+        wholeBtn.disabled = true;
+        incBtn.disabled = true;
+        const moved = await this.opts.onMoveToTomorrowWhole();
         if (moved)
           this.close();
-        else
-          moveBtn.disabled = false;
+        else {
+          wholeBtn.disabled = false;
+          incBtn.disabled = false;
+        }
+      };
+      const runIncomplete = async () => {
+        wholeBtn.disabled = true;
+        incBtn.disabled = true;
+        const moved = await this.opts.onMoveToTomorrowIncomplete();
+        if (moved)
+          this.close();
+        else {
+          wholeBtn.disabled = false;
+          incBtn.disabled = false;
+        }
+      };
+      moveBtn.addEventListener("click", () => {
+        stageTwoActive = true;
+        moveBtn.style.display = "none";
+        choices.style.display = "";
+        wholeBtn.focus();
+        keyHandler = (ev) => {
+          if (!stageTwoActive)
+            return;
+          const target = ev.target;
+          if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+            return;
+          }
+          if (ev.key === "w" || ev.key === "W") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            void runWhole();
+          } else if (ev.key === "i" || ev.key === "I") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            void runIncomplete();
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            exitStageTwo();
+            moveBtn.focus();
+          }
+        };
+        this.contentEl.addEventListener("keydown", keyHandler, true);
       });
+      wholeBtn.addEventListener("click", () => void runWhole());
+      incBtn.addEventListener("click", () => void runIncomplete());
     }
     const pomoBtn = actions.createEl("button", {
       cls: "dp-edit-pomo-btn",

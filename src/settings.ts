@@ -152,6 +152,7 @@ export class TodaySettingTab extends PluginSettingTab {
       "order",
       "project",
       "exercise",
+      "taskId",
     ];
     const changes: PrefixChange[] = [];
     for (const key of keys) {
@@ -294,6 +295,20 @@ export class TodaySettingTab extends PluginSettingTab {
           .onChange(async (v) => {
             if (/^[a-zA-Z]+$/.test(v)) {
               this.plugin.settings.prefixes.exercise = v;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Task ID tag prefix")
+      .setDesc(buildTaskIdDesc())
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.prefixes.taskId)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.prefixes.taskId = v;
               await this.plugin.saveSettings();
             }
           }),
@@ -945,6 +960,22 @@ function buildExerciseDesc(): DocumentFragment {
     " (25 pushups), ",
     makeCode("#x/bench/10/135"),
     " (10 reps at 135 lbs). The plugin sums reps per exercise (and per weight bucket when weighted) and renders a one-line summary at the top of the section.",
+  );
+  return f;
+}
+
+function buildTaskIdDesc(): DocumentFragment {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Cross-references a task across days. Default prefix ",
+    makeCode("tid"),
+    ". When you migrate a task's incomplete sub-tasks to the next day from the edit modal (",
+    makeCode("Move to tomorrow → Migrate incomplete"),
+    "), the plugin marks the original parent as completed, generates a 6-character ID, and stamps ",
+    makeCode("#tid/<id>"),
+    " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
+    makeCode("#tid/a3xK9p"),
+    ". The migrate-incomplete flow lets you check off the work you finished today while carrying the task title and unfinished sub-tasks (without the completed ones) into tomorrow's note — useful for showing partial progress while continuing the task. If all sub-tasks are already done, the original is still marked complete and a fresh empty parent is queued for tomorrow, so you can keep working on it.",
   );
   return f;
 }

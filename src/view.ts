@@ -29,6 +29,9 @@ import {
   setTaskTitle,
   setTaskDescription,
   setTaskChecked,
+  setTaskIdTag,
+  parseTaskId,
+  generateTaskId,
   snapToInterval,
   formatTotal,
   formatCompactDuration,
@@ -1935,7 +1938,9 @@ export class TodayView extends ItemView {
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
-      onMoveToTomorrow: () => this.moveTaskToTomorrow(file, task),
+      onMoveToTomorrowWhole: () => this.moveTaskToTomorrow(file, task),
+      onMoveToTomorrowIncomplete: () =>
+        this.migrateIncompleteToTomorrow(file, task),
       onStartPomodoro: () => this.enterPomodoro(file, task),
     }).open();
   }
@@ -1990,6 +1995,91 @@ export class TodayView extends ItemView {
     });
 
     new Notice(`Moved to ${targetFile.path}`);
+    return true;
+  }
+
+  // Carries the task title (with most tags) and any unfinished sub-tasks into
+  // tomorrow's note while keeping the completed sub-tasks on the source day as
+  // a record of partial progress. The source parent is checked off and stamped
+  // with a #tid/<id> tag; the new-day copy gets the same tag, so the two can
+  // be cross-referenced via search. The order tag (#o/) is stripped on the
+  // new copy because positioning is per-day.
+  private async migrateIncompleteToTomorrow(
+    file: TFile,
+    task: ParsedTask,
+  ): Promise<boolean> {
+    const fallback = {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback,
+      template: this.plugin.settings.dailyNoteTemplate,
+    };
+    const target = addDays(this.selectedDate, 1);
+    const targetFile = await ensureDailyNote(this.app, target, fallback);
+    if (targetFile.path === file.path) {
+      new Notice("Source and target are the same file.");
+      return false;
+    }
+
+    const prefixes = this.plugin.settings.prefixes;
+
+    // Re-parse to pick up any sub-task changes the user made in the modal
+    // since it opened — those persist immediately in edit mode and the
+    // captured `task` argument is stale on the sub-task front.
+    const fresh = parseFileTasks(
+      file.path,
+      await this.app.vault.read(file),
+      prefixes,
+      this.plugin.settings.defaultDurationMin,
+    );
+    let current =
+      fresh.find((t) => t.lineNumber === task.lineNumber) ??
+      fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
+    if (!current) {
+      new Notice("Couldn't locate the task to migrate.");
+      return false;
+    }
+
+    const existingId = parseTaskId(current.body, prefixes);
+    const taskId = existingId ?? generateTaskId();
+
+    const orderRe = new RegExp(
+      `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`,
+    );
+    let newParentLine = current.rawLine.replace(orderRe, "");
+    newParentLine = setTaskChecked(newParentLine, false);
+    newParentLine = setTaskIdTag(newParentLine, taskId, prefixes);
+
+    const uncheckedSubLines = current.subtasks
+      .filter((s) => !s.checked)
+      .map((s) => s.rawLine);
+
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (current!.lineNumber < lines.length) {
+        let parent = lines[current!.lineNumber];
+        parent = setTaskChecked(parent, true);
+        parent = setTaskIdTag(parent, taskId, prefixes);
+        lines[current!.lineNumber] = parent;
+      }
+      const removeNumbers = current!.subtasks
+        .filter((s) => !s.checked)
+        .map((s) => s.lineNumber)
+        .sort((a, b) => b - a);
+      for (const n of removeNumbers) {
+        if (n < lines.length) lines.splice(n, 1);
+      }
+      return lines.join("\n");
+    });
+
+    await this.app.vault.process(targetFile, (content) => {
+      const lines = content.split("\n");
+      const lastIdx = findLastTaskLine(content);
+      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      lines.splice(insertAt, 0, newParentLine, ...uncheckedSubLines);
+      return lines.join("\n");
+    });
+
+    new Notice(`Migrated to ${targetFile.path}`);
     return true;
   }
 
@@ -2543,7 +2633,8 @@ interface TaskEditOpts {
   ) => Promise<void>;
   onReorderSubtasks?: (ordered: ParsedSubtask[]) => Promise<void>;
   onShowInNote?: () => void;
-  onMoveToTomorrow?: () => Promise<boolean>;
+  onMoveToTomorrowWhole?: () => Promise<boolean>;
+  onMoveToTomorrowIncomplete?: () => Promise<boolean>;
   onStartPomodoro?: () => void;
 }
 
@@ -3204,17 +3295,98 @@ class TaskEditModal extends Modal {
     });
 
     if (this.opts.mode === "edit") {
-      const moveBtn = actions.createEl("button", {
+      const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
+      const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-show-btn",
         text: "Move to tomorrow",
       });
       moveBtn.type = "button";
-      moveBtn.addEventListener("click", async () => {
-        moveBtn.disabled = true;
-        const moved = await this.opts.onMoveToTomorrow!();
-        if (moved) this.close();
-        else moveBtn.disabled = false;
+
+      const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
+      choices.style.display = "none";
+      const wholeBtn = choices.createEl("button", {
+        cls: "dp-edit-show-btn",
       });
+      wholeBtn.type = "button";
+      wholeBtn.createSpan({ text: "Move whole " });
+      wholeBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "w" });
+      const incBtn = choices.createEl("button", {
+        cls: "dp-edit-show-btn",
+      });
+      incBtn.type = "button";
+      incBtn.createSpan({ text: "Migrate incomplete " });
+      incBtn.createEl("kbd", { cls: "dp-edit-move-kbd", text: "i" });
+
+      let stageTwoActive = false;
+      let keyHandler: ((ev: KeyboardEvent) => void) | null = null;
+
+      const exitStageTwo = (): void => {
+        stageTwoActive = false;
+        choices.style.display = "none";
+        moveBtn.style.display = "";
+        if (keyHandler) {
+          this.contentEl.removeEventListener("keydown", keyHandler, true);
+          keyHandler = null;
+        }
+      };
+
+      const runWhole = async (): Promise<void> => {
+        wholeBtn.disabled = true;
+        incBtn.disabled = true;
+        const moved = await this.opts.onMoveToTomorrowWhole!();
+        if (moved) this.close();
+        else {
+          wholeBtn.disabled = false;
+          incBtn.disabled = false;
+        }
+      };
+      const runIncomplete = async (): Promise<void> => {
+        wholeBtn.disabled = true;
+        incBtn.disabled = true;
+        const moved = await this.opts.onMoveToTomorrowIncomplete!();
+        if (moved) this.close();
+        else {
+          wholeBtn.disabled = false;
+          incBtn.disabled = false;
+        }
+      };
+
+      moveBtn.addEventListener("click", () => {
+        stageTwoActive = true;
+        moveBtn.style.display = "none";
+        choices.style.display = "";
+        wholeBtn.focus();
+        keyHandler = (ev: KeyboardEvent) => {
+          if (!stageTwoActive) return;
+          // Don't intercept while typing in inputs (title field, sub-task
+          // editors, etc.) — only fire when focus is on a non-input element.
+          const target = ev.target as HTMLElement | null;
+          if (
+            target &&
+            (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+          ) {
+            return;
+          }
+          if (ev.key === "w" || ev.key === "W") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            void runWhole();
+          } else if (ev.key === "i" || ev.key === "I") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            void runIncomplete();
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            exitStageTwo();
+            moveBtn.focus();
+          }
+        };
+        this.contentEl.addEventListener("keydown", keyHandler, true);
+      });
+
+      wholeBtn.addEventListener("click", () => void runWhole());
+      incBtn.addEventListener("click", () => void runIncomplete());
     }
 
     const pomoBtn = actions.createEl("button", {

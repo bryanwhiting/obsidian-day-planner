@@ -28,6 +28,7 @@ export interface TagPrefixes {
   order: string;
   project: string;
   exercise: string;
+  taskId: string;
 }
 
 export const DEFAULT_PREFIXES: TagPrefixes = {
@@ -36,6 +37,7 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
   order: "o",
   project: "p",
   exercise: "x",
+  taskId: "tid",
 };
 
 export interface ExerciseSet {
@@ -74,6 +76,7 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g",
     ),
+    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]{6})\\b`),
   };
 }
 
@@ -360,6 +363,35 @@ export function removeProjectTag(
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
+export function parseTaskId(
+  body: string,
+  prefixes: TagPrefixes,
+): string | null {
+  const m = buildTagRegexes(prefixes).taskId.exec(body);
+  return m ? m[1] : null;
+}
+
+export function setTaskIdTag(
+  rawLine: string,
+  id: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).taskId;
+  const newTag = `#${prefixes.taskId}/${id}`;
+  if (re.test(rawLine)) return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+
+export function generateTaskId(): string {
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let id = "";
+  for (let i = 0; i < 6; i++) {
+    id += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return id;
+}
+
 function appendTag(rawLine: string, tag: string): string {
   const trimmed = rawLine.replace(/[ \t]+$/, "");
   const sep = trimmed.endsWith(" ") ? "" : " ";
@@ -399,7 +431,7 @@ export function setTaskTitle(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -449,7 +481,7 @@ export function setTaskDescription(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
