@@ -6213,33 +6213,33 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     }
     const today = startOfDay(new Date());
     const window2 = settings.habitsStatsWindow;
-    const dayCells = await this.buildDayHeatmap(habits, fallback, today, window2);
-    const weekCells = await this.buildWeekHeatmap(habits, fallback, today, window2);
-    const monthCells = await this.buildMonthHeatmap(habits, fallback, today, window2);
-    const dayStart = addDays(today, -(window2 - 1));
-    const dayEndExclusive = addDays(today, 1);
-    this.renderRow(
-      root,
+    const dayBuckets = this.buildDayBuckets(today, window2);
+    const weekBuckets = this.buildWeekBuckets(today, window2);
+    const monthBuckets = this.buildMonthBuckets(today, window2);
+    const daySection = await this.buildSection(
       "Day",
-      formatDayRange(dayStart, dayEndExclusive),
-      dayCells
+      "day",
+      dayBuckets,
+      habits,
+      fallback
     );
-    const thisWeek = weekRange(today, settings.habitWeekStart);
-    const weekStart = addDays(thisWeek.start, -7 * (window2 - 1));
-    this.renderRow(
-      root,
+    const weekSection = await this.buildSection(
       "Week",
-      formatDayRange(weekStart, thisWeek.end),
-      weekCells
+      "week",
+      weekBuckets,
+      habits,
+      fallback
     );
-    const thisMonth = monthRange(today);
-    const monthStart = addMonths(thisMonth.start, -(window2 - 1));
-    this.renderRow(
-      root,
+    const monthSection = await this.buildSection(
       "Month",
-      formatMonthRange(monthStart, thisMonth.end),
-      monthCells
+      "month",
+      monthBuckets,
+      habits,
+      fallback
     );
+    this.renderSection(root, daySection);
+    this.renderSection(root, weekSection);
+    this.renderSection(root, monthSection);
   }
   async loadHabits() {
     const path = this.plugin.settings.habitsFile;
@@ -6249,46 +6249,191 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     const content = await this.plugin.habitsScanner.getContent(f);
     return parseHabitsFile(content, this.plugin.settings.habitPrefix);
   }
-  renderRow(parent, title, dateRange, cells) {
-    var _a;
-    const row = parent.createDiv({ cls: "dp-heatmap-row" });
-    const titleEl = row.createDiv({ cls: "dp-heatmap-row-title" });
-    titleEl.createSpan({ cls: "dp-heatmap-row-name", text: title });
-    titleEl.createSpan({ cls: "dp-heatmap-row-sep", text: " \xB7 " });
-    titleEl.createSpan({ cls: "dp-heatmap-row-range", text: dateRange });
-    const grid = row.createDiv({ cls: "dp-heatmap-grid" });
-    let totalReps = 0;
-    let completedSum = 0;
-    let totalPossible = 0;
-    const aggExercise = /* @__PURE__ */ new Map();
-    for (const c of cells) {
-      const cell = grid.createDiv({
-        cls: `dp-heatmap-cell q${quintile(c.rate)}`
+  buildDayBuckets(today, count) {
+    const out = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const start = addDays(today, -i);
+      const end = addDays(start, 1);
+      out.push({
+        start,
+        end,
+        label: start.getDate().toString(),
+        tooltip: start.toLocaleDateString(void 0, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        }),
+        isCurrent: i === 0
       });
-      cell.style.setProperty("--dp-heatmap-intensity", c.rate.toFixed(3));
-      cell.setAttribute("aria-label", c.tooltip);
-      cell.title = c.tooltip;
-      cell.createSpan({ cls: "dp-heatmap-cell-label", text: c.label });
-      totalReps += c.exerciseReps;
-      completedSum += c.habitsCompleted;
-      totalPossible += c.habitsTotal;
-      for (const [name, reps] of c.exerciseTotals) {
-        aggExercise.set(name, ((_a = aggExercise.get(name)) != null ? _a : 0) + reps);
+    }
+    return out;
+  }
+  buildWeekBuckets(today, count) {
+    const weekStart = this.plugin.settings.habitWeekStart;
+    const thisWeek = weekRange(today, weekStart);
+    const out = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const start = addDays(thisWeek.start, -7 * i);
+      const end = addDays(start, 7);
+      out.push({
+        start,
+        end,
+        label: `${start.getMonth() + 1}/${start.getDate()}`,
+        tooltip: `Week of ${start.toLocaleDateString(void 0, {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        })}`,
+        isCurrent: i === 0
+      });
+    }
+    return out;
+  }
+  buildMonthBuckets(today, count) {
+    const thisMonth = monthRange(today);
+    const out = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const start = addMonths(thisMonth.start, -i);
+      const end = addMonths(start, 1);
+      out.push({
+        start,
+        end,
+        label: start.toLocaleDateString(void 0, { month: "short" }).slice(0, 3),
+        tooltip: start.toLocaleDateString(void 0, {
+          month: "long",
+          year: "numeric"
+        }),
+        isCurrent: i === 0
+      });
+    }
+    return out;
+  }
+  async buildSection(name, period, buckets, allHabits, fallback) {
+    var _a;
+    const settings = this.plugin.settings;
+    const habits = allHabits.filter((h) => h.period === period);
+    const dateMap = /* @__PURE__ */ new Map();
+    for (const b of buckets) {
+      for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
+        const day = startOfDay(d);
+        dateMap.set(day.getTime(), day);
       }
     }
-    const totals = row.createDiv({ cls: "dp-heatmap-totals" });
-    totals.createSpan({
-      cls: "dp-heatmap-total",
-      text: totalPossible > 0 ? `${completedSum}/${totalPossible} habits` : "no habits"
+    const contentByTime = /* @__PURE__ */ new Map();
+    for (const [t, d] of dateMap) {
+      const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+      if (c)
+        contentByTime.set(t, c);
+    }
+    const rows = [];
+    for (const h of habits) {
+      const cells = [];
+      let totalChecked = 0;
+      let hits = 0;
+      for (const b of buckets) {
+        let count = 0;
+        for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
+          const c = contentByTime.get(startOfDay(d).getTime());
+          if (!c)
+            continue;
+          const lines = findHabitTaskLines(
+            c,
+            settings.habitPrefix,
+            h.period,
+            h.slug
+          );
+          for (const l of lines)
+            if (l.checked)
+              count++;
+        }
+        cells.push({ bucket: b, checkedCount: count });
+        totalChecked += count;
+        if (count > 0)
+          hits++;
+      }
+      rows.push({ habit: h, cells, totalChecked, hits });
+    }
+    let totalReps = 0;
+    const exerciseTotals = /* @__PURE__ */ new Map();
+    for (const c of contentByTime.values()) {
+      const summaries = parseExercises(c, settings.prefixes);
+      for (const s of summaries) {
+        for (const set of s.sets) {
+          totalReps += set.reps;
+          exerciseTotals.set(
+            s.name,
+            ((_a = exerciseTotals.get(s.name)) != null ? _a : 0) + set.reps
+          );
+        }
+      }
+    }
+    return {
+      name,
+      period,
+      dateRange: formatBucketsRange(buckets, period),
+      buckets,
+      rows,
+      totalReps,
+      exerciseTotals
+    };
+  }
+  renderSection(parent, section) {
+    const sectionEl = parent.createDiv({ cls: "dp-heatmap-section" });
+    const titleEl = sectionEl.createDiv({ cls: "dp-heatmap-row-title" });
+    titleEl.createSpan({ cls: "dp-heatmap-row-name", text: section.name });
+    titleEl.createSpan({ cls: "dp-heatmap-row-sep", text: " \xB7 " });
+    titleEl.createSpan({
+      cls: "dp-heatmap-row-range",
+      text: section.dateRange
     });
-    totals.createSpan({ cls: "dp-heatmap-sep", text: " \u2022 " });
+    if (section.rows.length === 0) {
+      sectionEl.createDiv({
+        cls: "dp-heatmap-no-habits",
+        text: `No ${section.name.toLowerCase()} habits.`
+      });
+    } else {
+      const grid = sectionEl.createDiv({ cls: "dp-heatmap-grid-rows" });
+      grid.style.gridTemplateColumns = `auto repeat(${section.buckets.length}, var(--dp-heatmap-cell))`;
+      grid.createDiv({ cls: "dp-heatmap-corner" });
+      for (const b of section.buckets) {
+        const labelEl = grid.createDiv({
+          cls: "dp-heatmap-col-label" + (b.isCurrent ? " is-current" : ""),
+          text: b.label
+        });
+        labelEl.title = b.tooltip;
+      }
+      for (const row of section.rows) {
+        const labelEl = grid.createDiv({ cls: "dp-heatmap-habit-label" });
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-name",
+          text: row.habit.slug
+        });
+        const summary = `${row.hits}/${row.cells.length}`;
+        labelEl.createSpan({
+          cls: "dp-heatmap-habit-summary",
+          text: summary
+        });
+        if (row.habit.label)
+          labelEl.title = row.habit.label;
+        for (const cell of row.cells) {
+          const cellEl = grid.createDiv({
+            cls: "dp-heatmap-cell q" + quintile(cell.checkedCount) + (cell.bucket.isCurrent ? " is-current" : "")
+          });
+          const word = cell.checkedCount === 1 ? "completion" : "completions";
+          cellEl.title = `${row.habit.slug} \xB7 ${cell.bucket.tooltip}
+${cell.checkedCount} ${word}`;
+        }
+      }
+    }
+    const totals = sectionEl.createDiv({ cls: "dp-heatmap-totals" });
     totals.createSpan({
       cls: "dp-heatmap-total-reps",
-      text: `${totalReps.toLocaleString()} reps`
+      text: `${section.totalReps.toLocaleString()} reps`
     });
-    if (aggExercise.size > 0) {
-      const breakdown = row.createDiv({ cls: "dp-heatmap-breakdown" });
-      const sorted = Array.from(aggExercise.entries()).sort(
+    if (section.exerciseTotals.size > 0) {
+      const breakdown = sectionEl.createDiv({ cls: "dp-heatmap-breakdown" });
+      const sorted = Array.from(section.exerciseTotals.entries()).sort(
         (a, b) => b[1] - a[1]
       );
       sorted.forEach(([name, reps], idx) => {
@@ -6308,116 +6453,24 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       });
     }
   }
-  async buildDayHeatmap(habits, fallback, today, count) {
-    const dayHabits = habits.filter((h) => h.period === "day");
-    const cells = [];
-    for (let i = count - 1; i >= 0; i--) {
-      const start = addDays(today, -i);
-      const end = addDays(start, 1);
-      const cell = await this.buildCell(start, end, dayHabits, fallback);
-      cell.label = start.getDate().toString();
-      cell.tooltip = `${start.toLocaleDateString(void 0, { weekday: "short", month: "short", day: "numeric" })}
-${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
-      cells.push(cell);
-    }
-    return cells;
-  }
-  async buildWeekHeatmap(habits, fallback, today, count) {
-    const weekHabits = habits.filter((h) => h.period === "week");
-    const weekStart = this.plugin.settings.habitWeekStart;
-    const cells = [];
-    const thisWeek = weekRange(today, weekStart);
-    for (let i = count - 1; i >= 0; i--) {
-      const start = addDays(thisWeek.start, -7 * i);
-      const end = addDays(start, 7);
-      const cell = await this.buildCell(start, end, weekHabits, fallback);
-      cell.label = `${start.getMonth() + 1}/${start.getDate()}`;
-      cell.tooltip = `Week of ${start.toLocaleDateString(void 0, { month: "short", day: "numeric" })}
-${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
-      cells.push(cell);
-    }
-    return cells;
-  }
-  async buildMonthHeatmap(habits, fallback, today, count) {
-    const monthHabits = habits.filter((h) => h.period === "month");
-    const cells = [];
-    const thisMonth = monthRange(today);
-    for (let i = count - 1; i >= 0; i--) {
-      const start = addMonths(thisMonth.start, -i);
-      const end = addMonths(start, 1);
-      const cell = await this.buildCell(start, end, monthHabits, fallback);
-      cell.label = start.toLocaleDateString(void 0, { month: "short" }).slice(0, 3);
-      cell.tooltip = `${start.toLocaleDateString(void 0, { month: "long", year: "numeric" })}
-${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
-      cells.push(cell);
-    }
-    return cells;
-  }
-  async buildCell(start, end, habits, fallback) {
-    var _a;
-    const dates = enumerateDailyNoteDatesInRange(start, end);
-    const contents = [];
-    for (const d of dates) {
-      const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
-      if (c)
-        contents.push(c);
-    }
-    let completed = 0;
-    for (const h of habits) {
-      let hasChecked = false;
-      for (const c of contents) {
-        const lines = findHabitTaskLines(
-          c,
-          this.plugin.settings.habitPrefix,
-          h.period,
-          h.slug
-        );
-        if (lines.some((l) => l.checked)) {
-          hasChecked = true;
-          break;
-        }
-      }
-      if (hasChecked)
-        completed++;
-    }
-    const total = habits.length;
-    let reps = 0;
-    const exerciseTotals = /* @__PURE__ */ new Map();
-    for (const c of contents) {
-      const summaries = parseExercises(c, this.plugin.settings.prefixes);
-      for (const s of summaries) {
-        for (const set of s.sets) {
-          reps += set.reps;
-          exerciseTotals.set(
-            s.name,
-            ((_a = exerciseTotals.get(s.name)) != null ? _a : 0) + set.reps
-          );
-        }
-      }
-    }
-    return {
-      start,
-      end,
-      label: "",
-      tooltip: "",
-      habitsCompleted: completed,
-      habitsTotal: total,
-      rate: total > 0 ? completed / total : 0,
-      exerciseReps: reps,
-      exerciseTotals
-    };
-  }
 };
-function quintile(rate) {
-  if (rate <= 0)
+function quintile(count) {
+  if (count <= 0)
     return 0;
-  if (rate < 0.25)
+  if (count === 1)
     return 1;
-  if (rate < 0.5)
+  if (count === 2)
     return 2;
-  if (rate < 0.75)
+  if (count === 3)
     return 3;
   return 4;
+}
+function formatBucketsRange(buckets, period) {
+  if (buckets.length === 0)
+    return "";
+  const first = buckets[0].start;
+  const last = buckets[buckets.length - 1].end;
+  return period === "month" ? formatMonthRange(first, last) : formatDayRange(first, last);
 }
 function formatDayRange(start, endExclusive) {
   const last = addDays(endExclusive, -1);
