@@ -114,6 +114,12 @@
     opacity: 1;
   }
 
+  body.is-mobile .dp-datenav .dp-nav-btn,
+  body.is-mobile .dp-datenav .dp-today-btn,
+  body.is-mobile .dp-datenav .dp-cal-btn {
+    opacity: 1;
+  }
+
   .dp-datenav-label {
     @apply flex-1 text-center;
     font-family: var(--font-display);
@@ -2244,6 +2250,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    opacity: 0;
+    transition: opacity 180ms ease, color 120ms, background-color 120ms;
+  }
+
+  .today-root .dp-pomo:hover .dp-pomo-iconbtn,
+  .today-root .dp-pomo-iconbtn:focus-visible {
+    opacity: 1;
+  }
+
+  body.is-mobile .today-root .dp-pomo-iconbtn {
+    opacity: 1;
   }
 
   .today-root .dp-pomo-iconbtn:hover {
