@@ -2,6 +2,23 @@
 
 ## 2026-05-06
 
+### Edit modal: lift `#tid/<id>` out of the title into a clickable header pill
+
+- **Requested:** "when a task has a tid in it, and i open the modal, i
+  can see the tid in the title. I have to delete it from the title, or
+  it will duplicate the task id. i shouldn't have to do that. parse out
+  the task id and put the id in the top right corner, which is a
+  clickable tag so i can see in the search the other instances of that
+  task id."
+- **Done:** `cleanBody` (`src/view.ts`) now strips `#tid/<id>` so the
+  title input no longer carries it (which was the source of the
+  on-save duplication). The tag is surfaced as a small pill in the top
+  right of the modal header (`.dp-edit-tid-pill`, `src/styles.src.css`)
+  that, when clicked, opens Obsidian's global search for
+  `tag:#tid/<id>` so the user can find every other occurrence of that
+  task id. The tid is still preserved in the underlying line on save
+  because `setTaskTitle` keeps the existing tag block.
+
 ### Apply daily-note template when files are created via link-following
 
 - **Requested:** "when i click the hyperlink to the date that doesn't

@@ -69,6 +69,18 @@ import {
   buildDateSuggestions,
   buildDateLinkInsert,
 } from "./dailyNote";
+import type { DailyNoteFallback } from "./dailyNote";
+import {
+  Habit,
+  HabitPeriod,
+  parseHabitsFile,
+  countHabitOccurrences,
+  weekRange,
+  monthRange,
+  enumerateDailyNoteDatesInRange,
+  appendHabitLine,
+  removeHabitLine,
+} from "./habits";
 
 export const VIEW_TYPE_TODAY = "today-view";
 
@@ -80,6 +92,11 @@ interface DragPayload {
   grabOffsetY: number;
   durationMin: number;
   bodyText: string;
+}
+
+interface HabitDisplay {
+  habit: Habit;
+  isComplete: boolean;
 }
 
 const TRANSPARENT_PIXEL =
@@ -412,6 +429,12 @@ export class TodayView extends ItemView {
       this.plugin.settings.projectColors,
     );
 
+    const habitDisplays = await this.loadHabitDisplays(
+      this.selectedDate,
+      fileContent,
+      fallback,
+    );
+
     this.renderSection(
       root,
       this.formatDateLabel(this.selectedDate),
@@ -420,6 +443,7 @@ export class TodayView extends ItemView {
       displayPath,
       tasks,
       exercises,
+      habitDisplays,
       true,
       colorMap,
       showOpenActiveLink ? activeFile : null,
@@ -648,6 +672,7 @@ export class TodayView extends ItemView {
     path: string,
     tasks: ParsedTask[],
     exercises: ExerciseSummary[],
+    habitDisplays: HabitDisplay[],
     isPrimary: boolean,
     colorMap: Map<string, string>,
     openActiveTarget: TFile | null = null,
@@ -696,6 +721,7 @@ export class TodayView extends ItemView {
     if (isPrimary) {
       const workout = header.createDiv({ cls: "dp-workout" });
       workout.textContent = formatExerciseLine(exercises);
+      this.renderHabitsLine(header, habitDisplays, file);
     }
 
     // Notes are excluded from time / project totals — by definition they
@@ -1866,6 +1892,7 @@ export class TodayView extends ItemView {
       .replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "")
       .replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "")
+      .replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "")
       .replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = ctx.tag?.trim();
@@ -1932,6 +1959,7 @@ export class TodayView extends ItemView {
   }
 
   private openTaskEditor(file: TFile, task: ParsedTask): void {
+    const prefixes = this.plugin.settings.prefixes;
     new TaskEditModal(this.app, {
       mode: "edit",
       modalTitle: "Edit task",
@@ -1940,6 +1968,8 @@ export class TodayView extends ItemView {
       initialDurationMin: task.durationMin,
       initialProject: task.project,
       initialChecked: task.checked,
+      initialTaskId: parseTaskId(task.body, prefixes),
+      taskIdPrefix: prefixes.taskId,
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
@@ -2244,6 +2274,167 @@ export class TodayView extends ItemView {
       lines[lineNumber] = setTaskChecked(lines[lineNumber], checked);
       return lines.join("\n");
     });
+  }
+
+  // Builds the per-habit completion state for the displayed daily note. Daily
+  // habits look only at the displayed note's content (already in hand);
+  // weekly/monthly habits scan all daily notes in the corresponding period
+  // around the displayed date via the shared scanner cache.
+  private async loadHabitDisplays(
+    displayDate: Date,
+    displayContent: string,
+    fallback: DailyNoteFallback,
+  ): Promise<HabitDisplay[]> {
+    const settings = this.plugin.settings;
+    const habitsFile = this.app.vault.getAbstractFileByPath(settings.habitsFile);
+    if (!(habitsFile instanceof TFile)) return [];
+    const habitsContent = await this.plugin.habitsScanner.getContent(habitsFile);
+    const habits = parseHabitsFile(habitsContent, settings.habitPrefix);
+    if (habits.length === 0) return [];
+
+    const week = weekRange(displayDate, settings.habitWeekStart);
+    const month = monthRange(displayDate);
+
+    const readWindow = async (start: Date, end: Date): Promise<string> => {
+      const parts: string[] = [];
+      for (const d of enumerateDailyNoteDatesInRange(start, end)) {
+        const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+        if (c) parts.push(c);
+      }
+      return parts.join("\n");
+    };
+
+    const needWeek = habits.some((h) => h.period === "week");
+    const needMonth = habits.some((h) => h.period === "month");
+    const weekContent = needWeek ? await readWindow(week.start, week.end) : "";
+    const monthContent = needMonth
+      ? await readWindow(month.start, month.end)
+      : "";
+
+    const out: HabitDisplay[] = [];
+    for (const h of habits) {
+      const haystack =
+        h.period === "day"
+          ? displayContent
+          : h.period === "week"
+            ? weekContent
+            : monthContent;
+      const n = countHabitOccurrences(
+        haystack,
+        settings.habitPrefix,
+        h.period,
+        h.slug,
+      );
+      out.push({ habit: h, isComplete: n > 0 });
+    }
+    return out;
+  }
+
+  private renderHabitsLine(
+    parent: HTMLElement,
+    displays: HabitDisplay[],
+    displayFile: TFile | null,
+  ): void {
+    if (displays.length === 0) return;
+    const settings = this.plugin.settings;
+    const wrap = parent.createDiv({ cls: "dp-habits" });
+
+    const periods: HabitPeriod[] = ["day", "week", "month"];
+    const groups: Record<HabitPeriod, HabitDisplay[]> = {
+      day: [],
+      week: [],
+      month: [],
+    };
+    for (const d of displays) groups[d.habit.period].push(d);
+
+    let firstSegment = true;
+    for (const period of periods) {
+      const items = groups[period];
+      if (items.length === 0) continue;
+      const visible = settings.habitsHideCompleted
+        ? items.filter((i) => !i.isComplete)
+        : items;
+
+      if (!firstSegment) {
+        wrap.createSpan({ cls: "dp-habit-sep", text: " • " });
+      }
+      firstSegment = false;
+
+      const labelText =
+        period === "day" ? "d:" : period === "week" ? "w:" : "m:";
+      wrap.createSpan({ cls: "dp-habit-period", text: labelText });
+      wrap.appendText(" ");
+
+      if (visible.length === 0) {
+        wrap.createSpan({ cls: "dp-habit-allcomplete", text: "✓" });
+        continue;
+      }
+
+      visible.forEach((d, idx) => {
+        if (idx > 0) wrap.appendText(", ");
+        const cls = "dp-habit" + (d.isComplete ? " is-done" : "");
+        const chip = wrap.createSpan({ cls, text: d.habit.slug });
+        if (d.habit.label) chip.title = d.habit.label;
+        chip.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          void this.applyHabitToggle(
+            displayFile,
+            d.habit.period,
+            d.habit.slug,
+            d.isComplete,
+          );
+        });
+      });
+    }
+
+    if (!firstSegment) {
+      wrap.appendText("  ");
+      const stats = wrap.createEl("a", {
+        cls: "dp-habit-stats-link",
+        text: "[stats]",
+        attr: { href: "#" },
+      });
+      stats.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        void this.plugin.activateHabitsStatsView();
+      });
+    }
+  }
+
+  // Toggles a habit on the displayed daily note: appends a new `- [x] <slug>
+  // #<prefix>/<period>/<slug>` line if currently incomplete, or removes the
+  // first matching `- [x]` line if currently complete. Creates the daily note
+  // if it doesn't exist (only on the toggle-on path; toggling off a missing
+  // file is a no-op).
+  private async applyHabitToggle(
+    file: TFile | null,
+    period: HabitPeriod,
+    slug: string,
+    currentlyComplete: boolean,
+  ): Promise<void> {
+    const settings = this.plugin.settings;
+    const fallback: DailyNoteFallback = {
+      folder: settings.dailyNoteFolderFallback,
+      format: settings.dailyNoteFormatFallback,
+      template: settings.dailyNoteTemplate,
+      dateLinkFormat: settings.dateLinkFormat,
+    };
+    let target: TFile;
+    if (file) {
+      target = file;
+    } else if (currentlyComplete) {
+      return;
+    } else {
+      target = await ensureDailyNote(this.app, this.selectedDate, fallback);
+    }
+    await this.app.vault.process(target, (content) => {
+      if (currentlyComplete) {
+        return removeHabitLine(content, settings.habitPrefix, period, slug);
+      }
+      return appendHabitLine(content, settings.habitPrefix, period, slug);
+    });
+    this.plugin.habitsScanner.invalidate(target.path);
   }
 
   private isPopout(): boolean {
@@ -2774,6 +2965,11 @@ interface TaskEditOpts {
   initialDurationMin: number;
   initialProject: string | null;
   initialChecked: boolean;
+  // When the task already carries a `#tid/<id>` tag, surface it as a clickable
+  // header pill (search for other instances) instead of leaking it into the
+  // title input where the user would have to delete it to avoid duplication.
+  initialTaskId?: string | null;
+  taskIdPrefix?: string;
   subtasks: ParsedSubtask[];
   projects: string[];
   durations: { label: string; min: number }[];
@@ -3166,6 +3362,31 @@ class TaskEditModal extends Modal {
     // relying on :has(). Removed in onClose.
     document.body.addClass("today-edit-open");
     this.titleEl.setText(this.opts.modalTitle);
+    if (this.opts.initialTaskId && this.opts.taskIdPrefix) {
+      const id = this.opts.initialTaskId;
+      const prefix = this.opts.taskIdPrefix;
+      const pill = this.titleEl.createEl("a", {
+        cls: "dp-edit-tid-pill",
+        text: `#${prefix}/${id}`,
+        href: "#",
+        attr: {
+          "aria-label": `Search for #${prefix}/${id}`,
+          title: `Search for other instances of this task`,
+        },
+      });
+      pill.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const search = (this.app as unknown as {
+          internalPlugins?: {
+            getPluginById?: (id: string) => {
+              instance?: { openGlobalSearch?: (q: string) => void };
+            } | null;
+          };
+        }).internalPlugins?.getPluginById?.("global-search");
+        search?.instance?.openGlobalSearch?.(`tag:#${prefix}/${id}`);
+        this.close();
+      });
+    }
     this.contentEl.empty();
 
     // On mobile, the on-screen keyboard often covers the field that just

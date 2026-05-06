@@ -1576,6 +1576,32 @@
     font-variation-settings: "opsz" 30;
     font-size: 16px;
     letter-spacing: var(--tracking-display);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .dp-edit-tid-pill {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    margin-right: 28px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--color-ink-faint);
+    background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+    border-radius: 999px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 120ms ease, background-color 120ms ease;
+  }
+
+  .dp-edit-tid-pill:hover {
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+    text-decoration: none;
   }
 
   .dp-title-input {
