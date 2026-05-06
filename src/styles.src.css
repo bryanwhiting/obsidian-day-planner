@@ -1830,8 +1830,8 @@
      * with the same circle. */
     appearance: none;
     -webkit-appearance: none;
-    background: var(--color-paper);
-    border: 1.5px solid var(--color-ink-muted);
+    background: transparent;
+    border: 2px solid var(--color-ink);
     border-radius: 50%;
     cursor: pointer;
     box-shadow: none;
