@@ -2663,6 +2663,11 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.unscheduledCollapsed = import_obsidian4.Platform.isMobile;
     this.overrideFilePath = null;
     this.hasRendered = false;
+    // Path of the workspace's active file at the last render. The
+    // active-leaf-change listener uses this to skip the rerender when nothing
+    // we display has changed — otherwise every click into the pane (which
+    // activates the leaf) would wipe the DOM and feel like the click was lost.
+    this.lastActiveFilePath = null;
     this.pomodoroState = null;
     this.pomodoroTickHandle = null;
     this.pomodoroHidden = false;
@@ -2686,7 +2691,12 @@ var TodayView = class extends import_obsidian4.ItemView {
       })
     );
     this.registerEvent(
-      this.app.workspace.on("active-leaf-change", () => this.scheduleRender())
+      this.app.workspace.on("active-leaf-change", () => {
+        var _a, _b;
+        const path = (_b = (_a = this.app.workspace.getActiveFile()) == null ? void 0 : _a.path) != null ? _b : null;
+        if (path !== this.lastActiveFilePath)
+          this.scheduleRender();
+      })
     );
     this.registerEvent(
       this.app.vault.on("modify", () => this.scheduleRender())
@@ -2867,6 +2877,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.scheduleRender();
   }
   async render() {
+    var _a;
     const root = this.containerEl.children[1];
     if (this.pomodoroState && !this.pomodoroHidden) {
       const handled = await this.renderPomodoro(root);
@@ -2913,6 +2924,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
     const intention = displayFile ? parseIntention(fileContent, this.plugin.settings.intentionTag) : null;
     const activeFile = this.app.workspace.getActiveFile();
+    this.lastActiveFilePath = (_a = activeFile == null ? void 0 : activeFile.path) != null ? _a : null;
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
     this.renderDateNav(root);
     const colorMap = resolveProjectColors(

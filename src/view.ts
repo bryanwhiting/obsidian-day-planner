@@ -138,6 +138,11 @@ export class TodayView extends ItemView {
   private unscheduledCollapsed: boolean = Platform.isMobile;
   private overrideFilePath: string | null = null;
   private hasRendered: boolean = false;
+  // Path of the workspace's active file at the last render. The
+  // active-leaf-change listener uses this to skip the rerender when nothing
+  // we display has changed — otherwise every click into the pane (which
+  // activates the leaf) would wipe the DOM and feel like the click was lost.
+  private lastActiveFilePath: string | null = null;
   private pomodoroState: {
     filePath: string;
     taskLineNumber: number;
@@ -182,7 +187,10 @@ export class TodayView extends ItemView {
       }),
     );
     this.registerEvent(
-      this.app.workspace.on("active-leaf-change", () => this.scheduleRender()),
+      this.app.workspace.on("active-leaf-change", () => {
+        const path = this.app.workspace.getActiveFile()?.path ?? null;
+        if (path !== this.lastActiveFilePath) this.scheduleRender();
+      }),
     );
     this.registerEvent(
       this.app.vault.on("modify", () => this.scheduleRender()),
@@ -432,6 +440,7 @@ export class TodayView extends ItemView {
       : null;
 
     const activeFile = this.app.workspace.getActiveFile();
+    this.lastActiveFilePath = activeFile?.path ?? null;
     const showOpenActiveLink =
       activeFile !== null &&
       (!displayFile || activeFile.path !== displayFile.path);
