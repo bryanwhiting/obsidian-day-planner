@@ -1629,6 +1629,10 @@
     color: var(--color-ink-faint);
   }
 
+  body.is-mobile .dp-description-input {
+    min-height: 84px;
+  }
+
   .dp-prompt-summary {
     display: flex;
     align-items: baseline;
