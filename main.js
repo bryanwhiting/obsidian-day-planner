@@ -3593,7 +3593,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   cleanBody(body) {
     var _a, _b;
     const p = this.plugin.settings.prefixes;
-    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "");
+    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
       if (!tag)
@@ -4466,6 +4466,21 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     this.modalEl.addClass("dp-title-modal");
     this.titleEl.setText(this.opts.modalTitle);
     this.contentEl.empty();
+    this.contentEl.addEventListener(
+      "focusin",
+      (ev) => {
+        const target = ev.target;
+        if (!target)
+          return;
+        const tag = target.tagName;
+        if (tag !== "INPUT" && tag !== "TEXTAREA")
+          return;
+        window.setTimeout(() => {
+          target.scrollIntoView({ block: "center", behavior: "smooth" });
+        }, 250);
+      },
+      true
+    );
     const titleRow = this.contentEl.createDiv({ cls: "dp-edit-title-row" });
     const checkBox = titleRow.createSpan({
       cls: "dp-edit-check",

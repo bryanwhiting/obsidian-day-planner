@@ -2944,6 +2944,24 @@ class TaskEditModal extends Modal {
     this.titleEl.setText(this.opts.modalTitle);
     this.contentEl.empty();
 
+    // On mobile, the on-screen keyboard often covers the field that just
+    // gained focus. Browser auto-scroll inside a position:fixed modal is
+    // unreliable, so wait for the keyboard to settle and pull the focused
+    // input into view ourselves.
+    this.contentEl.addEventListener(
+      "focusin",
+      (ev) => {
+        const target = ev.target as HTMLElement | null;
+        if (!target) return;
+        const tag = target.tagName;
+        if (tag !== "INPUT" && tag !== "TEXTAREA") return;
+        window.setTimeout(() => {
+          target.scrollIntoView({ block: "center", behavior: "smooth" });
+        }, 250);
+      },
+      true,
+    );
+
     const titleRow = this.contentEl.createDiv({ cls: "dp-edit-title-row" });
     const checkBox = titleRow.createSpan({
       cls: "dp-edit-check",

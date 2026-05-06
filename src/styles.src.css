@@ -2249,6 +2249,30 @@
     background: var(--color-paper);
   }
 
+  /* Mobile: keep the edit modal scrollable when the on-screen keyboard
+   * shrinks the viewport. dvh follows the visible viewport (keyboard up =
+   * smaller dvh), so capping max-height to dvh + overflow-y:auto means the
+   * user can always scroll to reach inputs and action buttons. */
+  body.is-mobile .dp-title-modal {
+    max-height: 100dvh;
+  }
+
+  body.is-mobile .dp-title-modal .modal-content {
+    max-height: calc(100dvh - 80px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  /* When an input gets focused, the keyboard reveals — give scrollIntoView
+   * (and the browser's auto-scroll on focus) some breathing room above the
+   * keyboard so the focused field doesn't end up flush with its edge. */
+  body.is-mobile .dp-title-modal input,
+  body.is-mobile .dp-title-modal textarea {
+    scroll-margin-top: 16px;
+    scroll-margin-bottom: 96px;
+  }
+
   .today-root .dp-pomo {
     position: relative;
     display: flex;
