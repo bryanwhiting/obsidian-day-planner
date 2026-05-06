@@ -685,34 +685,69 @@ export class TodayView extends ItemView {
     defaultDurationMin: number,
   ): void {
     const prefixes = this.plugin.settings.prefixes;
-    new TitlePromptModal(this.app, {
-      heading: `New task at ${this.fmtClock(startMin)}`,
-      placeholder: "Task title…",
-      durations: quickDurations(this.plugin.settings.quickDurationsMin),
-      projects: this.collectProjectNames(),
+    this.openNewTaskModal(
+      `New task at ${this.fmtClock(startMin)}`,
       defaultDurationMin,
-      onSubmit: (title, durationMin, project) => {
-        const newLine = buildTaskLine(title, prefixes, {
+      (title, description, durationMin, project) => {
+        const body = description
+          ? `${title} {${description}}`
+          : title;
+        const newLine = buildTaskLine(body, prefixes, {
           startMin,
           durationMin,
           project,
         });
         void this.appendTaskAfterLast(file, newLine);
       },
-    }).open();
+    );
   }
 
   private createUnscheduledTask(file: TFile): void {
     const prefixes = this.plugin.settings.prefixes;
-    new TitlePromptModal(this.app, {
-      heading: "New unscheduled task",
-      placeholder: "Task title…",
-      durations: quickDurations(this.plugin.settings.quickDurationsMin),
-      projects: this.collectProjectNames(),
-      defaultDurationMin: this.plugin.settings.defaultDurationMin,
-      onSubmit: (title, durationMin, project) => {
-        const newLine = buildTaskLine(title, prefixes, { durationMin, project });
+    this.openNewTaskModal(
+      "New unscheduled task",
+      this.plugin.settings.defaultDurationMin,
+      (title, description, durationMin, project) => {
+        const body = description
+          ? `${title} {${description}}`
+          : title;
+        const newLine = buildTaskLine(body, prefixes, {
+          durationMin,
+          project,
+        });
         void this.appendTaskAfterLast(file, newLine);
+      },
+    );
+  }
+
+  private openNewTaskModal(
+    modalTitle: string,
+    defaultDurationMin: number,
+    onCreate: (
+      title: string,
+      description: string | null,
+      durationMin: number,
+      project: string | null,
+    ) => void,
+  ): void {
+    new TaskEditModal(this.app, {
+      mode: "new",
+      modalTitle,
+      initialTitle: "",
+      initialDescription: "",
+      initialDurationMin: defaultDurationMin,
+      initialProject: null,
+      initialChecked: false,
+      subtasks: [],
+      projects: this.collectProjectNames(),
+      durations: quickDurations(this.plugin.settings.quickDurationsMin),
+      prefixes: this.plugin.settings.prefixes,
+      cleanBody: (body) => this.cleanBody(body),
+      onSave: (title, description, durationMin, project) => {
+        const proj =
+          project === undefined || project === "" ? null : project;
+        const dur = durationMin ?? defaultDurationMin;
+        onCreate(title, description, dur, proj);
       },
     }).open();
   }
@@ -1564,6 +1599,8 @@ export class TodayView extends ItemView {
 
   private openTaskEditor(file: TFile, task: ParsedTask): void {
     new TaskEditModal(this.app, {
+      mode: "edit",
+      modalTitle: "Edit task",
       initialTitle: this.cleanBody(task.body),
       initialDescription: task.description ?? "",
       initialDurationMin: task.durationMin,
@@ -1844,165 +1881,12 @@ export class TodayView extends ItemView {
   }
 }
 
-interface TitlePromptOpts {
-  heading: string;
-  placeholder: string;
-  defaultDurationMin: number;
-  // If provided, the modal advances to a duration-picker step after the title
-  // is entered. If omitted, the title submit fires onSubmit with
-  // defaultDurationMin immediately and no project.
-  durations?: { label: string; min: number }[];
-  projects?: string[];
-  onSubmit: (
-    title: string,
-    durationMin: number,
-    project: string | null,
-  ) => void;
-}
-
-class TitlePromptModal extends Modal {
-  private opts: TitlePromptOpts;
-  private datalistId: string;
-
-  constructor(app: App, opts: TitlePromptOpts) {
-    super(app);
-    this.opts = opts;
-    this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
-  }
-
-  onOpen(): void {
-    this.modalEl.addClass("dp-title-modal");
-    this.titleEl.setText(this.opts.heading);
-    this.renderTitleStep();
-  }
-
-  private renderTitleStep(): void {
-    this.contentEl.empty();
-    const input = this.contentEl.createEl("input", {
-      type: "text",
-      cls: "dp-title-input",
-      attr: { placeholder: this.opts.placeholder },
-    });
-    input.focus();
-
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        const title = input.value.trim();
-        if (this.opts.durations && this.opts.durations.length > 0) {
-          this.renderDurationStep(title);
-        } else {
-          this.opts.onSubmit(title, this.opts.defaultDurationMin, null);
-          this.close();
-        }
-      }
-      // Escape is handled by Modal's default close behavior — no task created.
-    });
-  }
-
-  private renderDurationStep(title: string): void {
-    this.contentEl.empty();
-    const summary = this.contentEl.createDiv({ cls: "dp-prompt-summary" });
-    summary.createSpan({ cls: "dp-prompt-summary-label", text: "Task" });
-    summary.createSpan({
-      cls: "dp-prompt-summary-value",
-      text: title || "(untitled)",
-    });
-
-    const projLabel = this.contentEl.createDiv({
-      cls: "dp-prompt-step-label",
-      text: "Project",
-    });
-    projLabel.setAttribute("aria-hidden", "true");
-
-    const projRow = this.contentEl.createDiv({ cls: "dp-project-row" });
-    const projInput = projRow.createEl("input", {
-      type: "text",
-      cls: "dp-project-input",
-      attr: {
-        placeholder: "(none)",
-        list: this.datalistId,
-        autocomplete: "off",
-      },
-    });
-    const datalist = projRow.createEl("datalist");
-    datalist.id = this.datalistId;
-    (this.opts.projects ?? []).forEach((name) => {
-      datalist.createEl("option", { attr: { value: name } });
-    });
-    const clearBtn = projRow.createEl("button", {
-      cls: "dp-project-clear",
-      attr: { "aria-label": "Clear project" },
-    });
-    clearBtn.type = "button";
-    clearBtn.setText("×");
-    clearBtn.addEventListener("click", () => {
-      projInput.value = "";
-      projInput.focus();
-    });
-
-    const durLabel = this.contentEl.createDiv({
-      cls: "dp-prompt-step-label",
-      text: "How long?",
-    });
-    durLabel.setAttribute("aria-hidden", "true");
-
-    const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
-    const durations = this.opts.durations ?? [];
-    const buttons: HTMLButtonElement[] = [];
-
-    const resolveProject = (): string | null => {
-      const raw = projInput.value.trim();
-      if (!raw) return null;
-      return sanitizeProjectName(raw) || null;
-    };
-
-    durations.forEach((d, idx) => {
-      const btn = row.createEl("button", {
-        cls: "dp-duration-btn",
-        text: d.label,
-      });
-      btn.type = "button";
-      btn.setAttribute("aria-label", `${d.label} (${idx + 1})`);
-      btn.addEventListener("click", () => {
-        this.opts.onSubmit(title, d.min, resolveProject());
-        this.close();
-      });
-      buttons.push(btn);
-    });
-
-    // Enter on the project input commits the typed/selected project and
-    // moves focus to the duration row so the user can press 1/2/3 next.
-    projInput.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        projInput.blur();
-        buttons[0]?.focus();
-      }
-    });
-
-    // Number-key shortcuts: 1 → first option, 2 → second, etc.
-    // Suppressed while the project input is focused so digits typed there
-    // (e.g. a project named "v2") aren't swallowed.
-    durations.forEach((d, idx) => {
-      this.scope.register([], `${idx + 1}`, (ev) => {
-        if (document.activeElement === projInput) return;
-        ev.preventDefault();
-        this.opts.onSubmit(title, d.min, resolveProject());
-        this.close();
-        return false;
-      });
-    });
-
-    projInput.focus();
-  }
-
-  onClose(): void {
-    this.contentEl.empty();
-  }
-}
-
 interface TaskEditOpts {
+  // "edit" attaches to an existing task line and exposes the subtask list
+  // plus footer actions. "new" reuses the same modal layout for task creation
+  // — no subtasks (no parent yet), no "show in note", no "move to tomorrow".
+  mode: "edit" | "new";
+  modalTitle: string;
   initialTitle: string;
   initialDescription: string;
   initialDurationMin: number;
@@ -2014,7 +1898,8 @@ interface TaskEditOpts {
   prefixes: TagPrefixes;
   cleanBody: (body: string) => string;
   // durationMin is null when the user did not pick a new duration — leave the
-  // existing #d/ tag (or its absence) alone.
+  // existing #d/ tag (or its absence) alone. In "new" mode it's always set
+  // because every new task needs a duration.
   // description is null when unchanged; otherwise it's the new value (empty
   // string clears the {…} block).
   // project is undefined when unchanged; "" means remove the tag; otherwise set.
@@ -2026,16 +1911,142 @@ interface TaskEditOpts {
     project: string | null | undefined,
     checked: boolean | null,
   ) => void;
-  onToggleSubtask: (sub: ParsedSubtask, checked: boolean) => Promise<void>;
-  onAddSubtask: (text: string) => Promise<ParsedSubtask | null>;
-  onEditSubtask: (sub: ParsedSubtask, newText: string) => Promise<void>;
-  onSetSubtaskTime: (
+  // Edit-only callbacks. Required in "edit" mode, ignored in "new" mode.
+  onToggleSubtask?: (sub: ParsedSubtask, checked: boolean) => Promise<void>;
+  onAddSubtask?: (text: string) => Promise<ParsedSubtask | null>;
+  onEditSubtask?: (sub: ParsedSubtask, newText: string) => Promise<void>;
+  onSetSubtaskTime?: (
     sub: ParsedSubtask,
     totalMin: number | null,
   ) => Promise<void>;
-  onReorderSubtasks: (ordered: ParsedSubtask[]) => Promise<void>;
-  onShowInNote: () => void;
-  onMoveToTomorrow: () => Promise<boolean>;
+  onReorderSubtasks?: (ordered: ParsedSubtask[]) => Promise<void>;
+  onShowInNote?: () => void;
+  onMoveToTomorrow?: () => Promise<boolean>;
+}
+
+// Wires a custom autocomplete popover onto a project input. The popover lists
+// matching project / sub-project paths (sub-projects rendered with a muted
+// "/sub" suffix), supports arrow-key navigation and click-to-select, and
+// always allows free-form entry — typing a brand-new name and pressing Enter
+// submits it as-is rather than picking a suggestion.
+function attachProjectSuggest(
+  input: HTMLInputElement,
+  wrap: HTMLElement,
+  projects: string[],
+): void {
+  const popover = wrap.createDiv({ cls: "dp-project-suggest" });
+  popover.style.display = "none";
+  let visible: string[] = [];
+  let activeIdx = -1;
+
+  const filter = (q: string): string[] => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return projects.slice(0, 12);
+    const starts = projects.filter((p) => p.toLowerCase().startsWith(needle));
+    const contains = projects.filter(
+      (p) =>
+        !p.toLowerCase().startsWith(needle) &&
+        p.toLowerCase().includes(needle),
+    );
+    return [...starts, ...contains].slice(0, 12);
+  };
+
+  const renderItems = (): void => {
+    popover.empty();
+    visible.forEach((name, i) => {
+      const item = popover.createDiv({ cls: "dp-project-suggest-item" });
+      if (i === activeIdx) item.addClass("is-active");
+      const slash = name.indexOf("/");
+      if (slash >= 0) {
+        item.createSpan({ text: name.slice(0, slash) });
+        item.createSpan({
+          cls: "dp-project-suggest-sub",
+          text: name.slice(slash),
+        });
+      } else {
+        item.createSpan({ text: name });
+      }
+      // mousedown (not click) so we beat the input's blur and the value
+      // commits before the popover hides.
+      item.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        input.value = name;
+        hide();
+        input.focus();
+      });
+      item.addEventListener("mousemove", () => {
+        if (activeIdx === i) return;
+        activeIdx = i;
+        updateActive();
+      });
+    });
+  };
+
+  const updateActive = (): void => {
+    const items = popover.querySelectorAll<HTMLElement>(
+      ".dp-project-suggest-item",
+    );
+    items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
+  };
+
+  const show = (): void => {
+    visible = filter(input.value);
+    if (visible.length === 0) {
+      hide();
+      return;
+    }
+    if (activeIdx < 0 || activeIdx >= visible.length) activeIdx = 0;
+    renderItems();
+    popover.style.display = "";
+  };
+
+  const hide = (): void => {
+    popover.style.display = "none";
+    activeIdx = -1;
+  };
+
+  input.addEventListener("input", show);
+  input.addEventListener("focus", show);
+  input.addEventListener("blur", () => {
+    // Delay so a mousedown on a popover item registers before we hide.
+    window.setTimeout(hide, 100);
+  });
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      if (popover.style.display === "none") {
+        show();
+        return;
+      }
+      activeIdx = Math.min(activeIdx + 1, visible.length - 1);
+      updateActive();
+    } else if (ev.key === "ArrowUp") {
+      if (popover.style.display === "none") return;
+      ev.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      updateActive();
+    } else if (ev.key === "Enter") {
+      // Pick the highlighted suggestion only when it differs from what's
+      // typed — otherwise let Enter fall through to the modal's submit.
+      if (
+        popover.style.display !== "none" &&
+        activeIdx >= 0 &&
+        activeIdx < visible.length &&
+        input.value !== visible[activeIdx]
+      ) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        input.value = visible[activeIdx];
+        hide();
+      }
+    } else if (ev.key === "Escape") {
+      if (popover.style.display !== "none") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        hide();
+      }
+    }
+  });
 }
 
 // Project segments only allow [\w-]; "/" separates a sub-project segment so
@@ -2068,19 +2079,17 @@ class TaskEditModal extends Modal {
   private durationChanged = false;
   private checked: boolean;
   private checkedChanged = false;
-  private datalistId: string;
 
   constructor(app: App, opts: TaskEditOpts) {
     super(app);
     this.opts = opts;
     this.selectedDurationMin = opts.initialDurationMin;
     this.checked = opts.initialChecked;
-    this.datalistId = `dp-projects-${Math.random().toString(36).slice(2, 9)}`;
   }
 
   onOpen(): void {
     this.modalEl.addClass("dp-title-modal");
-    this.titleEl.setText("Edit task");
+    this.titleEl.setText(this.opts.modalTitle);
     this.contentEl.empty();
 
     const titleRow = this.contentEl.createDiv({ cls: "dp-edit-title-row" });
@@ -2134,21 +2143,14 @@ class TaskEditModal extends Modal {
     projLabel.setAttribute("aria-hidden", "true");
 
     const projRow = this.contentEl.createDiv({ cls: "dp-project-row" });
-    const projInput = projRow.createEl("input", {
+    const projWrap = projRow.createDiv({ cls: "dp-project-input-wrap" });
+    const projInput = projWrap.createEl("input", {
       type: "text",
       cls: "dp-project-input",
-      attr: {
-        placeholder: "(none)",
-        list: this.datalistId,
-        autocomplete: "off",
-      },
+      attr: { placeholder: "(none)", autocomplete: "off" },
     });
     projInput.value = this.opts.initialProject ?? "";
-    const datalist = projRow.createEl("datalist");
-    datalist.id = this.datalistId;
-    this.opts.projects.forEach((name) => {
-      datalist.createEl("option", { attr: { value: name } });
-    });
+    attachProjectSuggest(projInput, projWrap, this.opts.projects);
     const clearBtn = projRow.createEl("button", {
       cls: "dp-project-clear",
       attr: { "aria-label": "Clear project" },
@@ -2186,6 +2188,9 @@ class TaskEditModal extends Modal {
 
     const resolveProject = (): string | null | undefined => {
       const raw = projInput.value.trim();
+      if (this.opts.mode === "new") {
+        return raw ? sanitizeProjectName(raw) || null : null;
+      }
       const initial = this.opts.initialProject ?? "";
       if (raw === initial) return undefined;
       if (!raw) return "";
@@ -2196,15 +2201,23 @@ class TaskEditModal extends Modal {
       // Task lines are single-line markdown; collapse any newlines the user
       // typed into spaces so we never write a broken line back to the file.
       const raw = descInput.value.replace(/\s+/g, " ").trim();
+      if (this.opts.mode === "new") return raw || null;
       if (raw === this.opts.initialDescription.trim()) return null;
       return raw;
     };
 
     const submit = (): void => {
+      const title = input.value.trim();
+      if (this.opts.mode === "new" && !title) {
+        input.focus();
+        return;
+      }
       this.opts.onSave(
-        input.value.trim(),
+        title,
         resolveDescription(),
-        this.durationChanged ? this.selectedDurationMin : null,
+        this.opts.mode === "new" || this.durationChanged
+          ? this.selectedDurationMin
+          : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null,
       );
@@ -2228,6 +2241,7 @@ class TaskEditModal extends Modal {
       }
     });
 
+    if (this.opts.mode === "edit") {
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({
       cls: "dp-prompt-step-label",
@@ -2255,7 +2269,7 @@ class TaskEditModal extends Modal {
         .slice()
         .sort((a, b) => a - b);
       const ordered = subs.slice();
-      void this.opts.onReorderSubtasks(ordered);
+      void this.opts.onReorderSubtasks!(ordered);
       // Update each sub's lineNumber to its new slot so subsequent edits
       // target the right line.
       ordered.forEach((s, i) => {
@@ -2303,7 +2317,7 @@ class TaskEditModal extends Modal {
         checked = !checked;
         row.toggleClass("is-done", checked);
         box.toggleClass("is-checked", checked);
-        void this.opts.onToggleSubtask(sub, checked);
+        void this.opts.onToggleSubtask!(sub, checked);
       };
       box.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -2352,7 +2366,7 @@ class TaskEditModal extends Modal {
           const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
           if (m) sub.text = m[1];
           renderTimeChip();
-          void this.opts.onSetSubtaskTime(sub, totalMin);
+          void this.opts.onSetSubtaskTime!(sub, totalMin);
         };
         editor.addEventListener("keydown", (kev) => {
           if (kev.key === "Enter") {
@@ -2388,7 +2402,7 @@ class TaskEditModal extends Modal {
             const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
             if (m) sub.text = m[1];
             textEl.setText(cleanBody(sub.text));
-            void this.opts.onEditSubtask(sub, next);
+            void this.opts.onEditSubtask!(sub, next);
           }
           textEl.style.display = "";
         };
@@ -2492,7 +2506,7 @@ class TaskEditModal extends Modal {
       if (!text) return;
       addInput.disabled = true;
       addBtn.disabled = true;
-      const sub = await this.opts.onAddSubtask(text);
+      const sub = await this.opts.onAddSubtask!(text);
       addInput.disabled = false;
       addBtn.disabled = false;
       if (sub) {
@@ -2511,33 +2525,36 @@ class TaskEditModal extends Modal {
         void submitNewSubtask();
       }
     });
+    } // end if (edit mode)
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
-    const showBtn = actions.createEl("button", {
-      cls: "dp-edit-show-btn",
-      text: "Show in note",
-    });
-    showBtn.type = "button";
-    showBtn.addEventListener("click", () => {
-      this.close();
-      this.opts.onShowInNote();
-    });
+    if (this.opts.mode === "edit") {
+      const showBtn = actions.createEl("button", {
+        cls: "dp-edit-show-btn",
+        text: "Show in note",
+      });
+      showBtn.type = "button";
+      showBtn.addEventListener("click", () => {
+        this.close();
+        this.opts.onShowInNote!();
+      });
 
-    const moveBtn = actions.createEl("button", {
-      cls: "dp-edit-show-btn",
-      text: "Move to tomorrow",
-    });
-    moveBtn.type = "button";
-    moveBtn.addEventListener("click", async () => {
-      moveBtn.disabled = true;
-      const moved = await this.opts.onMoveToTomorrow();
-      if (moved) this.close();
-      else moveBtn.disabled = false;
-    });
+      const moveBtn = actions.createEl("button", {
+        cls: "dp-edit-show-btn",
+        text: "Move to tomorrow",
+      });
+      moveBtn.type = "button";
+      moveBtn.addEventListener("click", async () => {
+        moveBtn.disabled = true;
+        const moved = await this.opts.onMoveToTomorrow!();
+        if (moved) this.close();
+        else moveBtn.disabled = false;
+      });
+    }
 
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
-      text: "Save",
+      text: this.opts.mode === "new" ? "Add task" : "Save",
     });
     saveBtn.type = "button";
     saveBtn.addEventListener("click", submit);
