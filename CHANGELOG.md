@@ -2,6 +2,50 @@
 
 ## 2026-05-06
 
+### Habits tracker: source file, dashboard line, click-toggle, stats pane
+
+- **Requested:** "let's add a habits tracker. The plugin should read
+  the settings to find a habits file (default is daily/_habits)…
+  habits should have their own hashtag (specified in a setting)… if
+  the habits haven't been completed yet this day/week/month, they
+  appear below the workout — so it won't disappear with the summary
+  collapse… show the uncompleted habits in this format: d:
+  call-mom, eat-burrito • w: … • m: … When i click on the habit, it
+  will then add a completed task to my file. I can click it a second
+  time to un-check it… The other thing is that it should have a
+  little button i can click which will show some stats — i want to
+  see a heatmap of both exercises and habits… For workouts, find a
+  way to sum all the #x/workout/reps." Follow-ups: habits file is
+  plain hashtag lines with optional descriptions (no frontmatter);
+  writes go to whatever daily note the dashboard is showing; weekly
+  habits scan all daily notes in the week; week-start and
+  hide-completed are configurable; stats open in a separate pane via
+  a `[stats]` link on the habits line.
+- **Done:** New `src/habits.ts` owns the parser
+  (`parseHabitsFile`), tag regex builder (`buildHabitTagRegex`),
+  occurrence counter, line mutators (`appendHabitLine` /
+  `removeHabitLine`, with `removeHabitLine` only touching `- [x]`
+  lines so prose-tag occurrences are protected), period helpers
+  (`weekRange`, `monthRange`, `enumerateDailyNoteDatesInRange`), and
+  a memoized `HabitsScanner` that mtime-checks daily-note reads so
+  weekly/monthly checks don't thrash the disk on every keystroke.
+  New `src/habitsView.ts` registers the `today-habits-stats` view
+  with three 10-cell heatmap rows (Day / Week / Month) showing
+  completion rate per cell plus total `#x/...` reps in each window.
+  `src/view.ts` `renderSection` now renders a `.dp-habits` line
+  immediately after `.dp-workout` (which sits in `.dp-header` and
+  survives summary collapse), with click-to-toggle chips and a
+  trailing `[stats]` link that calls
+  `plugin.activateHabitsStatsView()`. `src/settings.ts` adds
+  `habitsFile`, `habitPrefix`, `habitWeekStart`,
+  `habitsHideCompleted`, and `habitsStatsWindow`, surfaced via
+  `renderHabitsSection` between Notes and Templating. `src/main.ts`
+  instantiates the scanner, registers the stats view, and adds an
+  `open-habits-stats` command. CSS for `.dp-habits*` and
+  `.dp-heatmap*` lives next to `.dp-workout` in
+  `src/styles.src.css`, with cell colors driven by a
+  `--dp-heatmap-intensity` custom property.
+
 ### Edit modal: lift `#tid/<id>` out of the title into a clickable header pill
 
 - **Requested:** "when a task has a tid in it, and i open the modal, i

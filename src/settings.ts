@@ -71,6 +71,19 @@ export interface TodaySettings {
   // Moment.js format for the visible label of @-trigger date links. Empty
   // string falls back to the bare filename (no alias).
   dateLinkFormat: string;
+  // Path to the habits-source file (e.g. "daily/_habits.md"). Plain hashtag
+  // lines like `#h/day/call-mom Call mom` define habits.
+  habitsFile: string;
+  // Single-letter tag prefix for habits. Default "h" → tags look like
+  // `#h/day/call-mom`. Validated against /^[a-zA-Z]+$/.
+  habitPrefix: string;
+  // First day of the habit week. 0=Sunday..6=Saturday. Default Sunday.
+  habitWeekStart: number;
+  // When true, completed habits disappear from the dashboard line; when
+  // false, they remain with strikethrough styling.
+  habitsHideCompleted: boolean;
+  // Number of buckets shown in each heatmap row in the stats pane.
+  habitsStatsWindow: number;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -101,6 +114,11 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   pomodoroAutoReturn: true,
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
+  habitsFile: "daily/_habits.md",
+  habitPrefix: "h",
+  habitWeekStart: 0,
+  habitsHideCompleted: false,
+  habitsStatsWindow: 10,
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -169,6 +187,7 @@ export class TodaySettingTab extends PluginSettingTab {
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
     this.renderNotesSection(containerEl);
+    this.renderHabitsSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
@@ -1063,6 +1082,114 @@ export class TodaySettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.noteTag)
           .onChange(async (v) => {
             this.plugin.settings.noteTag = v.trim().replace(/^#+/, "");
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+
+  private renderHabitsSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Habits").setHeading();
+
+    const desc = document.createDocumentFragment();
+    desc.append(
+      "Habits live in a single source file as plain hashtag lines like ",
+      makeCode("#h/day/call-mom Call mom"),
+      " or ",
+      makeCode("#h/week/review-monarch"),
+      ". The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
+      makeCode("- [x] <slug> #h/<period>/<slug>"),
+      " to the displayed daily note. The point is to avoid muddying your daily checklist — habits stay invisible in the note unless completed.",
+    );
+    new Setting(containerEl).setDesc(desc);
+
+    new Setting(containerEl)
+      .setName("Habits file")
+      .setDesc("Vault path to the habits-source file. Default: daily/_habits.md.")
+      .addText((t) => {
+        t.setPlaceholder("daily/_habits.md")
+          .setValue(this.plugin.settings.habitsFile)
+          .onChange(async (v) => {
+            this.plugin.settings.habitsFile = v.trim();
+            await this.plugin.saveSettings();
+          });
+        new FileSuggest(this.app, t.inputEl, async (file) => {
+          t.setValue(file.path);
+          this.plugin.settings.habitsFile = file.path;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Habit tag prefix")
+      .setDesc(
+        "Letter(s) used between # and the period segment. Default `h` → tags look like `#h/day/call-mom`.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("h")
+          .setValue(this.plugin.settings.habitPrefix)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.habitPrefix = v;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Week start")
+      .setDesc(
+        "First day of the habit week. Affects when weekly habits reset and how the weekly heatmap is bucketed.",
+      )
+      .addDropdown((d) =>
+        d
+          .addOption("0", "Sunday")
+          .addOption("1", "Monday")
+          .addOption("2", "Tuesday")
+          .addOption("3", "Wednesday")
+          .addOption("4", "Thursday")
+          .addOption("5", "Friday")
+          .addOption("6", "Saturday")
+          .setValue(this.plugin.settings.habitWeekStart.toString())
+          .onChange(async (v) => {
+            const n = parseInt(v, 10);
+            if (Number.isFinite(n) && n >= 0 && n <= 6) {
+              this.plugin.settings.habitWeekStart = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Hide completed habits")
+      .setDesc(
+        "When on, completed habits disappear from the dashboard line. When off (default), they stay visible with strikethrough.",
+      )
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.habitsHideCompleted)
+          .onChange(async (v) => {
+            this.plugin.settings.habitsHideCompleted = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Stats window")
+      .setDesc(
+        "Number of cells in each heatmap row in the stats pane (last N days / weeks / months). Range 5–30.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.habitsStatsWindow.toString())
+          .onChange(async (v) => {
+            const n = clampInt(
+              v,
+              5,
+              30,
+              this.plugin.settings.habitsStatsWindow,
+            );
+            this.plugin.settings.habitsStatsWindow = n;
             await this.plugin.saveSettings();
           }),
       );

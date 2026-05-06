@@ -28,15 +28,19 @@ import {
   buildDateLinkInsert,
   applyDailyNoteTemplateIfEmpty,
 } from "./dailyNote";
+import { HabitsScanner } from "./habits";
+import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
 import { moment } from "obsidian";
 
 let polyfillInstalled = false;
 
 export default class TodayPlugin extends Plugin {
   settings!: TodaySettings;
+  habitsScanner!: HabitsScanner;
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.habitsScanner = new HabitsScanner(this.app);
 
     // HTML5 drag-and-drop doesn't fire on touch — install the polyfill once
     // on mobile so timeline blocks and unscheduled cards become draggable.
@@ -49,6 +53,11 @@ export default class TodayPlugin extends Plugin {
     this.registerView(
       VIEW_TYPE_TODAY,
       (leaf) => new TodayView(leaf, this),
+    );
+
+    this.registerView(
+      VIEW_TYPE_HABITS_STATS,
+      (leaf) => new HabitsStatsView(leaf, this),
     );
 
     this.addRibbonIcon("calendar-clock", "Open Today", () => {
@@ -65,6 +74,12 @@ export default class TodayPlugin extends Plugin {
       id: "open-calendar",
       name: "Open calendar",
       callback: () => void this.activateView({ openCalendar: true }),
+    });
+
+    this.addCommand({
+      id: "open-habits-stats",
+      name: "Open habit stats",
+      callback: () => void this.activateHabitsStatsView(),
     });
 
     this.addSettingTab(new TodaySettingTab(this.app, this));
@@ -137,6 +152,25 @@ export default class TodayPlugin extends Plugin {
     if (opts.openCalendar && leaf.view instanceof TodayView) {
       leaf.view.openCalendar();
     }
+  }
+
+  async activateHabitsStatsView(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_HABITS_STATS,
+    );
+    let leaf: WorkspaceLeaf | null;
+    if (existing.length > 0) {
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      return;
+    }
+    leaf = this.app.workspace.getRightLeaf(false);
+    if (!leaf) return;
+    await leaf.setViewState({
+      type: VIEW_TYPE_HABITS_STATS,
+      active: true,
+    });
+    this.app.workspace.revealLeaf(leaf);
   }
 }
 

@@ -318,7 +318,7 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
@@ -1111,7 +1111,12 @@ var DEFAULT_SETTINGS = {
   pomodoroAutoCycle: true,
   pomodoroAutoReturn: true,
   taskIdLength: 4,
-  dateLinkFormat: "ddd, MMM D, YYYY"
+  dateLinkFormat: "ddd, MMM D, YYYY",
+  habitsFile: "daily/_habits.md",
+  habitPrefix: "h",
+  habitWeekStart: 0,
+  habitsHideCompleted: false,
+  habitsStatsWindow: 10
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1168,6 +1173,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
     this.renderNotesSection(containerEl);
+    this.renderHabitsSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
@@ -1819,6 +1825,74 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       })
     );
   }
+  renderHabitsSection(containerEl) {
+    new import_obsidian2.Setting(containerEl).setName("Habits").setHeading();
+    const desc = document.createDocumentFragment();
+    desc.append(
+      "Habits live in a single source file as plain hashtag lines like ",
+      makeCode("#h/day/call-mom Call mom"),
+      " or ",
+      makeCode("#h/week/review-monarch"),
+      ". The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
+      makeCode("- [x] <slug> #h/<period>/<slug>"),
+      " to the displayed daily note. The point is to avoid muddying your daily checklist \u2014 habits stay invisible in the note unless completed."
+    );
+    new import_obsidian2.Setting(containerEl).setDesc(desc);
+    new import_obsidian2.Setting(containerEl).setName("Habits file").setDesc("Vault path to the habits-source file. Default: daily/_habits.md.").addText((t) => {
+      t.setPlaceholder("daily/_habits.md").setValue(this.plugin.settings.habitsFile).onChange(async (v) => {
+        this.plugin.settings.habitsFile = v.trim();
+        await this.plugin.saveSettings();
+      });
+      new FileSuggest(this.app, t.inputEl, async (file) => {
+        t.setValue(file.path);
+        this.plugin.settings.habitsFile = file.path;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian2.Setting(containerEl).setName("Habit tag prefix").setDesc(
+      "Letter(s) used between # and the period segment. Default `h` \u2192 tags look like `#h/day/call-mom`."
+    ).addText(
+      (t) => t.setPlaceholder("h").setValue(this.plugin.settings.habitPrefix).onChange(async (v) => {
+        if (/^[a-zA-Z]+$/.test(v)) {
+          this.plugin.settings.habitPrefix = v;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Week start").setDesc(
+      "First day of the habit week. Affects when weekly habits reset and how the weekly heatmap is bucketed."
+    ).addDropdown(
+      (d) => d.addOption("0", "Sunday").addOption("1", "Monday").addOption("2", "Tuesday").addOption("3", "Wednesday").addOption("4", "Thursday").addOption("5", "Friday").addOption("6", "Saturday").setValue(this.plugin.settings.habitWeekStart.toString()).onChange(async (v) => {
+        const n = parseInt(v, 10);
+        if (Number.isFinite(n) && n >= 0 && n <= 6) {
+          this.plugin.settings.habitWeekStart = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Hide completed habits").setDesc(
+      "When on, completed habits disappear from the dashboard line. When off (default), they stay visible with strikethrough."
+    ).addToggle(
+      (t) => t.setValue(this.plugin.settings.habitsHideCompleted).onChange(async (v) => {
+        this.plugin.settings.habitsHideCompleted = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Stats window").setDesc(
+      "Number of cells in each heatmap row in the stats pane (last N days / weeks / months). Range 5\u201330."
+    ).addText(
+      (t) => t.setValue(this.plugin.settings.habitsStatsWindow.toString()).onChange(async (v) => {
+        const n = clampInt(
+          v,
+          5,
+          30,
+          this.plugin.settings.habitsStatsWindow
+        );
+        this.plugin.settings.habitsStatsWindow = n;
+        await this.plugin.saveSettings();
+      })
+    );
+  }
 };
 function clampInt(v, lo, hi, fallback) {
   const n = parseInt(v, 10);
@@ -2335,6 +2409,121 @@ function buildDateLinkInsert(app, date, fileFormat, folder, displayFormat) {
   return `[[${linkPath}]]`;
 }
 
+// src/habits.ts
+var SLUG_PATTERN = "[\\w-]+";
+function escapeRegex2(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function buildHabitTagRegex(prefix, period, slug) {
+  const periodPart = period != null ? period : "(day|week|month)";
+  const slugPart = slug ? escapeRegex2(slug) : `(${SLUG_PATTERN})`;
+  return new RegExp(
+    `#${escapeRegex2(prefix)}\\/${periodPart}\\/${slugPart}(?![\\w-])`,
+    "g"
+  );
+}
+function parseHabitsFile(content, prefix) {
+  var _a;
+  const re = new RegExp(
+    `#${escapeRegex2(prefix)}\\/(day|week|month)\\/(${SLUG_PATTERN})(?![\\w-])(.*)$`
+  );
+  const habits = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const line of content.split("\n")) {
+    const m = re.exec(line);
+    if (!m)
+      continue;
+    const period = m[1];
+    const slug = m[2];
+    const label = ((_a = m[3]) != null ? _a : "").trim();
+    const key = `${period}/${slug}`;
+    if (seen.has(key))
+      continue;
+    seen.add(key);
+    habits.push({ period, slug, label });
+  }
+  return habits;
+}
+function countHabitOccurrences(content, prefix, period, slug) {
+  const re = buildHabitTagRegex(prefix, period, slug);
+  let count = 0;
+  for (const _ of content.matchAll(re))
+    count++;
+  return count;
+}
+function appendHabitLine(content, prefix, period, slug) {
+  const line = `- [x] ${slug} #${prefix}/${period}/${slug}`;
+  if (content.length === 0)
+    return line + "\n";
+  if (content.endsWith("\n"))
+    return content + line + "\n";
+  return content + "\n" + line + "\n";
+}
+var CHECKED_TASK_RE = /^\s*- \[[xX]\]\s+/;
+function removeHabitLine(content, prefix, period, slug) {
+  const tagRe = buildHabitTagRegex(prefix, period, slug);
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (!CHECKED_TASK_RE.test(lines[i]))
+      continue;
+    tagRe.lastIndex = 0;
+    if (!tagRe.test(lines[i]))
+      continue;
+    lines.splice(i, 1);
+    return lines.join("\n");
+  }
+  return content;
+}
+function weekRange(date, weekStart) {
+  const d = startOfDay(date);
+  const dow = d.getDay();
+  const offset = (dow - weekStart + 7) % 7;
+  const start = addDays(d, -offset);
+  const end = addDays(start, 7);
+  return { start, end };
+}
+function monthRange(date) {
+  const start = startOfMonth(date);
+  const end = addMonths(start, 1);
+  return { start, end };
+}
+function enumerateDailyNoteDatesInRange(start, end) {
+  const out = [];
+  let d = startOfDay(start);
+  const stop = end.getTime();
+  while (d.getTime() < stop) {
+    out.push(d);
+    d = addDays(d, 1);
+  }
+  return out;
+}
+var HabitsScanner = class {
+  constructor(app) {
+    this.app = app;
+    this.cache = /* @__PURE__ */ new Map();
+  }
+  invalidate(path) {
+    this.cache.delete(path);
+  }
+  clear() {
+    this.cache.clear();
+  }
+  async getContent(file) {
+    const cached = this.cache.get(file.path);
+    if (cached && cached.mtime === file.stat.mtime)
+      return cached.content;
+    const content = await this.app.vault.read(file);
+    this.cache.set(file.path, { mtime: file.stat.mtime, content });
+    return content;
+  }
+  async readDateContent(date, fallback) {
+    const resolved = await resolveDailyNote(this.app, date, fallback);
+    if (!resolved.file)
+      return "";
+    return this.getContent(resolved.file);
+  }
+};
+
 // src/view.ts
 var VIEW_TYPE_TODAY = "today-view";
 var TRANSPARENT_PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
@@ -2615,6 +2804,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       ),
       this.plugin.settings.projectColors
     );
+    const habitDisplays = await this.loadHabitDisplays(
+      this.selectedDate,
+      fileContent,
+      fallback
+    );
     this.renderSection(
       root,
       this.formatDateLabel(this.selectedDate),
@@ -2623,6 +2817,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       displayPath,
       tasks,
       exercises,
+      habitDisplays,
       true,
       colorMap,
       showOpenActiveLink ? activeFile : null
@@ -2822,7 +3017,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       day: "numeric"
     });
   }
-  renderSection(parent, title, subtitle, file, path, tasks, exercises, isPrimary, colorMap, openActiveTarget = null) {
+  renderSection(parent, title, subtitle, file, path, tasks, exercises, habitDisplays, isPrimary, colorMap, openActiveTarget = null) {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed)
       section.addClass("is-summaries-collapsed");
@@ -2868,6 +3063,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (isPrimary) {
       const workout = header.createDiv({ cls: "dp-workout" });
       workout.textContent = formatExerciseLine(exercises);
+      this.renderHabitsLine(header, habitDisplays, file);
     }
     const nonNoteTasks = tasks.filter((t) => !this.isNoteTask(t));
     const statsRow = header.createDiv({ cls: "dp-stats-row" });
@@ -3864,7 +4060,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   cleanBody(body) {
     var _a, _b;
     const p = this.plugin.settings.prefixes;
-    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "");
+    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "").replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
       if (!tag)
@@ -3933,6 +4129,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   openTaskEditor(file, task) {
     var _a;
+    const prefixes = this.plugin.settings.prefixes;
     new TaskEditModal(this.app, {
       mode: "edit",
       modalTitle: "Edit task",
@@ -3941,6 +4138,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       initialDurationMin: task.durationMin,
       initialProject: task.project,
       initialChecked: task.checked,
+      initialTaskId: parseTaskId(task.body, prefixes),
+      taskIdPrefix: prefixes.taskId,
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
@@ -4180,6 +4379,138 @@ var TodayView = class extends import_obsidian4.ItemView {
       lines[lineNumber] = setTaskChecked(lines[lineNumber], checked);
       return lines.join("\n");
     });
+  }
+  // Builds the per-habit completion state for the displayed daily note. Daily
+  // habits look only at the displayed note's content (already in hand);
+  // weekly/monthly habits scan all daily notes in the corresponding period
+  // around the displayed date via the shared scanner cache.
+  async loadHabitDisplays(displayDate, displayContent, fallback) {
+    const settings = this.plugin.settings;
+    const habitsFile = this.app.vault.getAbstractFileByPath(settings.habitsFile);
+    if (!(habitsFile instanceof import_obsidian4.TFile))
+      return [];
+    const habitsContent = await this.plugin.habitsScanner.getContent(habitsFile);
+    const habits = parseHabitsFile(habitsContent, settings.habitPrefix);
+    if (habits.length === 0)
+      return [];
+    const week = weekRange(displayDate, settings.habitWeekStart);
+    const month = monthRange(displayDate);
+    const readWindow = async (start, end) => {
+      const parts = [];
+      for (const d of enumerateDailyNoteDatesInRange(start, end)) {
+        const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+        if (c)
+          parts.push(c);
+      }
+      return parts.join("\n");
+    };
+    const needWeek = habits.some((h) => h.period === "week");
+    const needMonth = habits.some((h) => h.period === "month");
+    const weekContent = needWeek ? await readWindow(week.start, week.end) : "";
+    const monthContent = needMonth ? await readWindow(month.start, month.end) : "";
+    const out = [];
+    for (const h of habits) {
+      const haystack = h.period === "day" ? displayContent : h.period === "week" ? weekContent : monthContent;
+      const n = countHabitOccurrences(
+        haystack,
+        settings.habitPrefix,
+        h.period,
+        h.slug
+      );
+      out.push({ habit: h, isComplete: n > 0 });
+    }
+    return out;
+  }
+  renderHabitsLine(parent, displays, displayFile) {
+    if (displays.length === 0)
+      return;
+    const settings = this.plugin.settings;
+    const wrap = parent.createDiv({ cls: "dp-habits" });
+    const periods = ["day", "week", "month"];
+    const groups = {
+      day: [],
+      week: [],
+      month: []
+    };
+    for (const d of displays)
+      groups[d.habit.period].push(d);
+    let firstSegment = true;
+    for (const period of periods) {
+      const items = groups[period];
+      if (items.length === 0)
+        continue;
+      const visible = settings.habitsHideCompleted ? items.filter((i) => !i.isComplete) : items;
+      if (!firstSegment) {
+        wrap.createSpan({ cls: "dp-habit-sep", text: " \u2022 " });
+      }
+      firstSegment = false;
+      const labelText = period === "day" ? "d:" : period === "week" ? "w:" : "m:";
+      wrap.createSpan({ cls: "dp-habit-period", text: labelText });
+      wrap.appendText(" ");
+      if (visible.length === 0) {
+        wrap.createSpan({ cls: "dp-habit-allcomplete", text: "\u2713" });
+        continue;
+      }
+      visible.forEach((d, idx) => {
+        if (idx > 0)
+          wrap.appendText(", ");
+        const cls = "dp-habit" + (d.isComplete ? " is-done" : "");
+        const chip = wrap.createSpan({ cls, text: d.habit.slug });
+        if (d.habit.label)
+          chip.title = d.habit.label;
+        chip.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          void this.applyHabitToggle(
+            displayFile,
+            d.habit.period,
+            d.habit.slug,
+            d.isComplete
+          );
+        });
+      });
+    }
+    if (!firstSegment) {
+      wrap.appendText("  ");
+      const stats = wrap.createEl("a", {
+        cls: "dp-habit-stats-link",
+        text: "[stats]",
+        attr: { href: "#" }
+      });
+      stats.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        void this.plugin.activateHabitsStatsView();
+      });
+    }
+  }
+  // Toggles a habit on the displayed daily note: appends a new `- [x] <slug>
+  // #<prefix>/<period>/<slug>` line if currently incomplete, or removes the
+  // first matching `- [x]` line if currently complete. Creates the daily note
+  // if it doesn't exist (only on the toggle-on path; toggling off a missing
+  // file is a no-op).
+  async applyHabitToggle(file, period, slug, currentlyComplete) {
+    const settings = this.plugin.settings;
+    const fallback = {
+      folder: settings.dailyNoteFolderFallback,
+      format: settings.dailyNoteFormatFallback,
+      template: settings.dailyNoteTemplate,
+      dateLinkFormat: settings.dateLinkFormat
+    };
+    let target;
+    if (file) {
+      target = file;
+    } else if (currentlyComplete) {
+      return;
+    } else {
+      target = await ensureDailyNote(this.app, this.selectedDate, fallback);
+    }
+    await this.app.vault.process(target, (content) => {
+      if (currentlyComplete) {
+        return removeHabitLine(content, settings.habitPrefix, period, slug);
+      }
+      return appendHabitLine(content, settings.habitPrefix, period, slug);
+    });
+    this.plugin.habitsScanner.invalidate(target.path);
   }
   isPopout() {
     var _a;
@@ -4880,6 +5211,26 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     this.modalEl.addClass("dp-title-modal");
     document.body.addClass("today-edit-open");
     this.titleEl.setText(this.opts.modalTitle);
+    if (this.opts.initialTaskId && this.opts.taskIdPrefix) {
+      const id = this.opts.initialTaskId;
+      const prefix = this.opts.taskIdPrefix;
+      const pill = this.titleEl.createEl("a", {
+        cls: "dp-edit-tid-pill",
+        text: `#${prefix}/${id}`,
+        href: "#",
+        attr: {
+          "aria-label": `Search for #${prefix}/${id}`,
+          title: `Search for other instances of this task`
+        }
+      });
+      pill.addEventListener("click", (ev) => {
+        var _a2, _b, _c, _d;
+        ev.preventDefault();
+        const search = (_b = (_a2 = this.app.internalPlugins) == null ? void 0 : _a2.getPluginById) == null ? void 0 : _b.call(_a2, "global-search");
+        (_d = (_c = search == null ? void 0 : search.instance) == null ? void 0 : _c.openGlobalSearch) == null ? void 0 : _d.call(_c, `tag:#${prefix}/${id}`);
+        this.close();
+      });
+    }
     this.contentEl.empty();
     this.contentEl.addEventListener(
       "focusin",
@@ -5723,19 +6074,220 @@ var SubtaskQuickAddModal = class extends import_obsidian4.Modal {
   }
 };
 
+// src/habitsView.ts
+var import_obsidian5 = require("obsidian");
+var VIEW_TYPE_HABITS_STATS = "today-habits-stats";
+var HabitsStatsView = class extends import_obsidian5.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.rerenderTimer = null;
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return VIEW_TYPE_HABITS_STATS;
+  }
+  getDisplayText() {
+    return "Habit stats";
+  }
+  getIcon() {
+    return "activity";
+  }
+  async onOpen() {
+    this.registerEvent(
+      this.app.vault.on("modify", () => this.scheduleRender())
+    );
+    this.registerEvent(
+      this.app.vault.on("delete", () => this.scheduleRender())
+    );
+    this.registerEvent(
+      this.app.metadataCache.on("changed", () => this.scheduleRender())
+    );
+    await this.render();
+  }
+  async onClose() {
+    if (this.rerenderTimer !== null)
+      window.clearTimeout(this.rerenderTimer);
+  }
+  scheduleRender() {
+    if (this.rerenderTimer !== null)
+      window.clearTimeout(this.rerenderTimer);
+    this.rerenderTimer = window.setTimeout(() => {
+      this.rerenderTimer = null;
+      void this.render();
+    }, 100);
+  }
+  async render() {
+    const root = this.containerEl.children[1];
+    root.empty();
+    root.addClass("today-root");
+    root.addClass("dp-habit-stats");
+    const settings = this.plugin.settings;
+    const fallback = {
+      folder: settings.dailyNoteFolderFallback,
+      format: settings.dailyNoteFormatFallback,
+      template: settings.dailyNoteTemplate,
+      dateLinkFormat: settings.dateLinkFormat
+    };
+    const heading = root.createDiv({ cls: "dp-habit-stats-header" });
+    heading.createEl("h3", { text: "Habit stats" });
+    const habits = await this.loadHabits();
+    if (habits.length === 0) {
+      root.createDiv({
+        cls: "dp-habit-stats-empty",
+        text: `No habits found. Add tags like #${settings.habitPrefix}/day/<slug> to ${settings.habitsFile}.`
+      });
+      return;
+    }
+    const today = startOfDay(new Date());
+    const window2 = settings.habitsStatsWindow;
+    const dayCells = await this.buildDayHeatmap(habits, fallback, today, window2);
+    const weekCells = await this.buildWeekHeatmap(habits, fallback, today, window2);
+    const monthCells = await this.buildMonthHeatmap(habits, fallback, today, window2);
+    this.renderRow(root, "Day", dayCells);
+    this.renderRow(root, "Week", weekCells);
+    this.renderRow(root, "Month", monthCells);
+  }
+  async loadHabits() {
+    const path = this.plugin.settings.habitsFile;
+    const f = this.app.vault.getAbstractFileByPath(path);
+    if (!(f instanceof import_obsidian5.TFile))
+      return [];
+    const content = await this.plugin.habitsScanner.getContent(f);
+    return parseHabitsFile(content, this.plugin.settings.habitPrefix);
+  }
+  renderRow(parent, title, cells) {
+    const row = parent.createDiv({ cls: "dp-heatmap-row" });
+    row.createDiv({ cls: "dp-heatmap-row-title", text: title });
+    const grid = row.createDiv({ cls: "dp-heatmap-grid" });
+    let totalReps = 0;
+    let completedSum = 0;
+    let totalPossible = 0;
+    for (const c of cells) {
+      const cell = grid.createDiv({ cls: "dp-heatmap-cell" });
+      cell.style.setProperty("--dp-heatmap-intensity", c.rate.toFixed(3));
+      cell.setAttribute("aria-label", c.tooltip);
+      cell.title = c.tooltip;
+      cell.createSpan({ cls: "dp-heatmap-cell-label", text: c.label });
+      totalReps += c.exerciseReps;
+      completedSum += c.habitsCompleted;
+      totalPossible += c.habitsTotal;
+    }
+    const totals = row.createDiv({ cls: "dp-heatmap-totals" });
+    totals.createSpan({
+      cls: "dp-heatmap-total",
+      text: totalPossible > 0 ? `${completedSum}/${totalPossible}` : "\u2014"
+    });
+    totals.createSpan({ cls: "dp-heatmap-sep", text: " \u2022 " });
+    totals.createSpan({
+      cls: "dp-heatmap-total-reps",
+      text: `${totalReps} reps`
+    });
+  }
+  async buildDayHeatmap(habits, fallback, today, count) {
+    const dayHabits = habits.filter((h) => h.period === "day");
+    const cells = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const start = addDays(today, -i);
+      const end = addDays(start, 1);
+      const cell = await this.buildCell(start, end, dayHabits, fallback);
+      cell.label = start.toLocaleDateString(void 0, { weekday: "narrow" }).toUpperCase();
+      cell.tooltip = `${start.toLocaleDateString(void 0, { weekday: "short", month: "short", day: "numeric" })}
+${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
+      cells.push(cell);
+    }
+    return cells;
+  }
+  async buildWeekHeatmap(habits, fallback, today, count) {
+    const weekHabits = habits.filter((h) => h.period === "week");
+    const weekStart = this.plugin.settings.habitWeekStart;
+    const cells = [];
+    const thisWeek = weekRange(today, weekStart);
+    for (let i = count - 1; i >= 0; i--) {
+      const start = addDays(thisWeek.start, -7 * i);
+      const end = addDays(start, 7);
+      const cell = await this.buildCell(start, end, weekHabits, fallback);
+      cell.label = `${start.getMonth() + 1}/${start.getDate()}`;
+      cell.tooltip = `Week of ${start.toLocaleDateString(void 0, { month: "short", day: "numeric" })}
+${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
+      cells.push(cell);
+    }
+    return cells;
+  }
+  async buildMonthHeatmap(habits, fallback, today, count) {
+    const monthHabits = habits.filter((h) => h.period === "month");
+    const cells = [];
+    const thisMonth = monthRange(today);
+    for (let i = count - 1; i >= 0; i--) {
+      const start = addMonths(thisMonth.start, -i);
+      const end = addMonths(start, 1);
+      const cell = await this.buildCell(start, end, monthHabits, fallback);
+      cell.label = start.toLocaleDateString(void 0, { month: "short" });
+      cell.tooltip = `${start.toLocaleDateString(void 0, { month: "long", year: "numeric" })}
+${cell.habitsCompleted}/${cell.habitsTotal} habits \xB7 ${cell.exerciseReps} reps`;
+      cells.push(cell);
+    }
+    return cells;
+  }
+  async buildCell(start, end, habits, fallback) {
+    const dates = enumerateDailyNoteDatesInRange(start, end);
+    const contents = [];
+    for (const d of dates) {
+      const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+      if (c)
+        contents.push(c);
+    }
+    const combined = contents.join("\n");
+    let completed = 0;
+    for (const h of habits) {
+      const n = countHabitOccurrences(
+        combined,
+        this.plugin.settings.habitPrefix,
+        h.period,
+        h.slug
+      );
+      if (n > 0)
+        completed++;
+    }
+    const total = habits.length;
+    let reps = 0;
+    for (const c of contents) {
+      const summaries = parseExercises(c, this.plugin.settings.prefixes);
+      for (const s of summaries) {
+        for (const set of s.sets)
+          reps += set.reps;
+      }
+    }
+    return {
+      start,
+      end,
+      label: "",
+      tooltip: "",
+      habitsCompleted: completed,
+      habitsTotal: total,
+      rate: total > 0 ? completed / total : 0,
+      exerciseReps: reps
+    };
+  }
+};
+
 // src/main.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian5.Plugin {
+var TodayPlugin = class extends import_obsidian6.Plugin {
   async onload() {
     await this.loadSettings();
-    if (import_obsidian5.Platform.isMobile && !polyfillInstalled) {
+    this.habitsScanner = new HabitsScanner(this.app);
+    if (import_obsidian6.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
     this.registerView(
       VIEW_TYPE_TODAY,
       (leaf) => new TodayView(leaf, this)
+    );
+    this.registerView(
+      VIEW_TYPE_HABITS_STATS,
+      (leaf) => new HabitsStatsView(leaf, this)
     );
     this.addRibbonIcon("calendar-clock", "Open Today", () => {
       void this.activateView();
@@ -5750,11 +6302,16 @@ var TodayPlugin = class extends import_obsidian5.Plugin {
       name: "Open calendar",
       callback: () => void this.activateView({ openCalendar: true })
     });
+    this.addCommand({
+      id: "open-habits-stats",
+      name: "Open habit stats",
+      callback: () => void this.activateHabitsStatsView()
+    });
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian5.TFile))
+        if (!(af instanceof import_obsidian6.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -5812,8 +6369,27 @@ var TodayPlugin = class extends import_obsidian5.Plugin {
       leaf.view.openCalendar();
     }
   }
+  async activateHabitsStatsView() {
+    const existing = this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_HABITS_STATS
+    );
+    let leaf;
+    if (existing.length > 0) {
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      return;
+    }
+    leaf = this.app.workspace.getRightLeaf(false);
+    if (!leaf)
+      return;
+    await leaf.setViewState({
+      type: VIEW_TYPE_HABITS_STATS,
+      active: true
+    });
+    this.app.workspace.revealLeaf(leaf);
+  }
 };
-var InlineSuggest = class extends import_obsidian5.EditorSuggest {
+var InlineSuggest = class extends import_obsidian6.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -5900,7 +6476,7 @@ var InlineSuggest = class extends import_obsidian5.EditorSuggest {
       return buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian6.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian7.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,
