@@ -363,6 +363,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
 
     const dailyResolved = await resolveDailyNote(
@@ -551,6 +552,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -2005,6 +2007,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -2061,6 +2064,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -3228,7 +3232,7 @@ class TaskEditModal extends Modal {
     descInput.value = this.opts.initialDescription;
 
     const projLabel = this.contentEl.createDiv({
-      cls: "dp-prompt-step-label",
+      cls: "dp-prompt-step-label is-mobile-hidden",
       text: "Project",
     });
     projLabel.setAttribute("aria-hidden", "true");
@@ -3254,7 +3258,7 @@ class TaskEditModal extends Modal {
     });
 
     const durLabel = this.contentEl.createDiv({
-      cls: "dp-prompt-step-label",
+      cls: "dp-prompt-step-label is-mobile-hidden",
       text: "Duration",
     });
     durLabel.setAttribute("aria-hidden", "true");
@@ -3273,9 +3277,78 @@ class TaskEditModal extends Modal {
         this.durationChanged = true;
         buttons.forEach((b) => b.removeClass("is-selected"));
         btn.addClass("is-selected");
+        updateSummary();
       });
       buttons.push(btn);
     });
+
+    // Mobile-only quick-insert bar plus a small summary line, positioned
+    // directly under the title row. The bar replaces the project/duration
+    // form fields (hidden on mobile via CSS) — users tap a button to fire
+    // the autocomplete trigger and the summary echoes the selected values
+    // in a minimalist three-cell row underneath.
+    const quickInsert = createDiv({ cls: "dp-edit-quick-insert" });
+    const summary = createDiv({ cls: "dp-edit-quick-summary" });
+    titleRow.after(quickInsert);
+    quickInsert.after(summary);
+
+    const summaryProj = summary.createDiv({ cls: "dp-edit-quick-summary-cell" });
+    const summaryTime = summary.createDiv({ cls: "dp-edit-quick-summary-cell" });
+    const summaryDur = summary.createDiv({ cls: "dp-edit-quick-summary-cell" });
+
+    const insertTriggerAtCursor = (trigger: string): void => {
+      if (!trigger) return;
+      if (document.activeElement !== input) input.focus();
+      const cursor = input.selectionStart ?? input.value.length;
+      const before = input.value.slice(0, cursor);
+      const after = input.value.slice(cursor);
+      const needsLead = before.length > 0 && !/\s$/.test(before);
+      const insertion = (needsLead ? " " : "") + trigger;
+      input.value = before + insertion + after;
+      const newPos = before.length + insertion.length;
+      input.setSelectionRange(newPos, newPos);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    const addQuickBtn = (
+      trigger: string,
+      iconName: string,
+      label: string,
+    ): void => {
+      const btn = quickInsert.createEl("button", {
+        cls: "dp-edit-quick-btn",
+        attr: { "aria-label": `Insert ${label.toLowerCase()}` },
+      });
+      btn.type = "button";
+      setIcon(btn, iconName);
+      btn.createSpan({ cls: "dp-edit-quick-label", text: label });
+      // pointerdown + preventDefault keeps focus on the title input so the
+      // mobile keyboard doesn't dismiss between taps.
+      btn.addEventListener("pointerdown", (ev) => {
+        ev.preventDefault();
+        insertTriggerAtCursor(trigger);
+      });
+    };
+    addQuickBtn(this.opts.projectTrigger, "folder", "Project");
+    addQuickBtn(this.opts.timeTrigger, "clock", "Time");
+    addQuickBtn(this.opts.durationTrigger, "timer", "Duration");
+
+    const updateSummary = (): void => {
+      const proj = projInput.value.trim();
+      summaryProj.setText(proj || "—");
+      summaryProj.toggleClass("is-empty", !proj);
+
+      const timeMin = parseTime(input.value, this.opts.prefixes);
+      summaryTime.setText(
+        timeMin !== null ? formatClockShort(timeMin) : "—",
+      );
+      summaryTime.toggleClass("is-empty", timeMin === null);
+
+      summaryDur.setText(formatCompactDuration(this.selectedDurationMin));
+    };
+    input.addEventListener("input", updateSummary);
+    projInput.addEventListener("input", updateSummary);
+    updateSummary();
 
     const projectPool = this.opts.projects;
     const timePool = buildTimeOptions(
@@ -3287,7 +3360,9 @@ class TaskEditModal extends Modal {
     );
     // Replaces the [triggerStart, cursor] range in the title input. When
     // `replacement` is empty we also trim a trailing space we'd otherwise
-    // leave behind (so "foo ##bar" → "foo", not "foo ").
+    // leave behind (so "foo ##bar" → "foo", not "foo "). Dispatches an
+    // `input` event afterward so listeners (autocomplete refresh, the
+    // mobile summary line) stay in sync with the post-commit text.
     const replaceTriggerRange = (
       start: number,
       cursor: number,
@@ -3299,6 +3374,7 @@ class TaskEditModal extends Modal {
       input.value = before + replacement + after;
       const newCursor = before.length + replacement.length;
       input.setSelectionRange(newCursor, newCursor);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     };
     attachTitleSuggest(input, titleWrap, [
       {
@@ -3317,8 +3393,10 @@ class TaskEditModal extends Modal {
           }
         },
         commit: (name, start, cursor) => {
-          replaceTriggerRange(start, cursor, "");
+          // Set projInput first so the input event dispatched by
+          // replaceTriggerRange picks up the new project value.
           projInput.value = name;
+          replaceTriggerRange(start, cursor, "");
         },
       },
       {
@@ -3351,6 +3429,7 @@ class TaskEditModal extends Modal {
             });
           }
           replaceTriggerRange(start, cursor, "");
+          updateSummary();
         },
       },
       // Date rule keeps the resolved Date alongside the keyword in a parallel

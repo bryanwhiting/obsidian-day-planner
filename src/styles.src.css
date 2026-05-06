@@ -1996,6 +1996,88 @@
     transform: rotate(45deg) translate(-1px, -1px);
   }
 
+  /* Mobile-only quick-insert bar plus a small selected-values summary
+   * underneath, both placed directly under the title input. The bar
+   * mirrors the autocomplete triggers (project / time / duration) so
+   * phone users don't have to type "##" / "#@" / "#$" on a soft keyboard,
+   * and the summary echoes the currently chosen values in a minimalist
+   * three-column row. The full project input and duration buttons rows
+   * are hidden on mobile (see below) since this UI replaces them. */
+  .dp-edit-quick-insert,
+  .dp-edit-quick-summary {
+    display: none;
+  }
+
+  body.is-mobile .dp-edit-quick-insert {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  body.is-mobile .dp-edit-quick-summary {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--color-ink-muted);
+  }
+
+  .dp-edit-quick-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 8px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    cursor: pointer;
+    transition: border-color 120ms ease, color 120ms ease,
+      background-color 120ms ease;
+  }
+
+  .dp-edit-quick-btn:active {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-paper));
+  }
+
+  .dp-edit-quick-btn .svg-icon {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2px;
+  }
+
+  .dp-edit-quick-summary-cell {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    padding: 0 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dp-edit-quick-summary-cell.is-empty {
+    color: var(--color-ink-faint);
+  }
+
+  /* Hide the full project/duration form rows on mobile — the quick-insert
+   * bar above triggers the autocomplete pickers and the summary line
+   * echoes the chosen values, so the larger form fields are redundant. */
+  body.is-mobile .dp-title-modal .dp-prompt-step-label.is-mobile-hidden,
+  body.is-mobile .dp-title-modal .dp-project-row,
+  body.is-mobile .dp-title-modal .dp-duration-row {
+    display: none;
+  }
+
   .dp-edit-subtask-header {
     display: flex;
     align-items: baseline;
