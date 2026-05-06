@@ -789,89 +789,77 @@
     bottom: 0;
   }
 
-  /* ---------- note dots (gutter) ---------- */
+  /* ---------- note strips (inline on timeline) ---------- */
 
   .dp-notes-layer {
     position: absolute;
     top: 0;
-    left: 0;
-    width: 46px;
+    left: 46px;
+    right: 6px;
     bottom: 0;
     pointer-events: none;
   }
 
-  .dp-note-dot {
+  .dp-note-strip {
+    --dp-color: var(--color-ink-faint);
     position: absolute;
-    right: 4px;
-    width: 8px;
-    height: 8px;
-    margin-top: -4px;
-    border-radius: 50%;
-    background: var(--dp-color, var(--color-ink-faint));
-    box-shadow: 0 0 0 1.5px var(--color-paper);
+    left: 0;
+    right: 0;
+    height: 18px;
+    margin-top: -9px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-left: 3px solid var(--dp-color);
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--dp-color) 12%, transparent);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
     cursor: pointer;
     pointer-events: auto;
     z-index: 2;
-    transition: transform 100ms ease, box-shadow 100ms ease;
+    transition: background-color 100ms ease;
   }
 
-  .dp-note-dot:hover {
-    transform: scale(1.35);
-    box-shadow: 0 0 0 2px var(--color-paper);
+  .dp-note-strip:hover {
+    background: color-mix(in srgb, var(--dp-color) 22%, transparent);
   }
 
-  .dp-note-dot.is-done {
-    opacity: 0.45;
+  .dp-note-strip.is-done {
+    opacity: 0.5;
   }
 
-  .dp-note-tooltip {
-    position: absolute;
-    left: calc(100% + 8px);
-    top: 50%;
-    transform: translateY(-50%);
-    min-width: 160px;
-    max-width: 320px;
-    padding: 8px 10px;
-    background: var(--color-paper);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-float);
-    font-family: var(--font-sans);
-    font-size: 12px;
-    color: var(--color-ink);
-    pointer-events: none;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 100ms ease;
-    z-index: 10;
-    white-space: normal;
+  .dp-note-strip.is-done .dp-note-strip-title {
+    text-decoration: line-through;
   }
 
-  .dp-note-dot:hover .dp-note-tooltip {
-    opacity: 1;
-    visibility: visible;
+  .dp-note-strip-dot {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dp-color);
   }
 
-  .dp-note-tooltip-time {
+  .dp-note-strip-time {
+    flex: 0 0 auto;
     font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 500;
-    color: var(--color-ink-faint);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 2px;
-  }
-
-  .dp-note-tooltip-title {
-    font-weight: 600;
-    line-height: 1.3;
-  }
-
-  .dp-note-tooltip-desc {
-    margin-top: 4px;
-    font-size: 11.5px;
     color: var(--color-ink-muted);
-    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dp-note-strip-title {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
   }
 
   .dp-now-line {

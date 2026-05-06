@@ -2368,7 +2368,7 @@ var TodayView = class extends import_obsidian4.ItemView {
           continue;
         if (note.startMin < startMin || note.startMin > endMin)
           continue;
-        this.renderNoteDot(
+        this.renderNoteStrip(
           notesLayer,
           file,
           note,
@@ -2524,37 +2524,32 @@ var TodayView = class extends import_obsidian4.ItemView {
       return lines.join("\n");
     });
   }
-  // A timed note renders as a small colored dot in the timeline gutter at
-  // its start time. Click opens the editor; hover shows time + title +
-  // description in a popover. The dot inherits the task's project / context
-  // color so notes group visually with the project they belong to.
-  renderNoteDot(layer, file, note, topPx, colorMap) {
+  // A timed note renders as a thin one-line block on the timeline at its
+  // start time — a dot, the time, and the title, all visible inline. Click
+  // opens the editor for the full description and editing UI. The strip
+  // inherits the task's project / context color so notes group visually
+  // with their project.
+  renderNoteStrip(layer, file, note, topPx, colorMap) {
     var _a, _b;
-    const dot = layer.createDiv({ cls: "dp-note-dot" });
+    const strip = layer.createDiv({ cls: "dp-note-strip" });
     if (note.checked)
-      dot.addClass("is-done");
-    dot.style.top = `${topPx}px`;
+      strip.addClass("is-done");
+    strip.style.top = `${topPx}px`;
     const ctx = this.findContextTag(note);
     const projectColor = getTaskColor(note.project, note.subproject, colorMap);
     const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
     if (color)
-      dot.style.setProperty("--dp-color", color);
-    const tooltip = dot.createDiv({ cls: "dp-note-tooltip" });
-    tooltip.createDiv({
-      cls: "dp-note-tooltip-time",
+      strip.style.setProperty("--dp-color", color);
+    strip.createSpan({ cls: "dp-note-strip-dot" });
+    strip.createSpan({
+      cls: "dp-note-strip-time",
       text: this.fmtClock(note.startMin)
     });
-    tooltip.createDiv({
-      cls: "dp-note-tooltip-title",
+    strip.createSpan({
+      cls: "dp-note-strip-title",
       text: this.cleanBody(note.body) || "(untitled)"
     });
-    if (note.description) {
-      tooltip.createDiv({
-        cls: "dp-note-tooltip-desc",
-        text: note.description
-      });
-    }
-    dot.addEventListener("click", (ev) => {
+    strip.addEventListener("click", (ev) => {
       ev.stopPropagation();
       this.openTaskEditor(file, note);
     });
