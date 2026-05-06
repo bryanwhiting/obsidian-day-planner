@@ -2296,9 +2296,9 @@
 
   .dp-edit-show-btn,
   .dp-edit-save-btn {
-    padding: 7px 14px;
+    padding: 10px 18px;
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     border-radius: var(--radius-card);
     cursor: pointer;
@@ -2319,8 +2319,8 @@
 
   .dp-edit-icon-btn {
     @apply inline-flex items-center justify-center cursor-pointer;
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     padding: 0;
     box-sizing: border-box;
     background: var(--color-paper);
@@ -2342,8 +2342,8 @@
   }
 
   .dp-edit-icon-btn .svg-icon {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     stroke-width: 2px;
   }
 
@@ -2363,9 +2363,10 @@
     padding: 6px;
     background: var(--color-paper);
     border: 1px solid var(--color-hairline);
-    border-radius: 999px;
+    border-radius: 12px;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
     z-index: 10;
+    white-space: nowrap;
   }
 
   /* Tiny pointer down toward the parent button. */
@@ -2383,16 +2384,18 @@
     transform: translateX(-50%) translateY(-50%) rotate(45deg);
   }
 
-  .dp-edit-move-icon {
+  .dp-edit-move-choice {
     @apply inline-flex items-center justify-center cursor-pointer;
-    width: 32px;
-    height: 32px;
-    padding: 0;
+    height: 36px;
+    padding: 0 12px;
     box-sizing: border-box;
     background: var(--color-paper);
     border: 1px solid var(--color-hairline);
-    border-radius: 999px;
-    color: var(--color-ink-muted);
+    border-radius: 8px;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
     line-height: 1;
     opacity: 0;
     transform: translateY(10px) scale(0.6);
@@ -2400,31 +2403,30 @@
       background-color 120ms ease;
   }
 
-  .dp-edit-move-icon .svg-icon {
-    width: 16px;
-    height: 16px;
-    stroke-width: 2px;
+  .dp-edit-move-hotkey {
+    color: var(--color-accent);
+    font-weight: 700;
   }
 
-  .dp-edit-move-icon:hover {
+  .dp-edit-move-choice:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
     background: var(--color-surface-hover);
   }
 
-  .dp-edit-move-choices.is-open .dp-edit-move-icon {
+  .dp-edit-move-choices.is-open .dp-edit-move-choice {
     animation: dp-move-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
 
-  .dp-edit-move-choices.is-open .dp-edit-move-icon:nth-child(1) {
+  .dp-edit-move-choices.is-open .dp-edit-move-choice:nth-child(1) {
     animation-delay: 0ms;
   }
 
-  .dp-edit-move-choices.is-open .dp-edit-move-icon:nth-child(2) {
+  .dp-edit-move-choices.is-open .dp-edit-move-choice:nth-child(2) {
     animation-delay: 60ms;
   }
 
-  .dp-edit-move-choices.is-open .dp-edit-move-icon:nth-child(3) {
+  .dp-edit-move-choices.is-open .dp-edit-move-choice:nth-child(3) {
     animation-delay: 120ms;
   }
 

@@ -3881,10 +3881,24 @@ class TaskEditModal extends Modal {
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
 
+      const makeChoiceLabel = (
+        parent: HTMLElement,
+        prefix: string,
+        hotkey: string,
+        rest: string,
+      ): void => {
+        if (prefix) parent.appendText(prefix);
+        parent.createEl("span", {
+          cls: "dp-edit-move-hotkey",
+          text: `(${hotkey})`,
+        });
+        if (rest) parent.appendText(rest);
+      };
+
       const canMoveToToday = !!this.opts.onMoveToToday;
       const todayBtn = canMoveToToday
         ? choices.createEl("button", {
-            cls: "dp-edit-move-icon",
+            cls: "dp-edit-move-choice",
             attr: {
               "aria-label": "Move to today (t)",
               title: "Move to today (t)",
@@ -3893,28 +3907,28 @@ class TaskEditModal extends Modal {
         : null;
       if (todayBtn) {
         todayBtn.type = "button";
-        setIcon(todayBtn, "sun");
+        makeChoiceLabel(todayBtn, "Move ", "t", "oday");
       }
 
       const wholeBtn = choices.createEl("button", {
-        cls: "dp-edit-move-icon",
+        cls: "dp-edit-move-choice",
         attr: {
           "aria-label": "Move whole task (w)",
           title: "Move whole task (w)",
         },
       });
       wholeBtn.type = "button";
-      setIcon(wholeBtn, "package");
+      makeChoiceLabel(wholeBtn, "Move ", "w", "hole");
 
       const incBtn = choices.createEl("button", {
-        cls: "dp-edit-move-icon",
+        cls: "dp-edit-move-choice",
         attr: {
           "aria-label": "Split — migrate incomplete (i)",
           title: "Split — migrate incomplete (i)",
         },
       });
       incBtn.type = "button";
-      setIcon(incBtn, "split");
+      makeChoiceLabel(incBtn, "Move ", "i", "ncomplete");
 
       let stageTwoActive = false;
       let keyHandler: ((ev: KeyboardEvent) => void) | null = null;
@@ -3929,7 +3943,6 @@ class TaskEditModal extends Modal {
         stageTwoActive = false;
         choices.style.display = "none";
         choices.removeClass("is-open");
-        moveBtn.style.display = "";
         if (keyHandler) {
           this.contentEl.removeEventListener("keydown", keyHandler, true);
           keyHandler = null;
@@ -3946,8 +3959,12 @@ class TaskEditModal extends Modal {
       };
 
       moveBtn.addEventListener("click", () => {
+        if (stageTwoActive) {
+          exitStageTwo();
+          moveBtn.focus();
+          return;
+        }
         stageTwoActive = true;
-        moveBtn.style.display = "none";
         choices.style.display = "";
         // Re-trigger the staggered pop-in animation each time the cluster
         // opens by toggling the class across a forced reflow.
