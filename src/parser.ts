@@ -29,6 +29,7 @@ export interface TagPrefixes {
   project: string;
   exercise: string;
   taskId: string;
+  actual: string;
 }
 
 export const DEFAULT_PREFIXES: TagPrefixes = {
@@ -38,6 +39,7 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
   project: "p",
   exercise: "x",
   taskId: "tid",
+  actual: "ta",
 };
 
 export interface ExerciseSet {
@@ -77,6 +79,9 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
       "g",
     ),
     taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`),
+    actual: new RegExp(
+      `#${esc(prefixes.actual)}\\/(?:(\\d+)h)?(?:(\\d+)m)?(?=\\s|$)`,
+    ),
   };
 }
 
@@ -223,6 +228,54 @@ export function setDurationTag(
   const re = buildTagRegexes(prefixes).duration;
   const newTag = formatDuration(newDurationMin, prefixes);
   if (re.test(rawLine)) return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+
+export function parseActualTime(
+  body: string,
+  prefixes: TagPrefixes,
+): number | null {
+  const m = buildTagRegexes(prefixes).actual.exec(body);
+  if (!m) return null;
+  const h = m[1] ? parseInt(m[1], 10) : 0;
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  const total = h * 60 + min;
+  return total > 0 ? total : null;
+}
+
+export function formatActualTime(
+  totalMin: number,
+  prefixes: TagPrefixes,
+): string {
+  const safe = Math.max(1, Math.round(totalMin));
+  const h = Math.floor(safe / 60);
+  const m = safe % 60;
+  let body: string;
+  if (h === 0) body = `${m}m`;
+  else if (m === 0) body = `${h}h`;
+  else body = `${h}h${m}m`;
+  return `#${prefixes.actual}/${body}`;
+}
+
+// Adds `addMin` minutes onto the line's existing #ta/ tag (creating it if
+// none is present). Used by the pomodoro timer to accumulate actual work
+// time on the parent task or active sub-task across sessions.
+export function addActualTimeTag(
+  rawLine: string,
+  addMin: number,
+  prefixes: TagPrefixes,
+): string {
+  if (addMin <= 0) return rawLine;
+  const re = buildTagRegexes(prefixes).actual;
+  const m = re.exec(rawLine);
+  const existing =
+    m === null
+      ? 0
+      : (m[1] ? parseInt(m[1], 10) : 0) * 60 +
+        (m[2] ? parseInt(m[2], 10) : 0);
+  const total = existing + addMin;
+  const newTag = formatActualTime(total, prefixes);
+  if (m) return rawLine.replace(re, newTag);
   return appendTag(rawLine, newTag);
 }
 

@@ -155,6 +155,7 @@ export class TodaySettingTab extends PluginSettingTab {
       "project",
       "exercise",
       "taskId",
+      "actual",
     ];
     const changes: PrefixChange[] = [];
     for (const key of keys) {
@@ -311,6 +312,22 @@ export class TodaySettingTab extends PluginSettingTab {
           .onChange(async (v) => {
             if (/^[a-zA-Z]+$/.test(v)) {
               this.plugin.settings.prefixes.taskId = v;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Actual time tag prefix")
+      .setDesc(
+        "Prefix for actual-time tags written by the pomodoro timer (e.g. #ta/25m). Whole minutes only; subsequent sessions add to the existing tag.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.prefixes.actual)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.prefixes.actual = v;
               await this.plugin.saveSettings();
             }
           }),

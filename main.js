@@ -2161,7 +2161,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (inPomo) {
       if (ev.key === "x") {
         ev.preventDefault();
-        this.exitPomodoro();
+        void this.exitPomodoroWithCommit();
         return;
       }
       if (ev.key === " ") {
@@ -2214,16 +2214,19 @@ var TodayView = class extends import_obsidian4.ItemView {
     const phaseMs = state.phase === "work" ? workMs : breakMs;
     const expired = state.paused && state.pausedRemainingMs !== null && state.pausedRemainingMs <= 0;
     if (expired) {
+      this.bankWorkProgress();
       state.phase = state.phase === "work" ? "rest" : "work";
       state.startedAt = Date.now();
       state.paused = false;
       state.pausedRemainingMs = null;
+      state.workPhaseBankedMs = 0;
     } else if (state.paused) {
       const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
       state.startedAt = Date.now() - (phaseMs - remain);
       state.paused = false;
       state.pausedRemainingMs = null;
     } else {
+      this.bankWorkProgress();
       const elapsed = Date.now() - state.startedAt;
       state.paused = true;
       state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
@@ -2261,10 +2264,12 @@ var TodayView = class extends import_obsidian4.ItemView {
     const nextSub = task.subtasks.find((s) => !s.checked);
     if (nextSub) {
       this.pomodoroSubtaskHistory.push(nextSub.lineNumber);
+      await this.commitActualTime(file, nextSub.lineNumber);
       await this.applyLineChecked(file, nextSub.lineNumber, true);
       this.scheduleRender();
       return;
     }
+    await this.commitActualTime(file, task.lineNumber);
     await this.applyLineChecked(file, task.lineNumber, true);
     this.exitPomodoro();
   }
@@ -3988,6 +3993,44 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     this.scheduleRender();
   }
+  // User-initiated exit (button or 'x' key). Commits any unwritten work-phase
+  // minutes to the currently active sub-task (or the parent task if none) so
+  // the time the user just spent is preserved on the note.
+  async exitPomodoroWithCommit() {
+    const state = this.pomodoroState;
+    if (!state)
+      return;
+    this.bankWorkProgress();
+    const minutes = Math.floor(state.actualMs / 6e4);
+    if (minutes > 0) {
+      const file = this.app.vault.getAbstractFileByPath(state.filePath);
+      if (file instanceof import_obsidian4.TFile) {
+        try {
+          const content = await this.app.vault.read(file);
+          const tasks = parseFileTasks(
+            file.path,
+            content,
+            this.plugin.settings.prefixes,
+            this.plugin.settings.defaultDurationMin
+          );
+          let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
+          if (!task) {
+            task = tasks.find(
+              (t) => this.cleanBody(t.body) === state.taskBodySnapshot
+            );
+          }
+          if (task) {
+            const nextSub = task.subtasks.find((s) => !s.checked);
+            const target = nextSub ? nextSub.lineNumber : task.lineNumber;
+            await this.commitActualTime(file, target);
+          }
+        } catch (e) {
+          new import_obsidian4.Notice(`Today: failed to write actual time (${e.message})`);
+        }
+      }
+    }
+    this.exitPomodoro();
+  }
   // Returns ms elapsed in the current phase, clamped to the phase length.
   // Honors the paused/running anchor used elsewhere in the timer math.
   currentPhaseElapsedMs() {
@@ -4133,7 +4176,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       attr: { "aria-label": "Exit focus mode" }
     });
     (0, import_obsidian4.setIcon)(exit, "x");
-    exit.addEventListener("click", () => this.exitPomodoro());
+    exit.addEventListener("click", () => void this.exitPomodoroWithCommit());
     wrap.createDiv({
       cls: "dp-pomo-phase",
       text: state.phase === "work" ? "Focus" : "Break"
@@ -4162,6 +4205,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       });
       card.addEventListener("click", async () => {
         this.pomodoroSubtaskHistory.push(nextSub.lineNumber);
+        await this.commitActualTime(file, nextSub.lineNumber);
         await this.applyLineChecked(file, nextSub.lineNumber, true);
         this.scheduleRender();
       });
@@ -4190,16 +4234,19 @@ var TodayView = class extends import_obsidian4.ItemView {
     pauseBtn.addEventListener("click", () => {
       var _a;
       if (expired) {
+        this.bankWorkProgress();
         state.phase = state.phase === "work" ? "rest" : "work";
         state.startedAt = Date.now();
         state.paused = false;
         state.pausedRemainingMs = null;
+        state.workPhaseBankedMs = 0;
       } else if (state.paused) {
         const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
         state.startedAt = Date.now() - (phaseMs - remain);
         state.paused = false;
         state.pausedRemainingMs = null;
       } else {
+        this.bankWorkProgress();
         const elapsed = Date.now() - state.startedAt;
         state.paused = true;
         state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
@@ -4213,6 +4260,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     completeBtn.type = "button";
     completeBtn.addEventListener("click", async () => {
       completeBtn.disabled = true;
+      await this.commitActualTime(file, task.lineNumber);
       await this.applyLineChecked(file, task.lineNumber, true);
       this.exitPomodoro();
     });

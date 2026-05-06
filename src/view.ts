@@ -189,7 +189,7 @@ export class TodayView extends ItemView {
     if (inPomo) {
       if (ev.key === "x") {
         ev.preventDefault();
-        this.exitPomodoro();
+        void this.exitPomodoroWithCommit();
         return;
       }
       if (ev.key === " ") {
@@ -245,16 +245,22 @@ export class TodayView extends ItemView {
       state.pausedRemainingMs !== null &&
       state.pausedRemainingMs <= 0;
     if (expired) {
+      // Phase already ran to completion; ensure work time is banked before
+      // we flip and clear the per-phase counter for the new phase.
+      this.bankWorkProgress();
       state.phase = state.phase === "work" ? "rest" : "work";
       state.startedAt = Date.now();
       state.paused = false;
       state.pausedRemainingMs = null;
+      state.workPhaseBankedMs = 0;
     } else if (state.paused) {
       const remain = state.pausedRemainingMs ?? phaseMs;
       state.startedAt = Date.now() - (phaseMs - remain);
       state.paused = false;
       state.pausedRemainingMs = null;
     } else {
+      // Manual pause: capture work-phase progress before flipping the flag.
+      this.bankWorkProgress();
       const elapsed = Date.now() - state.startedAt;
       state.paused = true;
       state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
@@ -290,10 +296,12 @@ export class TodayView extends ItemView {
     const nextSub = task.subtasks.find((s) => !s.checked);
     if (nextSub) {
       this.pomodoroSubtaskHistory.push(nextSub.lineNumber);
+      await this.commitActualTime(file, nextSub.lineNumber);
       await this.applyLineChecked(file, nextSub.lineNumber, true);
       this.scheduleRender();
       return;
     }
+    await this.commitActualTime(file, task.lineNumber);
     await this.applyLineChecked(file, task.lineNumber, true);
     this.exitPomodoro();
   }
@@ -1838,6 +1846,7 @@ export class TodayView extends ItemView {
       .replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "")
       .replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "")
       .replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "")
+      .replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "")
       .replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = ctx.tag?.trim();
@@ -2304,6 +2313,44 @@ export class TodayView extends ItemView {
     this.scheduleRender();
   }
 
+  // User-initiated exit (button or 'x' key). Commits any unwritten work-phase
+  // minutes to the currently active sub-task (or the parent task if none) so
+  // the time the user just spent is preserved on the note.
+  private async exitPomodoroWithCommit(): Promise<void> {
+    const state = this.pomodoroState;
+    if (!state) return;
+    this.bankWorkProgress();
+    const minutes = Math.floor(state.actualMs / 60_000);
+    if (minutes > 0) {
+      const file = this.app.vault.getAbstractFileByPath(state.filePath);
+      if (file instanceof TFile) {
+        try {
+          const content = await this.app.vault.read(file);
+          const tasks = parseFileTasks(
+            file.path,
+            content,
+            this.plugin.settings.prefixes,
+            this.plugin.settings.defaultDurationMin,
+          );
+          let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
+          if (!task) {
+            task = tasks.find(
+              (t) => this.cleanBody(t.body) === state.taskBodySnapshot,
+            );
+          }
+          if (task) {
+            const nextSub = task.subtasks.find((s) => !s.checked);
+            const target = nextSub ? nextSub.lineNumber : task.lineNumber;
+            await this.commitActualTime(file, target);
+          }
+        } catch (e) {
+          new Notice(`Today: failed to write actual time (${(e as Error).message})`);
+        }
+      }
+    }
+    this.exitPomodoro();
+  }
+
   // Returns ms elapsed in the current phase, clamped to the phase length.
   // Honors the paused/running anchor used elsewhere in the timer math.
   private currentPhaseElapsedMs(): number {
@@ -2462,7 +2509,7 @@ export class TodayView extends ItemView {
       attr: { "aria-label": "Exit focus mode" },
     });
     setIcon(exit, "x");
-    exit.addEventListener("click", () => this.exitPomodoro());
+    exit.addEventListener("click", () => void this.exitPomodoroWithCommit());
 
     wrap.createDiv({
       cls: "dp-pomo-phase",
@@ -2495,6 +2542,7 @@ export class TodayView extends ItemView {
       });
       card.addEventListener("click", async () => {
         this.pomodoroSubtaskHistory.push(nextSub.lineNumber);
+        await this.commitActualTime(file, nextSub.lineNumber);
         await this.applyLineChecked(file, nextSub.lineNumber, true);
         this.scheduleRender();
       });
@@ -2529,16 +2577,19 @@ export class TodayView extends ItemView {
     pauseBtn.type = "button";
     pauseBtn.addEventListener("click", () => {
       if (expired) {
+        this.bankWorkProgress();
         state.phase = state.phase === "work" ? "rest" : "work";
         state.startedAt = Date.now();
         state.paused = false;
         state.pausedRemainingMs = null;
+        state.workPhaseBankedMs = 0;
       } else if (state.paused) {
         const remain = state.pausedRemainingMs ?? phaseMs;
         state.startedAt = Date.now() - (phaseMs - remain);
         state.paused = false;
         state.pausedRemainingMs = null;
       } else {
+        this.bankWorkProgress();
         const elapsed = Date.now() - state.startedAt;
         state.paused = true;
         state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
@@ -2553,6 +2604,7 @@ export class TodayView extends ItemView {
     completeBtn.type = "button";
     completeBtn.addEventListener("click", async () => {
       completeBtn.disabled = true;
+      await this.commitActualTime(file, task.lineNumber);
       await this.applyLineChecked(file, task.lineNumber, true);
       this.exitPomodoro();
     });
