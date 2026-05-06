@@ -1232,13 +1232,25 @@ export class TodayView extends ItemView {
     // we bother rendering. Excess rows are clipped by overflow:hidden.
     if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
       const subList = el.createDiv({ cls: "dp-block-subtasks" });
+      const prefixes = this.plugin.settings.prefixes;
       block.task.subtasks.forEach((sub) => {
         const subRow = subList.createDiv({ cls: "dp-block-subtask" });
         if (sub.checked) subRow.addClass("is-done");
-        const text = subRow.createSpan({
-          cls: "dp-block-subtask-text",
-          text: sub.text,
-        });
+        const text = subRow.createSpan({ cls: "dp-block-subtask-text" });
+        const subMin = parseTime(sub.text, prefixes);
+        if (subMin !== null) {
+          // Show the parsed time (e.g. "6:25p") instead of the raw `#t/625p`
+          // tag — `cleanBody` strips the tag, so the rest of the body
+          // renders cleanly after the chip.
+          text.createSpan({
+            cls: "dp-block-subtask-time",
+            text: this.fmtClock(subMin),
+          });
+          const body = this.cleanBody(sub.text);
+          if (body) text.appendText(" " + body);
+        } else {
+          text.setText(this.cleanBody(sub.text));
+        }
         // Clicking the text toggles the sub-task. Anywhere else on the
         // block falls through to the block's own click handler, which
         // opens the edit modal.

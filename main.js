@@ -3547,14 +3547,24 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
       const subList = el.createDiv({ cls: "dp-block-subtasks" });
+      const prefixes = this.plugin.settings.prefixes;
       block.task.subtasks.forEach((sub) => {
         const subRow = subList.createDiv({ cls: "dp-block-subtask" });
         if (sub.checked)
           subRow.addClass("is-done");
-        const text = subRow.createSpan({
-          cls: "dp-block-subtask-text",
-          text: sub.text
-        });
+        const text = subRow.createSpan({ cls: "dp-block-subtask-text" });
+        const subMin = parseTime(sub.text, prefixes);
+        if (subMin !== null) {
+          text.createSpan({
+            cls: "dp-block-subtask-time",
+            text: this.fmtClock(subMin)
+          });
+          const body = this.cleanBody(sub.text);
+          if (body)
+            text.appendText(" " + body);
+        } else {
+          text.setText(this.cleanBody(sub.text));
+        }
         text.addEventListener("click", (ev) => {
           ev.stopPropagation();
           void this.applyLineChecked(file, sub.lineNumber, !sub.checked);

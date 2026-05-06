@@ -1420,6 +1420,21 @@
     background: color-mix(in srgb, var(--dp-on-color) 12%, transparent);
   }
 
+  /* Time chip rendered inline at the start of a sub-task row when the
+   * sub-task carries its own `#t/HHMM` tag. Mono-font + faint background
+   * makes it look like a small pill so it doesn't blend into the body. */
+  .dp-block-subtask-time {
+    flex: 0 0 auto;
+    margin-right: 4px;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--dp-on-color) 16%, transparent);
+    color: color-mix(in srgb, var(--dp-on-color) 95%, transparent);
+  }
+
   /* warning icon inside block (no explicit duration) */
   .dp-block .dp-warn {
     flex: 0 0 auto;
