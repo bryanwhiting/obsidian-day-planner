@@ -2389,6 +2389,13 @@
     opacity: 1;
   }
 
+  /* Mobile has no keyboard, so the hint bars are useless — and worse, even at
+   * opacity:0 they still intercept taps near the bottom edge of the screen. */
+  body.is-mobile .today-root .dp-pomo-hints,
+  body.is-mobile .today-root .dp-timeline-hints {
+    display: none;
+  }
+
   .today-root .dp-pomo-hint {
     display: inline-flex;
     align-items: center;
