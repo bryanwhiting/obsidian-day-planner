@@ -332,37 +332,6 @@
     margin-bottom: 4px;
   }
 
-  .dp-summaries-toggle {
-    position: absolute;
-    top: 0;
-    right: 0;
-    z-index: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--radius-tab);
-    color: var(--color-ink-faint);
-    cursor: pointer;
-    transition: color 120ms, background-color 120ms, border-color 120ms;
-  }
-
-  .dp-summaries-toggle:hover {
-    background: var(--color-surface-hover);
-    color: var(--color-ink);
-    border-color: var(--color-hairline);
-  }
-
-  .dp-summaries-toggle .svg-icon {
-    width: 14px;
-    height: 14px;
-    stroke-width: 2px;
-  }
-
   .dp-title {
     font-family: var(--font-display);
     font-weight: 500;

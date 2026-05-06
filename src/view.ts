@@ -416,7 +416,7 @@ export class TodayView extends ItemView {
     }
 
     const collapseBtn = nav.createEl("button", {
-      cls: "dp-nav-btn dp-summaries-toggle",
+      cls: "dp-nav-btn",
       attr: {
         "aria-label": this.summariesCollapsed
           ? "Expand summaries"

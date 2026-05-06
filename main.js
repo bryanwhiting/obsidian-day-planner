@@ -2277,7 +2277,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       });
     }
     const collapseBtn = nav.createEl("button", {
-      cls: "dp-nav-btn dp-summaries-toggle",
+      cls: "dp-nav-btn",
       attr: {
         "aria-label": this.summariesCollapsed ? "Expand summaries" : "Collapse summaries",
         "aria-expanded": this.summariesCollapsed ? "false" : "true"
