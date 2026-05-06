@@ -2541,10 +2541,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (color)
       strip.style.setProperty("--dp-color", color);
     strip.createSpan({ cls: "dp-note-strip-dot" });
-    strip.createSpan({
-      cls: "dp-note-strip-time",
-      text: this.fmtClock(note.startMin)
-    });
+    const timeText = note.hasExplicitDuration ? `${this.fmtClock(note.startMin)}\u2013${this.fmtClock(note.startMin + note.durationMin)}` : this.fmtClock(note.startMin);
+    strip.createSpan({ cls: "dp-note-strip-time", text: timeText });
     strip.createSpan({
       cls: "dp-note-strip-title",
       text: this.cleanBody(note.body) || "(untitled)"

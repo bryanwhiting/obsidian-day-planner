@@ -810,10 +810,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 0 8px;
-    border-left: 3px solid var(--dp-color);
-    border-radius: 3px;
-    background: color-mix(in srgb, var(--dp-color) 12%, transparent);
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 11.5px;
@@ -823,11 +819,10 @@
     cursor: pointer;
     pointer-events: auto;
     z-index: 2;
-    transition: background-color 100ms ease;
   }
 
-  .dp-note-strip:hover {
-    background: color-mix(in srgb, var(--dp-color) 22%, transparent);
+  .dp-note-strip:hover .dp-note-strip-title {
+    color: var(--dp-color);
   }
 
   .dp-note-strip.is-done {
