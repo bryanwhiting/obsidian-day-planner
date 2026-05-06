@@ -476,9 +476,13 @@ export class TodayView extends ItemView {
       workout.textContent = formatExerciseLine(exercises);
     }
 
+    // Notes are excluded from time / project totals — by definition they
+    // don't block the calendar, so counting their durations would skew the
+    // "scheduled minutes" figure.
+    const nonNoteTasks = tasks.filter((t) => !this.isNoteTask(t));
     const statsRow = header.createDiv({ cls: "dp-stats-row" });
-    this.renderTimeTable(statsRow, tasks);
-    this.renderProjectTable(statsRow, tasks, colorMap);
+    this.renderTimeTable(statsRow, nonNoteTasks);
+    this.renderProjectTable(statsRow, nonNoteTasks, colorMap);
 
     if (!file && isPrimary) {
       const create = section.createEl("button", {
@@ -501,8 +505,13 @@ export class TodayView extends ItemView {
 
     const body = section.createDiv({ cls: "dp-body" });
     const { scheduled, unscheduled } = partition(tasks);
+    // Pull timed notes out of `scheduled` so they don't get laid out as
+    // blocks; they render as gutter dots instead. Untimed notes fall through
+    // to `unscheduled` and render as ordinary cards.
+    const timedNotes = scheduled.filter((t) => this.isNoteTask(t));
+    const blockTasks = scheduled.filter((t) => !this.isNoteTask(t));
 
-    this.renderTimeline(body, file, scheduled, colorMap);
+    this.renderTimeline(body, file, blockTasks, timedNotes, colorMap);
     this.renderUnscheduled(body, file, unscheduled, colorMap);
   }
 
@@ -510,6 +519,7 @@ export class TodayView extends ItemView {
     parent: HTMLElement,
     file: TFile,
     scheduled: ParsedTask[],
+    notes: ParsedTask[],
     colorMap: Map<string, string>,
   ): void {
     const settings = this.plugin.settings;
@@ -582,6 +592,21 @@ export class TodayView extends ItemView {
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
     for (const block of layout)
       this.renderBlock(blocksLayer, file, block, colorMap);
+
+    if (notes.length > 0) {
+      const notesLayer = timeline.createDiv({ cls: "dp-notes-layer" });
+      for (const note of notes) {
+        if (note.startMin === null) continue;
+        if (note.startMin < startMin || note.startMin > endMin) continue;
+        this.renderNoteDot(
+          notesLayer,
+          file,
+          note,
+          (note.startMin - startMin) * settings.pxPerMin,
+          colorMap,
+        );
+      }
+    }
 
     // Now-line: only when viewing today and the current time falls inside the
     // visible window. Stored on the wrap so refreshNowLines() can update it
@@ -762,6 +787,48 @@ export class TodayView extends ItemView {
       const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
       lines.splice(insertAt, 0, newLine);
       return lines.join("\n");
+    });
+  }
+
+  // A timed note renders as a small colored dot in the timeline gutter at
+  // its start time. Click opens the editor; hover shows time + title +
+  // description in a popover. The dot inherits the task's project / context
+  // color so notes group visually with the project they belong to.
+  private renderNoteDot(
+    layer: HTMLElement,
+    file: TFile,
+    note: ParsedTask,
+    topPx: number,
+    colorMap: Map<string, string>,
+  ): void {
+    const dot = layer.createDiv({ cls: "dp-note-dot" });
+    if (note.checked) dot.addClass("is-done");
+    dot.style.top = `${topPx}px`;
+
+    const ctx = this.findContextTag(note);
+    const projectColor = getTaskColor(note.project, note.subproject, colorMap);
+    const color = ctx?.color ?? projectColor ?? null;
+    if (color) dot.style.setProperty("--dp-color", color);
+
+    const tooltip = dot.createDiv({ cls: "dp-note-tooltip" });
+    tooltip.createDiv({
+      cls: "dp-note-tooltip-time",
+      text: this.fmtClock(note.startMin!),
+    });
+    tooltip.createDiv({
+      cls: "dp-note-tooltip-title",
+      text: this.cleanBody(note.body) || "(untitled)",
+    });
+    if (note.description) {
+      tooltip.createDiv({
+        cls: "dp-note-tooltip-desc",
+        text: note.description,
+      });
+    }
+
+    dot.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this.openTaskEditor(file, note);
     });
   }
 
@@ -1553,7 +1620,21 @@ export class TodayView extends ItemView {
       const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
     }
+    const noteTag = this.plugin.settings.noteTag?.trim();
+    if (noteTag) {
+      const esc = noteTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
+    }
     return out.replace(/\s+/g, " ").trim();
+  }
+
+  // Detects the configured note tag on a task body. Notes are events the
+  // user wants pinned to a specific time without occupying a calendar block.
+  private isNoteTask(task: ParsedTask): boolean {
+    const tag = this.plugin.settings.noteTag?.trim();
+    if (!tag) return false;
+    const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`#${esc}(?![\\w/-])`, "i").test(task.body);
   }
 
   // Returns the first configured context tag whose `#<tag>` appears in the

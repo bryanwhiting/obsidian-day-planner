@@ -32,6 +32,11 @@ export interface TodaySettings {
   quickDurationsMin: number[];
   projectColors: ProjectColor[];
   contextTags: ContextTag[];
+  // Bare hashtag (no leading "#") that flags a task as a "note" — an event the
+  // user wants on their day at a specific time but doesn't want occupying a
+  // calendar block. Notes render as a dot in the timeline gutter instead of a
+  // block. Default: "note", matching #note. Set to "tc/note" for #tc/note, etc.
+  noteTag: string;
   timelineHeightDesktop: string;
   timelineHeightMobile: string;
 }
@@ -53,6 +58,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
   contextTags: [],
+  noteTag: "note",
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
 };
@@ -119,6 +125,7 @@ export class TodaySettingTab extends PluginSettingTab {
     this.renderDefaultsSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
+    this.renderNotesSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
@@ -732,6 +739,38 @@ export class TodaySettingTab extends PluginSettingTab {
         this.display();
       });
     });
+  }
+
+  private renderNotesSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Notes").setHeading();
+
+    const desc = document.createDocumentFragment();
+    desc.append(
+      "A timed task containing this hashtag renders as a small dot in the timeline gutter instead of a calendar block — useful for events you need to be aware of (a delivery window, a kid's pickup) but don't want eating up planning space. Hover the dot to see the title and description. Enter the bare tag without the leading ",
+      makeCode("#"),
+      " — e.g. ",
+      makeCode("note"),
+      " matches ",
+      makeCode("#note"),
+      ", or ",
+      makeCode("tc/note"),
+      " matches ",
+      makeCode("#tc/note"),
+      ". Untimed notes still appear in the unscheduled list.",
+    );
+
+    new Setting(containerEl)
+      .setName("Note tag")
+      .setDesc(desc)
+      .addText((t) =>
+        t
+          .setPlaceholder("note")
+          .setValue(this.plugin.settings.noteTag)
+          .onChange(async (v) => {
+            this.plugin.settings.noteTag = v.trim().replace(/^#+/, "");
+            await this.plugin.saveSettings();
+          }),
+      );
   }
 }
 

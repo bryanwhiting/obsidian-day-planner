@@ -1009,6 +1009,7 @@ var DEFAULT_SETTINGS = {
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
   contextTags: [],
+  noteTag: "note",
   timelineHeightDesktop: "",
   timelineHeightMobile: ""
 };
@@ -1063,6 +1064,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     this.renderDefaultsSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
+    this.renderNotesSection(containerEl);
     this.renderTemplatingSection(containerEl);
     this.renderDayConfigSection(containerEl);
   }
@@ -1522,6 +1524,29 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         this.display();
       });
     });
+  }
+  renderNotesSection(containerEl) {
+    new import_obsidian2.Setting(containerEl).setName("Notes").setHeading();
+    const desc = document.createDocumentFragment();
+    desc.append(
+      "A timed task containing this hashtag renders as a small dot in the timeline gutter instead of a calendar block \u2014 useful for events you need to be aware of (a delivery window, a kid's pickup) but don't want eating up planning space. Hover the dot to see the title and description. Enter the bare tag without the leading ",
+      makeCode("#"),
+      " \u2014 e.g. ",
+      makeCode("note"),
+      " matches ",
+      makeCode("#note"),
+      ", or ",
+      makeCode("tc/note"),
+      " matches ",
+      makeCode("#tc/note"),
+      ". Untimed notes still appear in the unscheduled list."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Note tag").setDesc(desc).addText(
+      (t) => t.setPlaceholder("note").setValue(this.plugin.settings.noteTag).onChange(async (v) => {
+        this.plugin.settings.noteTag = v.trim().replace(/^#+/, "");
+        await this.plugin.saveSettings();
+      })
+    );
   }
 };
 function clampInt(v, lo, hi, fallback) {
@@ -2244,9 +2269,10 @@ var TodayView = class extends import_obsidian4.ItemView {
       const workout = header.createDiv({ cls: "dp-workout" });
       workout.textContent = formatExerciseLine(exercises);
     }
+    const nonNoteTasks = tasks.filter((t) => !this.isNoteTask(t));
     const statsRow = header.createDiv({ cls: "dp-stats-row" });
-    this.renderTimeTable(statsRow, tasks);
-    this.renderProjectTable(statsRow, tasks, colorMap);
+    this.renderTimeTable(statsRow, nonNoteTasks);
+    this.renderProjectTable(statsRow, nonNoteTasks, colorMap);
     if (!file && isPrimary) {
       const create = section.createEl("button", {
         cls: "dp-create",
@@ -2267,10 +2293,12 @@ var TodayView = class extends import_obsidian4.ItemView {
       return;
     const body = section.createDiv({ cls: "dp-body" });
     const { scheduled, unscheduled } = partition(tasks);
-    this.renderTimeline(body, file, scheduled, colorMap);
+    const timedNotes = scheduled.filter((t) => this.isNoteTask(t));
+    const blockTasks = scheduled.filter((t) => !this.isNoteTask(t));
+    this.renderTimeline(body, file, blockTasks, timedNotes, colorMap);
     this.renderUnscheduled(body, file, unscheduled, colorMap);
   }
-  renderTimeline(parent, file, scheduled, colorMap) {
+  renderTimeline(parent, file, scheduled, notes, colorMap) {
     const settings = this.plugin.settings;
     const startMin = settings.visibleStartHour * 60;
     const endMin = settings.visibleEndHour * 60;
@@ -2333,6 +2361,22 @@ var TodayView = class extends import_obsidian4.ItemView {
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
     for (const block of layout)
       this.renderBlock(blocksLayer, file, block, colorMap);
+    if (notes.length > 0) {
+      const notesLayer = timeline.createDiv({ cls: "dp-notes-layer" });
+      for (const note of notes) {
+        if (note.startMin === null)
+          continue;
+        if (note.startMin < startMin || note.startMin > endMin)
+          continue;
+        this.renderNoteDot(
+          notesLayer,
+          file,
+          note,
+          (note.startMin - startMin) * settings.pxPerMin,
+          colorMap
+        );
+      }
+    }
     if (sameDay(this.selectedDate, new Date())) {
       const nowLine = timeline.createDiv({ cls: "dp-now-line" });
       nowLine.dataset.startMin = String(startMin);
@@ -2478,6 +2522,41 @@ var TodayView = class extends import_obsidian4.ItemView {
       const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
       lines.splice(insertAt, 0, newLine);
       return lines.join("\n");
+    });
+  }
+  // A timed note renders as a small colored dot in the timeline gutter at
+  // its start time. Click opens the editor; hover shows time + title +
+  // description in a popover. The dot inherits the task's project / context
+  // color so notes group visually with the project they belong to.
+  renderNoteDot(layer, file, note, topPx, colorMap) {
+    var _a, _b;
+    const dot = layer.createDiv({ cls: "dp-note-dot" });
+    if (note.checked)
+      dot.addClass("is-done");
+    dot.style.top = `${topPx}px`;
+    const ctx = this.findContextTag(note);
+    const projectColor = getTaskColor(note.project, note.subproject, colorMap);
+    const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
+    if (color)
+      dot.style.setProperty("--dp-color", color);
+    const tooltip = dot.createDiv({ cls: "dp-note-tooltip" });
+    tooltip.createDiv({
+      cls: "dp-note-tooltip-time",
+      text: this.fmtClock(note.startMin)
+    });
+    tooltip.createDiv({
+      cls: "dp-note-tooltip-title",
+      text: this.cleanBody(note.body) || "(untitled)"
+    });
+    if (note.description) {
+      tooltip.createDiv({
+        cls: "dp-note-tooltip-desc",
+        text: note.description
+      });
+    }
+    dot.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this.openTaskEditor(file, note);
     });
   }
   renderBlock(layer, file, block, colorMap) {
@@ -3153,7 +3232,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     return m === 0 ? `${h12}${ampm}` : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
   }
   cleanBody(body) {
-    var _a;
+    var _a, _b;
     const p = this.plugin.settings.prefixes;
     let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
@@ -3163,7 +3242,22 @@ var TodayView = class extends import_obsidian4.ItemView {
       const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
     }
+    const noteTag = (_b = this.plugin.settings.noteTag) == null ? void 0 : _b.trim();
+    if (noteTag) {
+      const esc = noteTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
+    }
     return out.replace(/\s+/g, " ").trim();
+  }
+  // Detects the configured note tag on a task body. Notes are events the
+  // user wants pinned to a specific time without occupying a calendar block.
+  isNoteTask(task) {
+    var _a;
+    const tag = (_a = this.plugin.settings.noteTag) == null ? void 0 : _a.trim();
+    if (!tag)
+      return false;
+    const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`#${esc}(?![\\w/-])`, "i").test(task.body);
   }
   // Returns the first configured context tag whose `#<tag>` appears in the
   // task body, matching whole-tag (not as a prefix of another tag). Order
