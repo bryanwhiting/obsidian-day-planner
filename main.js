@@ -1495,7 +1495,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("#$"),
       ". Selecting a suggestion either fills the matching field in the modal or inserts the corresponding ",
       makeCode("#prefix/value"),
-      " tag inline."
+      " tag inline. These are mostly conveniences for mobile where typing is slow."
     );
     new import_obsidian2.Setting(containerEl).setName("Project trigger").setDesc(
       "Opens the project picker. Modal: fills the project field. Editor: inserts #p/<name>."

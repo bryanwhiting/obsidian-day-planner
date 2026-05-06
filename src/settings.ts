@@ -657,7 +657,7 @@ export class TodaySettingTab extends PluginSettingTab {
       makeCode("#$"),
       ". Selecting a suggestion either fills the matching field in the modal or inserts the corresponding ",
       makeCode("#prefix/value"),
-      " tag inline.",
+      " tag inline. These are mostly conveniences for mobile where typing is slow.",
     );
 
     new Setting(containerEl)
