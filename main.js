@@ -4404,8 +4404,10 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     });
     saveBtn.type = "button";
     saveBtn.addEventListener("click", submit);
-    input.focus();
-    input.select();
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
   }
   onClose() {
     this.contentEl.empty();

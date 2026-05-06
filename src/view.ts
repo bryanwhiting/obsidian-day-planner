@@ -2941,8 +2941,12 @@ class TaskEditModal extends Modal {
     saveBtn.type = "button";
     saveBtn.addEventListener("click", submit);
 
-    input.focus();
-    input.select();
+    // Defer so we win over Obsidian's default modal focus, which otherwise
+    // lands on the close button and forces the user to click into the title.
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
   }
 
   onClose(): void {
