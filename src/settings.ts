@@ -26,15 +26,12 @@ export interface AutocompleteSettings {
   timeTrigger: string;
   // Default "#$" — opens the duration picker.
   durationTrigger: string;
-  // Default "@" — opens the relative-date picker (today/tomorrow/Nd → daily-note link).
-  dateTrigger: string;
 }
 
 export const DEFAULT_AUTOCOMPLETE: AutocompleteSettings = {
   projectTrigger: "##",
   timeTrigger: "#@",
   durationTrigger: "#$",
-  dateTrigger: "@",
 };
 
 export interface TodaySettings {
@@ -68,9 +65,6 @@ export interface TodaySettings {
   pomodoroAutoCycle: boolean;
   pomodoroAutoReturn: boolean;
   taskIdLength: number;
-  // Moment.js format for the visible label of @-trigger date links. Empty
-  // string falls back to the bare filename (no alias).
-  dateLinkFormat: string;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -100,7 +94,6 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   pomodoroAutoCycle: true,
   pomodoroAutoReturn: true,
   taskIdLength: 4,
-  dateLinkFormat: "ddd, MMM D, YYYY",
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -660,23 +653,11 @@ export class TodaySettingTab extends PluginSettingTab {
       makeCode("##"),
       ", ",
       makeCode("#@"),
-      ", ",
-      makeCode("#$"),
       ", and ",
-      makeCode("@"),
-      ". Selecting a suggestion either fills the matching field in the modal, inserts the corresponding ",
+      makeCode("#$"),
+      ". Selecting a suggestion either fills the matching field in the modal or inserts the corresponding ",
       makeCode("#prefix/value"),
-      " tag inline, or — for the date trigger — drops in a link to the matching daily note (",
-      makeCode("@today"),
-      ", ",
-      makeCode("@tomorrow"),
-      ", ",
-      makeCode("@yesterday"),
-      ", ",
-      makeCode("@2d"),
-      ", ",
-      makeCode("@Nd"),
-      "). These are mostly conveniences for mobile where typing is slow.",
+      " tag inline. These are mostly conveniences for mobile where typing is slow.",
     );
 
     new Setting(containerEl)
@@ -726,44 +707,6 @@ export class TodaySettingTab extends PluginSettingTab {
             const trimmed = v.trim();
             if (!trimmed) return;
             this.plugin.settings.autocomplete.durationTrigger = trimmed;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Date trigger")
-      .setDesc(
-        "Opens the relative-date picker. Suggestions: today, tomorrow, yesterday, and Nd (e.g. 2d, 7d). Selecting one inserts a link to the matching daily note.",
-      )
-      .addText((t) =>
-        t
-          .setPlaceholder("@")
-          .setValue(this.plugin.settings.autocomplete.dateTrigger)
-          .onChange(async (v) => {
-            const trimmed = v.trim();
-            if (!trimmed) return;
-            this.plugin.settings.autocomplete.dateTrigger = trimmed;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    const dateFormatDesc = document.createDocumentFragment();
-    dateFormatDesc.append(
-      "Moment.js format for the visible label on date-trigger links. Default ",
-      makeCode("ddd, MMM D, YYYY"),
-      " renders as e.g. ",
-      makeCode("Mon, Mar 5, 2026"),
-      ". Leave blank to drop the alias and use just the file basename. The link target itself uses the daily-note format from the Templating section.",
-    );
-    new Setting(containerEl)
-      .setName("Date link format")
-      .setDesc(dateFormatDesc)
-      .addText((t) =>
-        t
-          .setPlaceholder("ddd, MMM D, YYYY")
-          .setValue(this.plugin.settings.dateLinkFormat)
-          .onChange(async (v) => {
-            this.plugin.settings.dateLinkFormat = v;
             await this.plugin.saveSettings();
           }),
       );

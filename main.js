@@ -1081,8 +1081,7 @@ function keyLabel(key) {
 var DEFAULT_AUTOCOMPLETE = {
   projectTrigger: "##",
   timeTrigger: "#@",
-  durationTrigger: "#$",
-  dateTrigger: "@"
+  durationTrigger: "#$"
 };
 var DEFAULT_SETTINGS = {
   visibleStartHour: 6,
@@ -1110,8 +1109,7 @@ var DEFAULT_SETTINGS = {
   pomodoroAutoStart: true,
   pomodoroAutoCycle: true,
   pomodoroAutoReturn: true,
-  taskIdLength: 4,
-  dateLinkFormat: "ddd, MMM D, YYYY"
+  taskIdLength: 4
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1493,23 +1491,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("##"),
       ", ",
       makeCode("#@"),
-      ", ",
-      makeCode("#$"),
       ", and ",
-      makeCode("@"),
-      ". Selecting a suggestion either fills the matching field in the modal, inserts the corresponding ",
+      makeCode("#$"),
+      ". Selecting a suggestion either fills the matching field in the modal or inserts the corresponding ",
       makeCode("#prefix/value"),
-      " tag inline, or \u2014 for the date trigger \u2014 drops in a link to the matching daily note (",
-      makeCode("@today"),
-      ", ",
-      makeCode("@tomorrow"),
-      ", ",
-      makeCode("@yesterday"),
-      ", ",
-      makeCode("@2d"),
-      ", ",
-      makeCode("@Nd"),
-      "). These are mostly conveniences for mobile where typing is slow."
+      " tag inline. These are mostly conveniences for mobile where typing is slow."
     );
     new import_obsidian2.Setting(containerEl).setName("Project trigger").setDesc(
       "Opens the project picker. Modal: fills the project field. Editor: inserts #p/<name>."
@@ -1541,31 +1527,6 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         if (!trimmed)
           return;
         this.plugin.settings.autocomplete.durationTrigger = trimmed;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("Date trigger").setDesc(
-      "Opens the relative-date picker. Suggestions: today, tomorrow, yesterday, and Nd (e.g. 2d, 7d). Selecting one inserts a link to the matching daily note."
-    ).addText(
-      (t) => t.setPlaceholder("@").setValue(this.plugin.settings.autocomplete.dateTrigger).onChange(async (v) => {
-        const trimmed = v.trim();
-        if (!trimmed)
-          return;
-        this.plugin.settings.autocomplete.dateTrigger = trimmed;
-        await this.plugin.saveSettings();
-      })
-    );
-    const dateFormatDesc = document.createDocumentFragment();
-    dateFormatDesc.append(
-      "Moment.js format for the visible label on date-trigger links. Default ",
-      makeCode("ddd, MMM D, YYYY"),
-      " renders as e.g. ",
-      makeCode("Mon, Mar 5, 2026"),
-      ". Leave blank to drop the alias and use just the file basename. The link target itself uses the daily-note format from the Templating section."
-    );
-    new import_obsidian2.Setting(containerEl).setName("Date link format").setDesc(dateFormatDesc).addText(
-      (t) => t.setPlaceholder("ddd, MMM D, YYYY").setValue(this.plugin.settings.dateLinkFormat).onChange(async (v) => {
-        this.plugin.settings.dateLinkFormat = v;
         await this.plugin.saveSettings();
       })
     );
@@ -2205,50 +2166,6 @@ function sameDay(a, b) {
 }
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-function buildDateSuggestions(query, today = new Date()) {
-  const q = query.trim().toLowerCase();
-  const out = [];
-  const named = [
-    { kw: "today", offset: 0 },
-    { kw: "tomorrow", offset: 1 },
-    { kw: "yesterday", offset: -1 }
-  ];
-  for (const n of named) {
-    if (!q || n.kw.startsWith(q)) {
-      out.push({ keyword: n.kw, date: addDays(today, n.offset) });
-    }
-  }
-  const numeric = q.match(/^(\d+)d?$/);
-  if (numeric) {
-    const n = parseInt(numeric[1], 10);
-    if (Number.isFinite(n) && n >= 0 && n <= 365) {
-      out.push({ keyword: `${n}d`, date: addDays(today, n) });
-    }
-  } else if (!q) {
-    for (const n of [2, 3, 7]) {
-      out.push({ keyword: `${n}d`, date: addDays(today, n) });
-    }
-  }
-  return out;
-}
-function buildDateLinkInsert(app, date, fileFormat, folder, displayFormat) {
-  var _a, _b;
-  const m = (0, import_obsidian3.moment)(date);
-  const fileBasename = m.format(fileFormat || "YYYY-MM-DD");
-  const cleanFolder = (folder || "").replace(/^\/+|\/+$/g, "");
-  const linkPath = cleanFolder ? `${cleanFolder}/${fileBasename}` : fileBasename;
-  const display = (displayFormat || "").trim() ? m.format(displayFormat.trim()) : "";
-  const useMd = ((_b = (_a = app.vault).getConfig) == null ? void 0 : _b.call(_a, "useMarkdownLinks")) === true;
-  if (useMd) {
-    const url = encodeURI(`${linkPath}.md`);
-    const label = display || fileBasename;
-    return `[${label}](${url})`;
-  }
-  if (display && display !== fileBasename) {
-    return `[[${linkPath}|${display}]]`;
-  }
-  return `[[${linkPath}]]`;
 }
 
 // src/view.ts
@@ -3024,10 +2941,6 @@ var TodayView = class extends import_obsidian4.ItemView {
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
       durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
-      dateTrigger: this.plugin.settings.autocomplete.dateTrigger,
-      dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
-      dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
-      dateLinkFormat: this.plugin.settings.dateLinkFormat,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -3862,10 +3775,6 @@ var TodayView = class extends import_obsidian4.ItemView {
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
       durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
-      dateTrigger: this.plugin.settings.autocomplete.dateTrigger,
-      dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
-      dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
-      dateLinkFormat: this.plugin.settings.dateLinkFormat,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -4683,15 +4592,7 @@ function attachTitleSuggest(input, wrap, rules) {
       const query = before.slice(idx + rule.trigger.length);
       if (/[\s#]/.test(query))
         continue;
-      if (!best) {
-        best = { rule, start: idx, query };
-        continue;
-      }
-      const bestEnd = best.start + best.rule.trigger.length;
-      const cEnd = idx + rule.trigger.length;
-      if (cEnd > bestEnd) {
-        best = { rule, start: idx, query };
-      } else if (cEnd === bestEnd && rule.trigger.length > best.rule.trigger.length) {
+      if (!best || idx > best.start) {
         best = { rule, start: idx, query };
       }
     }
@@ -4967,48 +4868,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           }
           replaceTriggerRange(start, cursor, "");
         }
-      },
-      // Date rule keeps the resolved Date alongside the keyword in a parallel
-      // map so commit() can rebuild the link without re-parsing the keyword.
-      (() => {
-        const dateMap = /* @__PURE__ */ new Map();
-        const fmt = this.opts.dateLinkFormat;
-        return {
-          trigger: this.opts.dateTrigger,
-          getSuggestions: (q) => {
-            dateMap.clear();
-            const items = buildDateSuggestions(q);
-            for (const it of items)
-              dateMap.set(it.keyword, it.date);
-            return items.map((it) => it.keyword);
-          },
-          renderItem: (el, keyword) => {
-            el.createSpan({ text: keyword });
-            const d = dateMap.get(keyword);
-            if (d && fmt.trim()) {
-              el.createSpan({
-                cls: "dp-project-suggest-sub",
-                text: ` ${(0, import_obsidian4.moment)(d).format(fmt.trim())}`
-              });
-            }
-          },
-          commit: (keyword, start, cursor) => {
-            const d = dateMap.get(keyword);
-            if (!d) {
-              replaceTriggerRange(start, cursor, "");
-              return;
-            }
-            const link = buildDateLinkInsert(
-              this.app,
-              d,
-              this.opts.dailyNoteFormat,
-              this.opts.dailyNoteFolder,
-              fmt
-            );
-            replaceTriggerRange(start, cursor, link + " ");
-          }
-        };
-      })()
+      }
     ]);
     const resolveProject = () => {
       var _a2;
@@ -5563,7 +5423,6 @@ var SubtaskQuickAddModal = class extends import_obsidian4.Modal {
 };
 
 // src/main.ts
-var import_obsidian6 = require("obsidian");
 var polyfillInstalled = false;
 var TodayPlugin = class extends import_obsidian5.Plugin {
   async onload() {
@@ -5650,8 +5509,7 @@ var InlineSuggest = class extends import_obsidian5.EditorSuggest {
     const candidates = [
       { trigger: auto.projectTrigger, kind: "project" },
       { trigger: auto.timeTrigger, kind: "time" },
-      { trigger: auto.durationTrigger, kind: "duration" },
-      { trigger: auto.dateTrigger, kind: "date" }
+      { trigger: auto.durationTrigger, kind: "duration" }
     ];
     const line = editor.getLine(cursor.line);
     const before = line.slice(0, cursor.ch);
@@ -5662,15 +5520,7 @@ var InlineSuggest = class extends import_obsidian5.EditorSuggest {
       const idx = before.lastIndexOf(c.trigger);
       if (idx < 0)
         continue;
-      if (!best) {
-        best = { idx, kind: c.kind, trigger: c.trigger };
-        continue;
-      }
-      const bestEnd = best.idx + best.trigger.length;
-      const cEnd = idx + c.trigger.length;
-      if (cEnd > bestEnd) {
-        best = { idx, kind: c.kind, trigger: c.trigger };
-      } else if (cEnd === bestEnd && c.trigger.length > best.trigger.length) {
+      if (!best || idx > best.idx) {
         best = { idx, kind: c.kind, trigger: c.trigger };
       }
     }
@@ -5718,22 +5568,6 @@ var InlineSuggest = class extends import_obsidian5.EditorSuggest {
         kind,
         display,
         insert: `#${prefixes.time}/${timeDisplayToTagBody(display)} `
-      }));
-    }
-    if (kind === "date") {
-      const settings = this.plugin.settings;
-      const fmt = settings.dateLinkFormat;
-      return buildDateSuggestions(query).map((s) => ({
-        kind,
-        display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian6.moment)(s.date).format(fmt.trim())}` : void 0,
-        insert: buildDateLinkInsert(
-          this.app,
-          s.date,
-          settings.dailyNoteFormatFallback,
-          settings.dailyNoteFolderFallback,
-          fmt
-        ) + " "
       }));
     }
     const pool = this.plugin.settings.quickDurationsMin.map(
