@@ -4006,6 +4006,14 @@ var TodayView = class extends import_obsidian4.ItemView {
       root.setAttribute("tabindex", "-1");
     const wrap = root.createDiv({ cls: "dp-pomo" });
     const topBar = wrap.createDiv({ cls: "dp-pomo-topbar" });
+    const editTask = topBar.createEl("button", {
+      cls: "dp-pomo-iconbtn",
+      attr: { "aria-label": "Edit task" }
+    });
+    (0, import_obsidian4.setIcon)(editTask, "pencil");
+    editTask.addEventListener("click", () => {
+      this.openTaskEditor(file, task);
+    });
     const showTimeline = topBar.createEl("button", {
       cls: "dp-pomo-iconbtn",
       attr: { "aria-label": "Show timeline" }

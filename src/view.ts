@@ -2361,6 +2361,15 @@ export class TodayView extends ItemView {
 
     const topBar = wrap.createDiv({ cls: "dp-pomo-topbar" });
 
+    const editTask = topBar.createEl("button", {
+      cls: "dp-pomo-iconbtn",
+      attr: { "aria-label": "Edit task" },
+    });
+    setIcon(editTask, "pencil");
+    editTask.addEventListener("click", () => {
+      this.openTaskEditor(file, task);
+    });
+
     const showTimeline = topBar.createEl("button", {
       cls: "dp-pomo-iconbtn",
       attr: { "aria-label": "Show timeline" },
