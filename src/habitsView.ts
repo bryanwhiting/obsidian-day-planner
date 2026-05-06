@@ -329,7 +329,7 @@ export class HabitsStatsView extends ItemView {
       // intrinsic width so it doesn't stretch into the available space and
       // push cells around on wide panes.
       const grid = sectionEl.createDiv({ cls: "dp-heatmap-grid-rows" });
-      const cellCols = section.buckets.map(() => "10px").join(" ");
+      const cellCols = section.buckets.map(() => "12px").join(" ");
       grid.style.gridTemplateColumns = `140px ${cellCols}`;
 
       // Header row: empty corner + bucket labels.
