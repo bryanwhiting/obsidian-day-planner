@@ -3095,6 +3095,9 @@ class TaskEditModal extends Modal {
 
   onOpen(): void {
     this.modalEl.addClass("dp-title-modal");
+    // Body marker so mobile CSS can target this modal's container without
+    // relying on :has(). Removed in onClose.
+    document.body.addClass("today-edit-open");
     this.titleEl.setText(this.opts.modalTitle);
     this.contentEl.empty();
 
@@ -3738,6 +3741,7 @@ class TaskEditModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
+    document.body.removeClass("today-edit-open");
   }
 }
 

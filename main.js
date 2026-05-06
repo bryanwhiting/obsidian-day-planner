@@ -4624,6 +4624,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
   onOpen() {
     var _a;
     this.modalEl.addClass("dp-title-modal");
+    document.body.addClass("today-edit-open");
     this.titleEl.setText(this.opts.modalTitle);
     this.contentEl.empty();
     this.contentEl.addEventListener(
@@ -5209,6 +5210,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
   }
   onClose() {
     this.contentEl.empty();
+    document.body.removeClass("today-edit-open");
   }
 };
 var SubtaskQuickAddModal = class extends import_obsidian4.Modal {
