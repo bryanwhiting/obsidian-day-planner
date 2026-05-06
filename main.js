@@ -3167,8 +3167,55 @@ var TodayView = class extends import_obsidian4.ItemView {
       },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
-      }
+      },
+      onMoveToTomorrow: () => this.moveTaskToTomorrow(file, task)
     }).open();
+  }
+  // Moves a task line (and its sub-task lines) from `file` to tomorrow's daily
+  // note. Tomorrow is computed relative to the day currently being viewed.
+  // No-op if tomorrow's daily note doesn't exist. Returns true on success.
+  async moveTaskToTomorrow(file, task) {
+    const fallback = {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback,
+      template: this.plugin.settings.dailyNoteTemplate
+    };
+    const target = addDays(this.selectedDate, 1);
+    const resolved = await resolveDailyNote(this.app, target, fallback);
+    if (!resolved.file) {
+      new import_obsidian4.Notice(`Tomorrow's note doesn't exist (${resolved.path}).`);
+      return false;
+    }
+    const targetFile = resolved.file;
+    if (targetFile.path === file.path) {
+      new import_obsidian4.Notice("Source and target are the same file.");
+      return false;
+    }
+    const lineNumbers = [task.lineNumber, ...task.subtasks.map((s) => s.lineNumber)].sort((a, b) => a - b);
+    let movedLines = [];
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      movedLines = lineNumbers.filter((n) => n < lines.length).map((n) => lines[n]);
+      for (let i = lineNumbers.length - 1; i >= 0; i--) {
+        const n = lineNumbers[i];
+        if (n < lines.length)
+          lines.splice(n, 1);
+      }
+      return lines.join("\n");
+    });
+    if (movedLines.length === 0) {
+      new import_obsidian4.Notice("Today: nothing to move.");
+      return false;
+    }
+    await this.app.vault.process(targetFile, (content) => {
+      const lines = content.split("\n");
+      const lastIdx = findLastTaskLine(content);
+      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      lines.splice(insertAt, 0, ...movedLines);
+      return lines.join("\n");
+    });
+    new import_obsidian4.Notice(`Moved to ${resolved.path}`);
+    return true;
   }
   // Inserts a new sub-task line below the parent's existing sub-tasks (or
   // directly below the parent if none exist). Re-parses on each call so
@@ -3612,6 +3659,19 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     showBtn.addEventListener("click", () => {
       this.close();
       this.opts.onShowInNote();
+    });
+    const moveBtn = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Move to tomorrow"
+    });
+    moveBtn.type = "button";
+    moveBtn.addEventListener("click", async () => {
+      moveBtn.disabled = true;
+      const moved = await this.opts.onMoveToTomorrow();
+      if (moved)
+        this.close();
+      else
+        moveBtn.disabled = false;
     });
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
