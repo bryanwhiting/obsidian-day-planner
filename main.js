@@ -4218,13 +4218,14 @@ var TodayView = class extends import_obsidian4.ItemView {
   openTaskEditor(file, task) {
     var _a;
     const prefixes = this.plugin.settings.prefixes;
+    const initialProjectFull = task.project ? task.subproject ? `${task.project}/${task.subproject}` : task.project : null;
     new TaskEditModal(this.app, {
       mode: "edit",
       modalTitle: "Edit task",
       initialTitle: this.cleanBody(task.body),
       initialDescription: (_a = task.description) != null ? _a : "",
       initialDurationMin: task.durationMin,
-      initialProject: task.project,
+      initialProject: initialProjectFull,
       initialChecked: task.checked,
       initialTaskId: parseTaskId(task.body, prefixes),
       taskIdPrefix: prefixes.taskId,

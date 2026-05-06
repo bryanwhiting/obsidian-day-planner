@@ -1995,13 +1995,21 @@ export class TodayView extends ItemView {
 
   private openTaskEditor(file: TFile, task: ParsedTask): void {
     const prefixes = this.plugin.settings.prefixes;
+    // Compose the full "proj/sub" path so the input shows the actual
+    // project on the line, not just the parent. setProjectTag accepts the
+    // composed form and writes it back as `#p/proj/sub` on save.
+    const initialProjectFull = task.project
+      ? task.subproject
+        ? `${task.project}/${task.subproject}`
+        : task.project
+      : null;
     new TaskEditModal(this.app, {
       mode: "edit",
       modalTitle: "Edit task",
       initialTitle: this.cleanBody(task.body),
       initialDescription: task.description ?? "",
       initialDurationMin: task.durationMin,
-      initialProject: task.project,
+      initialProject: initialProjectFull,
       initialChecked: task.checked,
       initialTaskId: parseTaskId(task.body, prefixes),
       taskIdPrefix: prefixes.taskId,
