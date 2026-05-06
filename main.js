@@ -2041,18 +2041,25 @@ var TodayView = class extends import_obsidian4.ItemView {
     const t = ev.target;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
       return;
-    if (this.pomodoroState && !this.pomodoroHidden) {
+    const inPomo = this.pomodoroState !== null && !this.pomodoroHidden;
+    if (ev.key === "p") {
+      ev.preventDefault();
+      if (this.isPopout())
+        void this.returnLeafToMain();
+      else
+        void this.popOutLeaf();
+      return;
+    }
+    if (ev.key === "t" && this.pomodoroState !== null) {
+      ev.preventDefault();
+      this.pomodoroHidden = !this.pomodoroHidden;
+      this.scheduleRender();
+      return;
+    }
+    if (inPomo) {
       if (ev.key === "x") {
         ev.preventDefault();
         this.exitPomodoro();
-        return;
-      }
-      if (ev.key === "p") {
-        ev.preventDefault();
-        if (this.isPopout())
-          void this.returnLeafToMain();
-        else
-          void this.popOutLeaf();
         return;
       }
       if (ev.key === " ") {
@@ -2070,6 +2077,24 @@ var TodayView = class extends import_obsidian4.ItemView {
         void this.undoLastSubtask();
         return;
       }
+      return;
+    }
+    if (ev.key === "h") {
+      ev.preventDefault();
+      void this.navigateTo(new Date());
+      return;
+    }
+    if (ev.key === "c") {
+      ev.preventDefault();
+      this.calendarOpen = !this.calendarOpen;
+      this.scheduleRender();
+      return;
+    }
+    if (ev.key === "s") {
+      ev.preventDefault();
+      this.summariesCollapsed = !this.summariesCollapsed;
+      this.scheduleRender();
+      return;
     }
     if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight")
       return;
@@ -2235,6 +2260,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       colorMap,
       showOpenActiveLink ? activeFile : null
     );
+    this.renderTimelineHints(root);
     root.scrollTop = prevRootScroll;
     const newTimelines = root.querySelectorAll(".dp-timeline-wrap");
     newTimelines.forEach((el, i) => {
@@ -2243,6 +2269,21 @@ var TodayView = class extends import_obsidian4.ItemView {
         el.scrollTop = prev;
     });
     this.hasRendered = true;
+  }
+  renderTimelineHints(root) {
+    const hints = root.createDiv({ cls: "dp-timeline-hints" });
+    const addHint = (key, label) => {
+      const item = hints.createSpan({ cls: "dp-pomo-hint" });
+      item.createEl("kbd", { cls: "dp-pomo-kbd", text: key });
+      item.createSpan({ cls: "dp-pomo-hint-label", text: label });
+    };
+    addHint("\u2190/\u2192", "day");
+    addHint("h", "today");
+    addHint("c", "calendar");
+    addHint("s", "summaries");
+    if (this.pomodoroState !== null)
+      addHint("t", "focus");
+    addHint("p", this.isPopout() ? "return" : "pop out");
   }
   renderDateNav(parent) {
     const nav = parent.createDiv({ cls: "dp-datenav" });
@@ -3948,6 +3989,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     addHint("enter", nextSub ? "done sub-task" : "complete");
     if (this.pomodoroSubtaskHistory.length > 0)
       addHint("z", "undo");
+    addHint("t", "timeline");
     addHint("p", this.isPopout() ? "return" : "pop out");
     addHint("x", "close");
     if (((_b = (_a = root.ownerDocument) == null ? void 0 : _a.activeElement) == null ? void 0 : _b.tagName) !== "INPUT") {

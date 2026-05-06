@@ -96,6 +96,24 @@
     border-bottom: 1px solid var(--color-hairline);
   }
 
+  .dp-datenav .dp-nav-btn,
+  .dp-datenav .dp-today-btn,
+  .dp-datenav .dp-cal-btn {
+    opacity: 0;
+    transition: opacity 180ms ease, color 120ms, background-color 120ms,
+      border-color 120ms;
+  }
+
+  .dp-datenav:hover .dp-nav-btn,
+  .dp-datenav:hover .dp-today-btn,
+  .dp-datenav:hover .dp-cal-btn,
+  .dp-datenav .dp-nav-btn:focus-visible,
+  .dp-datenav .dp-today-btn:focus-visible,
+  .dp-datenav .dp-cal-btn:focus-visible,
+  .dp-datenav .dp-cal-btn.is-active {
+    opacity: 1;
+  }
+
   .dp-datenav-label {
     @apply flex-1 text-center;
     font-family: var(--font-display);
@@ -2244,14 +2262,12 @@
     height: 15px;
   }
 
-  .today-root .dp-pomo-hints {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
+  .today-root .dp-pomo-hints,
+  .today-root .dp-timeline-hints {
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-wrap: wrap;
     gap: 14px;
     padding: 24px 16px 16px;
     opacity: 0;
@@ -2261,7 +2277,22 @@
     pointer-events: auto;
   }
 
-  .today-root .dp-pomo-hints:hover {
+  .today-root .dp-pomo-hints {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .today-root .dp-timeline-hints {
+    position: sticky;
+    bottom: 0;
+    margin: 16px -14px -28px;
+    background: linear-gradient(to bottom, transparent, var(--color-paper) 40%);
+  }
+
+  .today-root .dp-pomo-hints:hover,
+  .today-root .dp-timeline-hints:hover {
     opacity: 1;
   }
 
