@@ -1601,12 +1601,7 @@ export class TodayView extends ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
     };
     const target = addDays(this.selectedDate, 1);
-    const resolved = await resolveDailyNote(this.app, target, fallback);
-    if (!resolved.file) {
-      new Notice(`Tomorrow's note doesn't exist (${resolved.path}).`);
-      return false;
-    }
-    const targetFile = resolved.file;
+    const targetFile = await ensureDailyNote(this.app, target, fallback);
     if (targetFile.path === file.path) {
       new Notice("Source and target are the same file.");
       return false;
@@ -1642,7 +1637,7 @@ export class TodayView extends ItemView {
       return lines.join("\n");
     });
 
-    new Notice(`Moved to ${resolved.path}`);
+    new Notice(`Moved to ${targetFile.path}`);
     return true;
   }
 

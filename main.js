@@ -3181,12 +3181,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       template: this.plugin.settings.dailyNoteTemplate
     };
     const target = addDays(this.selectedDate, 1);
-    const resolved = await resolveDailyNote(this.app, target, fallback);
-    if (!resolved.file) {
-      new import_obsidian4.Notice(`Tomorrow's note doesn't exist (${resolved.path}).`);
-      return false;
-    }
-    const targetFile = resolved.file;
+    const targetFile = await ensureDailyNote(this.app, target, fallback);
     if (targetFile.path === file.path) {
       new import_obsidian4.Notice("Source and target are the same file.");
       return false;
@@ -3214,7 +3209,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       lines.splice(insertAt, 0, ...movedLines);
       return lines.join("\n");
     });
-    new import_obsidian4.Notice(`Moved to ${resolved.path}`);
+    new import_obsidian4.Notice(`Moved to ${targetFile.path}`);
     return true;
   }
   // Inserts a new sub-task line below the parent's existing sub-tasks (or
