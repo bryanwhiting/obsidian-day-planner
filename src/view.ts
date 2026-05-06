@@ -4045,9 +4045,17 @@ class TaskEditModal extends Modal {
 
     // Defer so we win over Obsidian's default modal focus, which otherwise
     // lands on the close button and forces the user to click into the title.
+    // For existing tasks we append a trailing space and drop the caret at the
+    // end — picks up where the user left off and lets them start typing
+    // immediately. submit() trims trailing whitespace before saving so the
+    // padding never lands in the file. New tasks open with an empty input.
     window.setTimeout(() => {
       input.focus();
-      input.select();
+      if (this.opts.mode === "edit" && !/\s$/.test(input.value)) {
+        input.value = input.value + " ";
+      }
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
     }, 0);
   }
 

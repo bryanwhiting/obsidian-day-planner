@@ -5441,9 +5441,19 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       (0, import_obsidian4.setIcon)(moveBtn, "forward");
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
+      const makeChoiceLabel = (parent, prefix, hotkey, rest) => {
+        if (prefix)
+          parent.appendText(prefix);
+        parent.createEl("span", {
+          cls: "dp-edit-move-hotkey",
+          text: `(${hotkey})`
+        });
+        if (rest)
+          parent.appendText(rest);
+      };
       const canMoveToToday = !!this.opts.onMoveToToday;
       const todayBtn = canMoveToToday ? choices.createEl("button", {
-        cls: "dp-edit-move-icon",
+        cls: "dp-edit-move-choice",
         attr: {
           "aria-label": "Move to today (t)",
           title: "Move to today (t)"
@@ -5451,26 +5461,26 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       }) : null;
       if (todayBtn) {
         todayBtn.type = "button";
-        (0, import_obsidian4.setIcon)(todayBtn, "sun");
+        makeChoiceLabel(todayBtn, "Move ", "t", "oday");
       }
       const wholeBtn = choices.createEl("button", {
-        cls: "dp-edit-move-icon",
+        cls: "dp-edit-move-choice",
         attr: {
           "aria-label": "Move whole task (w)",
           title: "Move whole task (w)"
         }
       });
       wholeBtn.type = "button";
-      (0, import_obsidian4.setIcon)(wholeBtn, "package");
+      makeChoiceLabel(wholeBtn, "Move ", "w", "hole");
       const incBtn = choices.createEl("button", {
-        cls: "dp-edit-move-icon",
+        cls: "dp-edit-move-choice",
         attr: {
           "aria-label": "Split \u2014 migrate incomplete (i)",
           title: "Split \u2014 migrate incomplete (i)"
         }
       });
       incBtn.type = "button";
-      (0, import_obsidian4.setIcon)(incBtn, "split");
+      makeChoiceLabel(incBtn, "Move ", "i", "ncomplete");
       let stageTwoActive = false;
       let keyHandler = null;
       const setSubBtnsDisabled = (disabled) => {
@@ -5483,7 +5493,6 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         stageTwoActive = false;
         choices.style.display = "none";
         choices.removeClass("is-open");
-        moveBtn.style.display = "";
         if (keyHandler) {
           this.contentEl.removeEventListener("keydown", keyHandler, true);
           keyHandler = null;
@@ -5498,8 +5507,12 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           setSubBtnsDisabled(false);
       };
       moveBtn.addEventListener("click", () => {
+        if (stageTwoActive) {
+          exitStageTwo();
+          moveBtn.focus();
+          return;
+        }
         stageTwoActive = true;
-        moveBtn.style.display = "none";
         choices.style.display = "";
         choices.removeClass("is-open");
         void choices.offsetWidth;
@@ -5570,7 +5583,11 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     saveBtn.addEventListener("click", () => submit());
     window.setTimeout(() => {
       input.focus();
-      input.select();
+      if (this.opts.mode === "edit" && !/\s$/.test(input.value)) {
+        input.value = input.value + " ";
+      }
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
     }, 0);
   }
   onClose() {
