@@ -4271,7 +4271,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       },
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
-      onUnschedule: () => this.unscheduleTask(file, task)
+      onUnschedule: () => this.unscheduleTask(file, task),
+      onDuplicate: (includeSubtasks) => this.duplicateTask(file, task, includeSubtasks),
+      hasSubtasks: task.subtasks.length > 0
     }).open();
   }
   // Removes the task's parent line and all of its sub-task lines from `file`.
@@ -4290,6 +4292,33 @@ var TodayView = class extends import_obsidian4.ItemView {
       return lines.join("\n");
     });
     new import_obsidian4.Notice("Task deleted");
+  }
+  // Inserts a copy of the task line (and optionally its sub-tasks) directly
+  // under the existing block. Strips any `#tid/<id>` tag from the copies so
+  // task IDs stay unique — the duplicate stays untagged until the user edits
+  // it (or another flow re-assigns one).
+  async duplicateTask(file, task, includeSubtasks) {
+    const prefixes = this.plugin.settings.prefixes;
+    const escTid = prefixes.taskId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const tidRe = new RegExp(`\\s*#${escTid}\\/[A-Za-z0-9]+\\b`, "g");
+    const stripTid = (line) => line.replace(tidRe, "").replace(/[ \t]+$/, "");
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (task.lineNumber >= lines.length)
+        return content;
+      const subNums = task.subtasks.map((s) => s.lineNumber).filter((n) => n < lines.length).sort((a, b) => a - b);
+      const lastIdx = subNums.length > 0 ? subNums[subNums.length - 1] : task.lineNumber;
+      const copyBlock = [stripTid(lines[task.lineNumber])];
+      if (includeSubtasks) {
+        for (const n of subNums)
+          copyBlock.push(stripTid(lines[n]));
+      }
+      lines.splice(lastIdx + 1, 0, ...copyBlock);
+      return lines.join("\n");
+    });
+    new import_obsidian4.Notice(
+      includeSubtasks ? "Task duplicated (with sub-tasks)" : "Task duplicated"
+    );
   }
   // Strips the `#t/` time tag from the task's parent line. The modal closes
   // afterwards; the caller (Today view) re-renders on file modify, dropping
@@ -6103,6 +6132,13 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       await this.opts.onUnschedule();
       this.close();
     };
+    const runDuplicate = async () => {
+      if (!this.opts.onDuplicate)
+        return;
+      const includeSubs = this.opts.hasSubtasks ? window.confirm("Copy sub-tasks too?") : false;
+      await this.opts.onDuplicate(includeSubs);
+      this.close();
+    };
     if (this.opts.mode === "edit" && this.opts.onDelete) {
       const deleteBtn = actions.createEl("button", {
         cls: "dp-edit-delete-btn",
@@ -6312,6 +6348,15 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       (0, import_obsidian4.setIcon)(unschedBtn, "calendar-x");
       unschedBtn.addEventListener("click", () => void runUnschedule());
     }
+    if (this.opts.mode === "edit" && this.opts.onDuplicate) {
+      const dupBtn = actions.createEl("button", {
+        cls: "dp-edit-icon-btn",
+        attr: { "aria-label": "Duplicate (y)", title: "Duplicate (y)" }
+      });
+      dupBtn.type = "button";
+      (0, import_obsidian4.setIcon)(dupBtn, "copy");
+      dupBtn.addEventListener("click", () => void runDuplicate());
+    }
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: this.opts.mode === "new" ? "Add task" : "Save"
@@ -6371,6 +6416,9 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       } else if (k === "u" && this.opts.onUnschedule) {
         ev.preventDefault();
         void runUnschedule();
+      } else if (k === "y" && this.opts.onDuplicate) {
+        ev.preventDefault();
+        void runDuplicate();
       }
     };
     this.modalEl.addEventListener("keydown", onModalKey);

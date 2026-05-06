@@ -2047,6 +2047,9 @@ export class TodayView extends ItemView {
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
       onUnschedule: () => this.unscheduleTask(file, task),
+      onDuplicate: (includeSubtasks) =>
+        this.duplicateTask(file, task, includeSubtasks),
+      hasSubtasks: task.subtasks.length > 0,
     }).open();
   }
 
@@ -2065,6 +2068,43 @@ export class TodayView extends ItemView {
       return lines.join("\n");
     });
     new Notice("Task deleted");
+  }
+
+  // Inserts a copy of the task line (and optionally its sub-tasks) directly
+  // under the existing block. Strips any `#tid/<id>` tag from the copies so
+  // task IDs stay unique — the duplicate stays untagged until the user edits
+  // it (or another flow re-assigns one).
+  private async duplicateTask(
+    file: TFile,
+    task: ParsedTask,
+    includeSubtasks: boolean,
+  ): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    const escTid = prefixes.taskId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const tidRe = new RegExp(`\\s*#${escTid}\\/[A-Za-z0-9]+\\b`, "g");
+    const stripTid = (line: string): string =>
+      line.replace(tidRe, "").replace(/[ \t]+$/, "");
+
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (task.lineNumber >= lines.length) return content;
+      const subNums = task.subtasks
+        .map((s) => s.lineNumber)
+        .filter((n) => n < lines.length)
+        .sort((a, b) => a - b);
+      const lastIdx =
+        subNums.length > 0 ? subNums[subNums.length - 1] : task.lineNumber;
+
+      const copyBlock: string[] = [stripTid(lines[task.lineNumber])];
+      if (includeSubtasks) {
+        for (const n of subNums) copyBlock.push(stripTid(lines[n]));
+      }
+      lines.splice(lastIdx + 1, 0, ...copyBlock);
+      return lines.join("\n");
+    });
+    new Notice(
+      includeSubtasks ? "Task duplicated (with sub-tasks)" : "Task duplicated",
+    );
   }
 
   // Strips the `#t/` time tag from the task's parent line. The modal closes
@@ -3171,6 +3211,12 @@ interface TaskEditOpts {
   // Strips the `#t/` time tag from the task line so it falls out of the
   // schedule and back into the unscheduled bucket.
   onUnschedule?: () => Promise<void>;
+  // Duplicates the task. The modal prompts for "include sub-tasks?" before
+  // calling this — when there are no sub-tasks the prompt is skipped and
+  // `includeSubtasks` is always false.
+  onDuplicate?: (includeSubtasks: boolean) => Promise<void>;
+  // Drives whether the duplicate flow asks the y/n sub-task prompt at all.
+  hasSubtasks?: boolean;
 }
 
 interface MoveChoice {
@@ -4322,6 +4368,17 @@ class TaskEditModal extends Modal {
       await this.opts.onUnschedule();
       this.close();
     };
+    const runDuplicate = async (): Promise<void> => {
+      if (!this.opts.onDuplicate) return;
+      // Only ask the y/n question when the task actually has sub-tasks.
+      // window.confirm OK = yes, Cancel = no — same pattern the Delete
+      // confirm uses.
+      const includeSubs = this.opts.hasSubtasks
+        ? window.confirm("Copy sub-tasks too?")
+        : false;
+      await this.opts.onDuplicate(includeSubs);
+      this.close();
+    };
 
     if (this.opts.mode === "edit" && this.opts.onDelete) {
       const deleteBtn = actions.createEl("button", {
@@ -4567,6 +4624,16 @@ class TaskEditModal extends Modal {
       unschedBtn.addEventListener("click", () => void runUnschedule());
     }
 
+    if (this.opts.mode === "edit" && this.opts.onDuplicate) {
+      const dupBtn = actions.createEl("button", {
+        cls: "dp-edit-icon-btn",
+        attr: { "aria-label": "Duplicate (y)", title: "Duplicate (y)" },
+      });
+      dupBtn.type = "button";
+      setIcon(dupBtn, "copy");
+      dupBtn.addEventListener("click", () => void runDuplicate());
+    }
+
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: this.opts.mode === "new" ? "Add task" : "Save",
@@ -4643,6 +4710,9 @@ class TaskEditModal extends Modal {
       } else if (k === "u" && this.opts.onUnschedule) {
         ev.preventDefault();
         void runUnschedule();
+      } else if (k === "y" && this.opts.onDuplicate) {
+        ev.preventDefault();
+        void runDuplicate();
       }
     };
     this.modalEl.addEventListener("keydown", onModalKey);
