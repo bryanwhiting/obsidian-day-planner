@@ -3532,7 +3532,7 @@ var TitlePromptModal = class extends import_obsidian4.Modal {
   }
 };
 function sanitizeProjectName(raw) {
-  return raw.trim().replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return raw.trim().replace(/[^\w/-]+/g, "-").replace(/-+/g, "-").replace(/\/+/g, "/").replace(/-?\/-?/g, "/").replace(/^[-/]+|[-/]+$/g, "");
 }
 function fmtClockShort(totalMin) {
   const h24 = Math.floor(totalMin / 60) % 24;

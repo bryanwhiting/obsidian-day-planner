@@ -2038,14 +2038,17 @@ interface TaskEditOpts {
   onMoveToTomorrow: () => Promise<boolean>;
 }
 
-// Project tags only allow [\w-]; replace anything else with dashes so users
-// can type "My Project" and end up with #p/My-Project rather than a broken tag.
+// Project segments only allow [\w-]; "/" separates a sub-project segment so
+// users can type "My Project/Sub" and end up with #p/My-Project/Sub. Anything
+// else becomes a dash; runs of dashes/slashes collapse and trim.
 function sanitizeProjectName(raw: string): string {
   return raw
     .trim()
-    .replace(/[^\w-]+/g, "-")
+    .replace(/[^\w/-]+/g, "-")
     .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replace(/\/+/g, "/")
+    .replace(/-?\/-?/g, "/")
+    .replace(/^[-/]+|[-/]+$/g, "");
 }
 
 function fmtClockShort(totalMin: number): string {
