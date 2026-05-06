@@ -23,6 +23,8 @@ import {
   formatCompactDuration,
   timeDisplayToTagBody,
 } from "./parser";
+import { buildDateSuggestions, buildDateLinkInsert } from "./dailyNote";
+import { moment } from "obsidian";
 
 let polyfillInstalled = false;
 
@@ -116,7 +118,7 @@ export default class TodayPlugin extends Plugin {
   }
 }
 
-type SuggestKind = "project" | "time" | "duration";
+type SuggestKind = "project" | "time" | "duration" | "date";
 
 interface SuggestItem {
   kind: SuggestKind;
@@ -152,15 +154,27 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
       { trigger: auto.projectTrigger, kind: "project" },
       { trigger: auto.timeTrigger, kind: "time" },
       { trigger: auto.durationTrigger, kind: "duration" },
+      { trigger: auto.dateTrigger, kind: "date" },
     ];
     const line = editor.getLine(cursor.line);
     const before = line.slice(0, cursor.ch);
+    // Pick by latest match-end so the trigger nearest the cursor wins; on
+    // ties prefer the longer trigger so e.g. "#@" beats its own "@" suffix
+    // when both are configured.
     let best: { idx: number; kind: SuggestKind; trigger: string } | null = null;
     for (const c of candidates) {
       if (!c.trigger) continue;
       const idx = before.lastIndexOf(c.trigger);
       if (idx < 0) continue;
-      if (!best || idx > best.idx) {
+      if (!best) {
+        best = { idx, kind: c.kind, trigger: c.trigger };
+        continue;
+      }
+      const bestEnd = best.idx + best.trigger.length;
+      const cEnd = idx + c.trigger.length;
+      if (cEnd > bestEnd) {
+        best = { idx, kind: c.kind, trigger: c.trigger };
+      } else if (cEnd === bestEnd && c.trigger.length > best.trigger.length) {
         best = { idx, kind: c.kind, trigger: c.trigger };
       }
     }
@@ -207,6 +221,23 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
         kind,
         display,
         insert: `#${prefixes.time}/${timeDisplayToTagBody(display)} `,
+      }));
+    }
+    if (kind === "date") {
+      const settings = this.plugin.settings;
+      const fmt = settings.dateLinkFormat;
+      return buildDateSuggestions(query).map((s) => ({
+        kind,
+        display: s.keyword,
+        subDisplay: fmt.trim() ? ` ${moment(s.date).format(fmt.trim())}` : undefined,
+        insert:
+          buildDateLinkInsert(
+            this.app,
+            s.date,
+            settings.dailyNoteFormatFallback,
+            settings.dailyNoteFolderFallback,
+            fmt,
+          ) + " ",
       }));
     }
     const pool = this.plugin.settings.quickDurationsMin.map((m) =>

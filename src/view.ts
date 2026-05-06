@@ -7,6 +7,7 @@ import {
   App,
   Platform,
   setIcon,
+  moment,
 } from "obsidian";
 import { parseTimelineHeight } from "./settings";
 import type TodayPlugin from "./main";
@@ -65,6 +66,8 @@ import {
   endOfMonth,
   sameDay,
   startOfDay,
+  buildDateSuggestions,
+  buildDateLinkInsert,
 } from "./dailyNote";
 
 export const VIEW_TYPE_TODAY = "today-view";
@@ -984,6 +987,10 @@ export class TodayView extends ItemView {
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
       durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
+      dateTrigger: this.plugin.settings.autocomplete.dateTrigger,
+      dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
+      dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -1938,6 +1945,10 @@ export class TodayView extends ItemView {
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
       durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
+      dateTrigger: this.plugin.settings.autocomplete.dateTrigger,
+      dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
+      dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -2763,10 +2774,16 @@ interface TaskEditOpts {
   projects: string[];
   durations: { label: string; min: number }[];
   prefixes: TagPrefixes;
-  // Trigger strings for the in-title autocompletes (e.g. "##", "#@", "#$").
+  // Trigger strings for the in-title autocompletes (e.g. "##", "#@", "#$", "@").
   projectTrigger: string;
   timeTrigger: string;
   durationTrigger: string;
+  dateTrigger: string;
+  // Daily-note resolution + display format used by the date trigger to build
+  // the inserted link.
+  dailyNoteFormat: string;
+  dailyNoteFolder: string;
+  dateLinkFormat: string;
   // Hours that anchor the title-input time picker (visibleStartHour through
   // visibleEndHour from settings).
   visibleStartHour: number;
@@ -3007,7 +3024,20 @@ function attachTitleSuggest(
       if (idx < 0) continue;
       const query = before.slice(idx + rule.trigger.length);
       if (/[\s#]/.test(query)) continue;
-      if (!best || idx > best.start) {
+      if (!best) {
+        best = { rule, start: idx, query };
+        continue;
+      }
+      const bestEnd = best.start + best.rule.trigger.length;
+      const cEnd = idx + rule.trigger.length;
+      // Latest match-end wins; on ties prefer the longer trigger so e.g.
+      // "#@" beats its own "@" suffix when both are configured.
+      if (cEnd > bestEnd) {
+        best = { rule, start: idx, query };
+      } else if (
+        cEnd === bestEnd &&
+        rule.trigger.length > best.rule.trigger.length
+      ) {
         best = { rule, start: idx, query };
       }
     }
@@ -3323,6 +3353,46 @@ class TaskEditModal extends Modal {
           replaceTriggerRange(start, cursor, "");
         },
       },
+      // Date rule keeps the resolved Date alongside the keyword in a parallel
+      // map so commit() can rebuild the link without re-parsing the keyword.
+      ((): TitleSuggestRule => {
+        const dateMap = new Map<string, Date>();
+        const fmt = this.opts.dateLinkFormat;
+        return {
+          trigger: this.opts.dateTrigger,
+          getSuggestions: (q) => {
+            dateMap.clear();
+            const items = buildDateSuggestions(q);
+            for (const it of items) dateMap.set(it.keyword, it.date);
+            return items.map((it) => it.keyword);
+          },
+          renderItem: (el, keyword) => {
+            el.createSpan({ text: keyword });
+            const d = dateMap.get(keyword);
+            if (d && fmt.trim()) {
+              el.createSpan({
+                cls: "dp-project-suggest-sub",
+                text: ` ${moment(d).format(fmt.trim())}`,
+              });
+            }
+          },
+          commit: (keyword, start, cursor) => {
+            const d = dateMap.get(keyword);
+            if (!d) {
+              replaceTriggerRange(start, cursor, "");
+              return;
+            }
+            const link = buildDateLinkInsert(
+              this.app,
+              d,
+              this.opts.dailyNoteFormat,
+              this.opts.dailyNoteFolder,
+              fmt,
+            );
+            replaceTriggerRange(start, cursor, link + " ");
+          },
+        };
+      })(),
     ]);
 
     const resolveProject = (): string | null | undefined => {
