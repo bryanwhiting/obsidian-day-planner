@@ -2,6 +2,20 @@
 
 ## 2026-05-06
 
+### Edit modal: bigger action icons, labeled move popover
+
+- **Requested:** "these icons are too small. make them bigger. Also, when
+  i click the 'move' icon, i want words to pop up, the words showing the
+  hotkeys like move (w)hole or move (i)ncompleted. I also don't want the
+  original move icon to disappear (right now it disappears)."
+- **Done:** Bumped `.dp-edit-icon-btn` from 32→40 px (svg 16→20) and the
+  Save button padding to match (`src/styles.src.css`). Replaced the move
+  popover's icon sub-buttons with text labels — `Move (t)oday`, `Move
+  (w)hole`, `Move (i)ncomplete` — with the hotkey letter highlighted in
+  the accent color via a new `.dp-edit-move-hotkey` span. The original
+  move icon now stays visible while the popover is open; clicking it
+  again closes the popover (`src/view.ts`).
+
 ### Settings layout: move #ta into Pomodoro, split Task ID into its own section
 
 - **Requested:** "in the settings, move the #ta into the top of the Pomo
