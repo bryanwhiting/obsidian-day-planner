@@ -2037,15 +2037,56 @@ export class TodayView extends ItemView {
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
-      onMoveToTomorrowWhole: () =>
-        this.moveTaskWholeToDate(file, task, addDays(this.selectedDate, 1)),
-      onMoveToTomorrowIncomplete: () =>
-        this.migrateIncompleteToDate(file, task, addDays(this.selectedDate, 1)),
-      onMoveToToday: this.selectedDate.getTime() > startOfDay(new Date()).getTime()
-        ? () => this.moveTaskWholeToDate(file, task, startOfDay(new Date()))
-        : undefined,
+      moveChoices: this.buildMoveChoices(file, task),
       onStartPomodoro: () => this.enterPomodoro(file, task),
     }).open();
+  }
+
+  // Computes the date-picker entries for the edit modal's "Move" button:
+  // tomorrow, +2 days, +3 days, and the first day of next week (driven by
+  // habitWeekStart). The `next week` entry is dropped when its date already
+  // appears as one of the next-3-days. All offsets are relative to the
+  // currently-viewed day, so opening the modal on a future-dated note pushes
+  // tasks forward from there rather than from real today.
+  private buildMoveChoices(file: TFile, task: ParsedTask): MoveChoice[] {
+    const sel = startOfDay(this.selectedDate);
+    const weekStart = this.plugin.settings.habitWeekStart;
+    const day1 = addDays(sel, 1);
+    const day2 = addDays(sel, 2);
+    const day3 = addDays(sel, 3);
+    const offset = ((weekStart - sel.getDay() + 7) % 7) || 7;
+    const nextWeek = addDays(sel, offset);
+    const dayLabel = (d: Date): string =>
+      d.toLocaleDateString(undefined, { weekday: "short" });
+    const choices: MoveChoice[] = [
+      {
+        label: "tomorrow",
+        hotkey: "1",
+        onChoose: () => this.moveTaskWholeToDate(file, task, day1),
+      },
+      {
+        label: dayLabel(day2),
+        hotkey: "2",
+        onChoose: () => this.moveTaskWholeToDate(file, task, day2),
+      },
+      {
+        label: dayLabel(day3),
+        hotkey: "3",
+        onChoose: () => this.moveTaskWholeToDate(file, task, day3),
+      },
+    ];
+    const nextWeekIsDup =
+      sameDay(nextWeek, day1) ||
+      sameDay(nextWeek, day2) ||
+      sameDay(nextWeek, day3);
+    if (!nextWeekIsDup) {
+      choices.push({
+        label: "next week",
+        hotkey: "4",
+        onChoose: () => this.moveTaskWholeToDate(file, task, nextWeek),
+      });
+    }
+    return choices;
   }
 
   // Moves a task line (and its sub-task lines) from `file` to the daily note
@@ -3069,12 +3110,17 @@ interface TaskEditOpts {
   ) => Promise<void>;
   onReorderSubtasks?: (ordered: ParsedSubtask[]) => Promise<void>;
   onShowInNote?: () => void;
-  onMoveToTomorrowWhole?: () => Promise<boolean>;
-  onMoveToTomorrowIncomplete?: () => Promise<boolean>;
-  // Set when the task is on a future-dated daily note; lets the user pull it
-  // back to today's note instead of pushing it further out.
-  onMoveToToday?: () => Promise<boolean>;
+  // Date-picker entries shown when "Move" is clicked. Each is a `{label,
+  // hotkey, onChoose}` triple; the modal only renders / wires keys, the
+  // caller decides which dates appear and what happens on click.
+  moveChoices?: MoveChoice[];
   onStartPomodoro?: () => void;
+}
+
+interface MoveChoice {
+  label: string;
+  hotkey: string;
+  onChoose: () => Promise<boolean>;
 }
 
 // Wires a custom autocomplete popover onto a project input. The popover lists
@@ -4142,10 +4188,11 @@ class TaskEditModal extends Modal {
     });
 
     if (this.opts.mode === "edit") {
+      const moveChoices = this.opts.moveChoices ?? [];
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Move to tomorrow", title: "Move to tomorrow" },
+        attr: { "aria-label": "Move to…", title: "Move to…" },
       });
       moveBtn.type = "button";
       setIcon(moveBtn, "forward");
@@ -4153,62 +4200,30 @@ class TaskEditModal extends Modal {
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
 
-      const makeChoiceLabel = (
-        parent: HTMLElement,
-        prefix: string,
-        hotkey: string,
-        rest: string,
-      ): void => {
-        if (prefix) parent.appendText(prefix);
-        parent.createEl("span", {
-          cls: "dp-edit-move-hotkey",
-          text: `(${hotkey})`,
+      const choiceBtns: HTMLButtonElement[] = [];
+      for (const choice of moveChoices) {
+        const btn = choices.createEl("button", {
+          cls: "dp-edit-move-choice",
+          attr: {
+            "aria-label": `Move to ${choice.label} (${choice.hotkey})`,
+            title: `Move to ${choice.label} (${choice.hotkey})`,
+          },
         });
-        if (rest) parent.appendText(rest);
-      };
-
-      const canMoveToToday = !!this.opts.onMoveToToday;
-      const todayBtn = canMoveToToday
-        ? choices.createEl("button", {
-            cls: "dp-edit-move-choice",
-            attr: {
-              "aria-label": "Move to today (t)",
-              title: "Move to today (t)",
-            },
-          })
-        : null;
-      if (todayBtn) {
-        todayBtn.type = "button";
-        makeChoiceLabel(todayBtn, "Move ", "t", "oday");
+        btn.type = "button";
+        btn.createEl("span", {
+          cls: "dp-edit-move-hotkey",
+          text: `(${choice.hotkey})`,
+        });
+        btn.appendText(` ${choice.label}`);
+        btn.addEventListener("click", () => void runWith(choice.onChoose));
+        choiceBtns.push(btn);
       }
-
-      const wholeBtn = choices.createEl("button", {
-        cls: "dp-edit-move-choice",
-        attr: {
-          "aria-label": "Move whole task (w)",
-          title: "Move whole task (w)",
-        },
-      });
-      wholeBtn.type = "button";
-      makeChoiceLabel(wholeBtn, "Move ", "w", "hole");
-
-      const incBtn = choices.createEl("button", {
-        cls: "dp-edit-move-choice",
-        attr: {
-          "aria-label": "Split — migrate incomplete (i)",
-          title: "Split — migrate incomplete (i)",
-        },
-      });
-      incBtn.type = "button";
-      makeChoiceLabel(incBtn, "Move ", "i", "ncomplete");
 
       let stageTwoActive = false;
       let keyHandler: ((ev: KeyboardEvent) => void) | null = null;
 
       const setSubBtnsDisabled = (disabled: boolean): void => {
-        if (todayBtn) todayBtn.disabled = disabled;
-        wholeBtn.disabled = disabled;
-        incBtn.disabled = disabled;
+        for (const b of choiceBtns) b.disabled = disabled;
       };
 
       const exitStageTwo = (): void => {
@@ -4236,6 +4251,7 @@ class TaskEditModal extends Modal {
           moveBtn.focus();
           return;
         }
+        if (choiceBtns.length === 0) return;
         stageTwoActive = true;
         choices.style.display = "";
         // Re-trigger the staggered pop-in animation each time the cluster
@@ -4243,7 +4259,7 @@ class TaskEditModal extends Modal {
         choices.removeClass("is-open");
         void choices.offsetWidth;
         choices.addClass("is-open");
-        (todayBtn ?? wholeBtn).focus();
+        choiceBtns[0].focus();
         keyHandler = (ev: KeyboardEvent) => {
           if (!stageTwoActive) return;
           // Don't intercept while typing in inputs (title field, sub-task
@@ -4255,42 +4271,24 @@ class TaskEditModal extends Modal {
           ) {
             return;
           }
-          if (ev.key === "w" || ev.key === "W") {
-            ev.preventDefault();
-            ev.stopPropagation();
-            void runWith(this.opts.onMoveToTomorrowWhole!);
-          } else if (ev.key === "i" || ev.key === "I") {
-            ev.preventDefault();
-            ev.stopPropagation();
-            void runWith(this.opts.onMoveToTomorrowIncomplete!);
-          } else if ((ev.key === "t" || ev.key === "T") && todayBtn) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            void runWith(this.opts.onMoveToToday!);
-          } else if (ev.key === "Escape") {
+          if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
             exitStageTwo();
             moveBtn.focus();
+            return;
+          }
+          for (const choice of moveChoices) {
+            if (ev.key === choice.hotkey) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              void runWith(choice.onChoose);
+              return;
+            }
           }
         };
         this.contentEl.addEventListener("keydown", keyHandler, true);
       });
-
-      if (todayBtn) {
-        todayBtn.addEventListener(
-          "click",
-          () => void runWith(this.opts.onMoveToToday!),
-        );
-      }
-      wholeBtn.addEventListener(
-        "click",
-        () => void runWith(this.opts.onMoveToTomorrowWhole!),
-      );
-      incBtn.addEventListener(
-        "click",
-        () => void runWith(this.opts.onMoveToTomorrowIncomplete!),
-      );
     }
 
     const pomoBtn = actions.createEl("button", {

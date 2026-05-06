@@ -2760,6 +2760,10 @@
     animation-delay: 120ms;
   }
 
+  .dp-edit-move-choices.is-open .dp-edit-move-choice:nth-child(4) {
+    animation-delay: 180ms;
+  }
+
   @keyframes dp-move-pop {
     0% {
       opacity: 0;

@@ -4237,11 +4237,51 @@ var TodayView = class extends import_obsidian4.ItemView {
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
-      onMoveToTomorrowWhole: () => this.moveTaskWholeToDate(file, task, addDays(this.selectedDate, 1)),
-      onMoveToTomorrowIncomplete: () => this.migrateIncompleteToDate(file, task, addDays(this.selectedDate, 1)),
-      onMoveToToday: this.selectedDate.getTime() > startOfDay(new Date()).getTime() ? () => this.moveTaskWholeToDate(file, task, startOfDay(new Date())) : void 0,
+      moveChoices: this.buildMoveChoices(file, task),
       onStartPomodoro: () => this.enterPomodoro(file, task)
     }).open();
+  }
+  // Computes the date-picker entries for the edit modal's "Move" button:
+  // tomorrow, +2 days, +3 days, and the first day of next week (driven by
+  // habitWeekStart). The `next week` entry is dropped when its date already
+  // appears as one of the next-3-days. All offsets are relative to the
+  // currently-viewed day, so opening the modal on a future-dated note pushes
+  // tasks forward from there rather than from real today.
+  buildMoveChoices(file, task) {
+    const sel = startOfDay(this.selectedDate);
+    const weekStart = this.plugin.settings.habitWeekStart;
+    const day1 = addDays(sel, 1);
+    const day2 = addDays(sel, 2);
+    const day3 = addDays(sel, 3);
+    const offset = (weekStart - sel.getDay() + 7) % 7 || 7;
+    const nextWeek = addDays(sel, offset);
+    const dayLabel = (d) => d.toLocaleDateString(void 0, { weekday: "short" });
+    const choices = [
+      {
+        label: "tomorrow",
+        hotkey: "1",
+        onChoose: () => this.moveTaskWholeToDate(file, task, day1)
+      },
+      {
+        label: dayLabel(day2),
+        hotkey: "2",
+        onChoose: () => this.moveTaskWholeToDate(file, task, day2)
+      },
+      {
+        label: dayLabel(day3),
+        hotkey: "3",
+        onChoose: () => this.moveTaskWholeToDate(file, task, day3)
+      }
+    ];
+    const nextWeekIsDup = sameDay(nextWeek, day1) || sameDay(nextWeek, day2) || sameDay(nextWeek, day3);
+    if (!nextWeekIsDup) {
+      choices.push({
+        label: "next week",
+        hotkey: "4",
+        onChoose: () => this.moveTaskWholeToDate(file, task, nextWeek)
+      });
+    }
+    return choices;
   }
   // Moves a task line (and its sub-task lines) from `file` to the daily note
   // for `targetDate`. No-op if source and target are the same file.
@@ -5280,7 +5320,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     this.checked = opts.initialChecked;
   }
   onOpen() {
-    var _a;
+    var _a, _b;
     this.modalEl.addClass("dp-title-modal");
     document.body.addClass("today-edit-open");
     this.titleEl.setText(this.opts.modalTitle);
@@ -5297,9 +5337,9 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         }
       });
       pill.addEventListener("click", (ev) => {
-        var _a2, _b, _c, _d;
+        var _a2, _b2, _c, _d;
         ev.preventDefault();
-        const search = (_b = (_a2 = this.app.internalPlugins) == null ? void 0 : _a2.getPluginById) == null ? void 0 : _b.call(_a2, "global-search");
+        const search = (_b2 = (_a2 = this.app.internalPlugins) == null ? void 0 : _a2.getPluginById) == null ? void 0 : _b2.call(_a2, "global-search");
         (_d = (_c = search == null ? void 0 : search.instance) == null ? void 0 : _c.openGlobalSearch) == null ? void 0 : _d.call(_c, `tag:#${prefix}/${id}`);
         this.close();
       });
@@ -5940,62 +5980,39 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       this.opts.onShowInNote();
     });
     if (this.opts.mode === "edit") {
+      const moveChoices = (_b = this.opts.moveChoices) != null ? _b : [];
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Move to tomorrow", title: "Move to tomorrow" }
+        attr: { "aria-label": "Move to\u2026", title: "Move to\u2026" }
       });
       moveBtn.type = "button";
       (0, import_obsidian4.setIcon)(moveBtn, "forward");
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
-      const makeChoiceLabel = (parent, prefix, hotkey, rest) => {
-        if (prefix)
-          parent.appendText(prefix);
-        parent.createEl("span", {
-          cls: "dp-edit-move-hotkey",
-          text: `(${hotkey})`
+      const choiceBtns = [];
+      for (const choice of moveChoices) {
+        const btn = choices.createEl("button", {
+          cls: "dp-edit-move-choice",
+          attr: {
+            "aria-label": `Move to ${choice.label} (${choice.hotkey})`,
+            title: `Move to ${choice.label} (${choice.hotkey})`
+          }
         });
-        if (rest)
-          parent.appendText(rest);
-      };
-      const canMoveToToday = !!this.opts.onMoveToToday;
-      const todayBtn = canMoveToToday ? choices.createEl("button", {
-        cls: "dp-edit-move-choice",
-        attr: {
-          "aria-label": "Move to today (t)",
-          title: "Move to today (t)"
-        }
-      }) : null;
-      if (todayBtn) {
-        todayBtn.type = "button";
-        makeChoiceLabel(todayBtn, "Move ", "t", "oday");
+        btn.type = "button";
+        btn.createEl("span", {
+          cls: "dp-edit-move-hotkey",
+          text: `(${choice.hotkey})`
+        });
+        btn.appendText(` ${choice.label}`);
+        btn.addEventListener("click", () => void runWith(choice.onChoose));
+        choiceBtns.push(btn);
       }
-      const wholeBtn = choices.createEl("button", {
-        cls: "dp-edit-move-choice",
-        attr: {
-          "aria-label": "Move whole task (w)",
-          title: "Move whole task (w)"
-        }
-      });
-      wholeBtn.type = "button";
-      makeChoiceLabel(wholeBtn, "Move ", "w", "hole");
-      const incBtn = choices.createEl("button", {
-        cls: "dp-edit-move-choice",
-        attr: {
-          "aria-label": "Split \u2014 migrate incomplete (i)",
-          title: "Split \u2014 migrate incomplete (i)"
-        }
-      });
-      incBtn.type = "button";
-      makeChoiceLabel(incBtn, "Move ", "i", "ncomplete");
       let stageTwoActive = false;
       let keyHandler = null;
       const setSubBtnsDisabled = (disabled) => {
-        if (todayBtn)
-          todayBtn.disabled = disabled;
-        wholeBtn.disabled = disabled;
-        incBtn.disabled = disabled;
+        for (const b of choiceBtns)
+          b.disabled = disabled;
       };
       const exitStageTwo = () => {
         stageTwoActive = false;
@@ -6020,12 +6037,14 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           moveBtn.focus();
           return;
         }
+        if (choiceBtns.length === 0)
+          return;
         stageTwoActive = true;
         choices.style.display = "";
         choices.removeClass("is-open");
         void choices.offsetWidth;
         choices.addClass("is-open");
-        (todayBtn != null ? todayBtn : wholeBtn).focus();
+        choiceBtns[0].focus();
         keyHandler = (ev) => {
           if (!stageTwoActive)
             return;
@@ -6033,41 +6052,24 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
             return;
           }
-          if (ev.key === "w" || ev.key === "W") {
-            ev.preventDefault();
-            ev.stopPropagation();
-            void runWith(this.opts.onMoveToTomorrowWhole);
-          } else if (ev.key === "i" || ev.key === "I") {
-            ev.preventDefault();
-            ev.stopPropagation();
-            void runWith(this.opts.onMoveToTomorrowIncomplete);
-          } else if ((ev.key === "t" || ev.key === "T") && todayBtn) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            void runWith(this.opts.onMoveToToday);
-          } else if (ev.key === "Escape") {
+          if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
             exitStageTwo();
             moveBtn.focus();
+            return;
+          }
+          for (const choice of moveChoices) {
+            if (ev.key === choice.hotkey) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              void runWith(choice.onChoose);
+              return;
+            }
           }
         };
         this.contentEl.addEventListener("keydown", keyHandler, true);
       });
-      if (todayBtn) {
-        todayBtn.addEventListener(
-          "click",
-          () => void runWith(this.opts.onMoveToToday)
-        );
-      }
-      wholeBtn.addEventListener(
-        "click",
-        () => void runWith(this.opts.onMoveToTomorrowWhole)
-      );
-      incBtn.addEventListener(
-        "click",
-        () => void runWith(this.opts.onMoveToTomorrowIncomplete)
-      );
     }
     const pomoBtn = actions.createEl("button", {
       cls: "dp-edit-icon-btn",
