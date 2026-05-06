@@ -1045,6 +1045,9 @@ function keyLabel(key) {
 }
 
 // src/settings.ts
+var DEFAULT_AUTOCOMPLETE = {
+  projectTrigger: "##"
+};
 var DEFAULT_SETTINGS = {
   visibleStartHour: 6,
   visibleEndHour: 23,
@@ -1055,6 +1058,7 @@ var DEFAULT_SETTINGS = {
   snapMin: 15,
   pxPerMin: 1,
   prefixes: { ...DEFAULT_PREFIXES },
+  autocomplete: { ...DEFAULT_AUTOCOMPLETE },
   dailyNoteFormatFallback: "YYYY-MM-DD",
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
@@ -1450,6 +1454,15 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
+    new import_obsidian2.Setting(containerEl).setName("Project autocomplete trigger").setDesc(buildProjectTriggerDesc()).addText(
+      (t) => t.setPlaceholder("##").setValue(this.plugin.settings.autocomplete.projectTrigger).onChange(async (v) => {
+        const trimmed = v.trim();
+        if (trimmed.length === 0)
+          return;
+        this.plugin.settings.autocomplete.projectTrigger = trimmed;
+        await this.plugin.saveSettings();
+      })
+    );
     const prefix = this.plugin.settings.prefixes.project;
     const desc = document.createDocumentFragment();
     desc.append(
@@ -1782,6 +1795,17 @@ function buildTaskIdDesc() {
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
     makeCode("#tid/a3xK9p"),
     ". The migrate-incomplete flow lets you check off the work you finished today while carrying the task title and unfinished sub-tasks (without the completed ones) into tomorrow's note \u2014 useful for showing partial progress while continuing the task. If all sub-tasks are already done, the original is still marked complete and a fresh empty parent is queued for tomorrow, so you can keep working on it."
+  );
+  return f;
+}
+function buildProjectTriggerDesc() {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Type this in a task title (in the new/edit modal) or in a daily note to open a project picker. Default ",
+    makeCode("##"),
+    ". Selecting a project sets the project field in the modal, or inserts ",
+    makeCode("#p/<name>"),
+    " into the note."
   );
   return f;
 }
@@ -2846,6 +2870,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
+      projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, _checked, extras) => {
         var _a, _b;
@@ -3674,6 +3699,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
+      projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, checked) => {
         void this.applyTaskEdit(
@@ -4440,6 +4466,140 @@ function attachProjectSuggest(input, wrap, projects) {
     }
   });
 }
+function attachTitleProjectSuggest(input, wrap, projectInput, projects, trigger) {
+  if (!trigger)
+    return;
+  const popover = wrap.createDiv({ cls: "dp-project-suggest" });
+  popover.style.display = "none";
+  let visible = [];
+  let activeIdx = -1;
+  let triggerStart = -1;
+  const filter = (q) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle)
+      return projects.slice(0, 12);
+    const starts = projects.filter((p) => p.toLowerCase().startsWith(needle));
+    const contains = projects.filter(
+      (p) => !p.toLowerCase().startsWith(needle) && p.toLowerCase().includes(needle)
+    );
+    return [...starts, ...contains].slice(0, 12);
+  };
+  const renderItems = () => {
+    popover.empty();
+    visible.forEach((name, i) => {
+      const item = popover.createDiv({ cls: "dp-project-suggest-item" });
+      if (i === activeIdx)
+        item.addClass("is-active");
+      const slash = name.indexOf("/");
+      if (slash >= 0) {
+        item.createSpan({ text: name.slice(0, slash) });
+        item.createSpan({
+          cls: "dp-project-suggest-sub",
+          text: name.slice(slash)
+        });
+      } else {
+        item.createSpan({ text: name });
+      }
+      item.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        commit(name);
+      });
+      item.addEventListener("mousemove", () => {
+        if (activeIdx === i)
+          return;
+        activeIdx = i;
+        updateActive();
+      });
+    });
+  };
+  const updateActive = () => {
+    const items = popover.querySelectorAll(
+      ".dp-project-suggest-item"
+    );
+    items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
+  };
+  const detect = () => {
+    var _a;
+    const cursor = (_a = input.selectionStart) != null ? _a : input.value.length;
+    const before = input.value.slice(0, cursor);
+    const idx = before.lastIndexOf(trigger);
+    if (idx < 0)
+      return null;
+    const query = before.slice(idx + trigger.length);
+    if (/[\s#]/.test(query))
+      return null;
+    return { start: idx, query };
+  };
+  const refresh = () => {
+    const det = detect();
+    if (!det) {
+      hide();
+      return;
+    }
+    triggerStart = det.start;
+    visible = filter(det.query);
+    if (visible.length === 0) {
+      hide();
+      return;
+    }
+    if (activeIdx < 0 || activeIdx >= visible.length)
+      activeIdx = 0;
+    renderItems();
+    popover.style.display = "";
+  };
+  const hide = () => {
+    popover.style.display = "none";
+    activeIdx = -1;
+    triggerStart = -1;
+  };
+  const commit = (name) => {
+    var _a;
+    if (triggerStart < 0)
+      return;
+    const cursor = (_a = input.selectionStart) != null ? _a : input.value.length;
+    const before = input.value.slice(0, triggerStart);
+    const after = input.value.slice(cursor);
+    const trimmedBefore = before.replace(/\s+$/, "");
+    input.value = trimmedBefore + after;
+    const newCursor = trimmedBefore.length;
+    input.setSelectionRange(newCursor, newCursor);
+    projectInput.value = name;
+    hide();
+    input.focus();
+  };
+  input.addEventListener("input", refresh);
+  input.addEventListener("click", refresh);
+  input.addEventListener("keyup", (ev) => {
+    if (ev.key === "ArrowLeft" || ev.key === "ArrowRight")
+      refresh();
+  });
+  input.addEventListener("blur", () => {
+    window.setTimeout(hide, 100);
+  });
+  input.addEventListener("keydown", (ev) => {
+    if (popover.style.display === "none")
+      return;
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, visible.length - 1);
+      updateActive();
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      updateActive();
+    } else if (ev.key === "Enter" || ev.key === "Tab") {
+      if (activeIdx >= 0 && activeIdx < visible.length) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        commit(visible[activeIdx]);
+      }
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      hide();
+    }
+  });
+}
 function sanitizeProjectName(raw) {
   return raw.trim().replace(/[^\w/-]+/g, "-").replace(/-+/g, "-").replace(/\/+/g, "/").replace(/-?\/-?/g, "/").replace(/^[-/]+|[-/]+$/g, "");
 }
@@ -4506,10 +4666,11 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         toggleChecked();
       }
     });
-    const input = titleRow.createEl("input", {
+    const titleWrap = titleRow.createDiv({ cls: "dp-title-input-wrap" });
+    const input = titleWrap.createEl("input", {
       type: "text",
       cls: "dp-title-input",
-      attr: { placeholder: "Task title\u2026" }
+      attr: { placeholder: "Task title\u2026", autocomplete: "off" }
     });
     input.value = this.opts.initialTitle;
     const descLabel = this.contentEl.createDiv({
@@ -4536,6 +4697,13 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     });
     projInput.value = (_a = this.opts.initialProject) != null ? _a : "";
     attachProjectSuggest(projInput, projWrap, this.opts.projects);
+    attachTitleProjectSuggest(
+      input,
+      titleWrap,
+      projInput,
+      this.opts.projects,
+      this.opts.projectTrigger
+    );
     const clearBtn = projRow.createEl("button", {
       cls: "dp-project-clear",
       attr: { "aria-label": "Clear project" }
@@ -5114,16 +5282,21 @@ var TodayPlugin = class extends import_obsidian5.Plugin {
       callback: () => void this.activateView({ openCalendar: true })
     });
     this.addSettingTab(new TodaySettingTab(this.app, this));
+    this.registerEditorSuggest(new ProjectEditorSuggest(this));
   }
   async onunload() {
   }
   async loadSettings() {
-    var _a;
+    var _a, _b;
     const data = await this.loadData();
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...data != null ? data : {},
       prefixes: { ...DEFAULT_PREFIXES, ...(_a = data == null ? void 0 : data.prefixes) != null ? _a : {} },
+      autocomplete: {
+        ...DEFAULT_AUTOCOMPLETE,
+        ...(_b = data == null ? void 0 : data.autocomplete) != null ? _b : {}
+      },
       projectColors: Array.isArray(data == null ? void 0 : data.projectColors) ? data.projectColors.filter(
         (c) => c && typeof c.project === "string" && typeof c.color === "string"
       ) : []
@@ -5157,6 +5330,87 @@ var TodayPlugin = class extends import_obsidian5.Plugin {
     if (opts.openCalendar && leaf.view instanceof TodayView) {
       leaf.view.openCalendar();
     }
+  }
+};
+var ProjectEditorSuggest = class extends import_obsidian5.EditorSuggest {
+  constructor(plugin) {
+    super(plugin.app);
+    this.plugin = plugin;
+  }
+  onTrigger(cursor, editor, _file) {
+    const trigger = this.plugin.settings.autocomplete.projectTrigger;
+    if (!trigger)
+      return null;
+    const line = editor.getLine(cursor.line);
+    const before = line.slice(0, cursor.ch);
+    const idx = before.lastIndexOf(trigger);
+    if (idx < 0)
+      return null;
+    if (!/\S/.test(before.slice(0, idx)))
+      return null;
+    const query = before.slice(idx + trigger.length);
+    if (/[\s#]/.test(query))
+      return null;
+    return {
+      start: { line: cursor.line, ch: idx },
+      end: cursor,
+      query
+    };
+  }
+  getSuggestions(ctx) {
+    const projects = this.collectProjects();
+    const q = ctx.query.trim().toLowerCase();
+    if (!q)
+      return projects.slice(0, 12);
+    const starts = projects.filter((p) => p.toLowerCase().startsWith(q));
+    const contains = projects.filter(
+      (p) => !p.toLowerCase().startsWith(q) && p.toLowerCase().includes(q)
+    );
+    return [...starts, ...contains].slice(0, 12);
+  }
+  renderSuggestion(name, el) {
+    el.addClass("dp-project-suggest-item");
+    const slash = name.indexOf("/");
+    if (slash >= 0) {
+      el.createSpan({ text: name.slice(0, slash) });
+      el.createSpan({
+        cls: "dp-project-suggest-sub",
+        text: name.slice(slash)
+      });
+    } else {
+      el.createSpan({ text: name });
+    }
+  }
+  selectSuggestion(name, _evt) {
+    if (!this.context)
+      return;
+    const editor = this.context.editor;
+    const prefix = this.plugin.settings.prefixes.project;
+    editor.replaceRange(
+      `#${prefix}/${name} `,
+      this.context.start,
+      this.context.end
+    );
+    this.close();
+  }
+  collectProjects() {
+    var _a, _b;
+    const prefix = `#${this.plugin.settings.prefixes.project}/`.toLowerCase();
+    const names = /* @__PURE__ */ new Set();
+    const cache = this.app.metadataCache;
+    const tags = (_b = (_a = cache.getTags) == null ? void 0 : _a.call(cache)) != null ? _b : {};
+    for (const tag of Object.keys(tags)) {
+      if (tag.toLowerCase().startsWith(prefix)) {
+        const name = tag.slice(prefix.length);
+        if (name)
+          names.add(name);
+      }
+    }
+    for (const pc of this.plugin.settings.projectColors) {
+      if (pc.project)
+        names.add(pc.project);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
   }
 };
 /*! Bundled license information:

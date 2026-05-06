@@ -15,6 +15,19 @@ import {
 import { ContextTag, ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
 import { TagMigrationModal, PrefixChange } from "./migrate";
 
+// Inline-autocomplete trigger strings. Stored as a record so future shortcut
+// triggers (duration, time, etc.) can be added without changing the Settings
+// shape.
+export interface AutocompleteSettings {
+  // Typed in the task title input or directly in a daily note to open the
+  // project picker. Default "##".
+  projectTrigger: string;
+}
+
+export const DEFAULT_AUTOCOMPLETE: AutocompleteSettings = {
+  projectTrigger: "##",
+};
+
 export interface TodaySettings {
   visibleStartHour: number;
   visibleEndHour: number;
@@ -25,6 +38,7 @@ export interface TodaySettings {
   snapMin: number;
   pxPerMin: number;
   prefixes: TagPrefixes;
+  autocomplete: AutocompleteSettings;
   dailyNoteFormatFallback: string;
   dailyNoteFolderFallback: string;
   dailyNoteTemplate: string;
@@ -57,6 +71,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   snapMin: 15,
   pxPerMin: 1,
   prefixes: { ...DEFAULT_PREFIXES },
+  autocomplete: { ...DEFAULT_AUTOCOMPLETE },
   dailyNoteFormatFallback: "YYYY-MM-DD",
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
@@ -632,6 +647,21 @@ export class TodaySettingTab extends PluginSettingTab {
         }),
       );
 
+    new Setting(containerEl)
+      .setName("Project autocomplete trigger")
+      .setDesc(buildProjectTriggerDesc())
+      .addText((t) =>
+        t
+          .setPlaceholder("##")
+          .setValue(this.plugin.settings.autocomplete.projectTrigger)
+          .onChange(async (v) => {
+            const trimmed = v.trim();
+            if (trimmed.length === 0) return;
+            this.plugin.settings.autocomplete.projectTrigger = trimmed;
+            await this.plugin.saveSettings();
+          }),
+      );
+
     const prefix = this.plugin.settings.prefixes.project;
 
     const desc = document.createDocumentFragment();
@@ -1014,6 +1044,18 @@ function buildTaskIdDesc(): DocumentFragment {
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
     makeCode("#tid/a3xK9p"),
     ". The migrate-incomplete flow lets you check off the work you finished today while carrying the task title and unfinished sub-tasks (without the completed ones) into tomorrow's note — useful for showing partial progress while continuing the task. If all sub-tasks are already done, the original is still marked complete and a fresh empty parent is queued for tomorrow, so you can keep working on it.",
+  );
+  return f;
+}
+
+function buildProjectTriggerDesc(): DocumentFragment {
+  const f = document.createDocumentFragment();
+  f.append(
+    "Type this in a task title (in the new/edit modal) or in a daily note to open a project picker. Default ",
+    makeCode("##"),
+    ". Selecting a project sets the project field in the modal, or inserts ",
+    makeCode("#p/<name>"),
+    " into the note.",
   );
   return f;
 }

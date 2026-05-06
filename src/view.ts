@@ -977,6 +977,7 @@ export class TodayView extends ItemView {
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
+      projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, _checked, extras) => {
         const proj =
@@ -1925,6 +1926,7 @@ export class TodayView extends ItemView {
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
+      projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, checked) => {
         void this.applyTaskEdit(
@@ -2743,6 +2745,8 @@ interface TaskEditOpts {
   projects: string[];
   durations: { label: string; min: number }[];
   prefixes: TagPrefixes;
+  // Trigger string for the in-title project autocomplete (e.g. "##").
+  projectTrigger: string;
   cleanBody: (body: string) => string;
   // durationMin is null when the user did not pick a new duration — leave the
   // existing #d/ tag (or its absence) alone. In "new" mode it's always set
@@ -2901,6 +2905,156 @@ function attachProjectSuggest(
   });
 }
 
+// Watches a free-text input (the modal's title field) for an inline trigger
+// like "##" followed by a project query, and surfaces the same project picker
+// as the dedicated project input. Picking a suggestion strips the
+// "##<query>" out of the title and writes the project name into projectInput,
+// so the user can capture the project and the title in one keystroke flow.
+function attachTitleProjectSuggest(
+  input: HTMLInputElement,
+  wrap: HTMLElement,
+  projectInput: HTMLInputElement,
+  projects: string[],
+  trigger: string,
+): void {
+  if (!trigger) return;
+  const popover = wrap.createDiv({ cls: "dp-project-suggest" });
+  popover.style.display = "none";
+  let visible: string[] = [];
+  let activeIdx = -1;
+  // Index in input.value where the trigger begins for the active match. -1
+  // when no match is active.
+  let triggerStart = -1;
+
+  const filter = (q: string): string[] => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return projects.slice(0, 12);
+    const starts = projects.filter((p) => p.toLowerCase().startsWith(needle));
+    const contains = projects.filter(
+      (p) =>
+        !p.toLowerCase().startsWith(needle) &&
+        p.toLowerCase().includes(needle),
+    );
+    return [...starts, ...contains].slice(0, 12);
+  };
+
+  const renderItems = (): void => {
+    popover.empty();
+    visible.forEach((name, i) => {
+      const item = popover.createDiv({ cls: "dp-project-suggest-item" });
+      if (i === activeIdx) item.addClass("is-active");
+      const slash = name.indexOf("/");
+      if (slash >= 0) {
+        item.createSpan({ text: name.slice(0, slash) });
+        item.createSpan({
+          cls: "dp-project-suggest-sub",
+          text: name.slice(slash),
+        });
+      } else {
+        item.createSpan({ text: name });
+      }
+      item.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        commit(name);
+      });
+      item.addEventListener("mousemove", () => {
+        if (activeIdx === i) return;
+        activeIdx = i;
+        updateActive();
+      });
+    });
+  };
+
+  const updateActive = (): void => {
+    const items = popover.querySelectorAll<HTMLElement>(
+      ".dp-project-suggest-item",
+    );
+    items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
+  };
+
+  const detect = (): { start: number; query: string } | null => {
+    const cursor = input.selectionStart ?? input.value.length;
+    const before = input.value.slice(0, cursor);
+    const idx = before.lastIndexOf(trigger);
+    if (idx < 0) return null;
+    const query = before.slice(idx + trigger.length);
+    // Whitespace or another "#" terminates the query — treat the trigger as
+    // already-resolved text.
+    if (/[\s#]/.test(query)) return null;
+    return { start: idx, query };
+  };
+
+  const refresh = (): void => {
+    const det = detect();
+    if (!det) {
+      hide();
+      return;
+    }
+    triggerStart = det.start;
+    visible = filter(det.query);
+    if (visible.length === 0) {
+      hide();
+      return;
+    }
+    if (activeIdx < 0 || activeIdx >= visible.length) activeIdx = 0;
+    renderItems();
+    popover.style.display = "";
+  };
+
+  const hide = (): void => {
+    popover.style.display = "none";
+    activeIdx = -1;
+    triggerStart = -1;
+  };
+
+  const commit = (name: string): void => {
+    if (triggerStart < 0) return;
+    const cursor = input.selectionStart ?? input.value.length;
+    const before = input.value.slice(0, triggerStart);
+    const after = input.value.slice(cursor);
+    // Trim a trailing space we'd otherwise leave behind ("foo ##bar" → "foo")
+    // so the title doesn't end up with a dangling space.
+    const trimmedBefore = before.replace(/\s+$/, "");
+    input.value = trimmedBefore + after;
+    const newCursor = trimmedBefore.length;
+    input.setSelectionRange(newCursor, newCursor);
+    projectInput.value = name;
+    hide();
+    input.focus();
+  };
+
+  input.addEventListener("input", refresh);
+  input.addEventListener("click", refresh);
+  input.addEventListener("keyup", (ev) => {
+    if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") refresh();
+  });
+  input.addEventListener("blur", () => {
+    window.setTimeout(hide, 100);
+  });
+  input.addEventListener("keydown", (ev) => {
+    if (popover.style.display === "none") return;
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, visible.length - 1);
+      updateActive();
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      updateActive();
+    } else if (ev.key === "Enter" || ev.key === "Tab") {
+      if (activeIdx >= 0 && activeIdx < visible.length) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        commit(visible[activeIdx]);
+      }
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      hide();
+    }
+  });
+}
+
 // Project segments only allow [\w-]; "/" separates a sub-project segment so
 // users can type "My Project/Sub" and end up with #p/My-Project/Sub. Anything
 // else becomes a dash; runs of dashes/slashes collapse and trim.
@@ -2987,10 +3141,11 @@ class TaskEditModal extends Modal {
       }
     });
 
-    const input = titleRow.createEl("input", {
+    const titleWrap = titleRow.createDiv({ cls: "dp-title-input-wrap" });
+    const input = titleWrap.createEl("input", {
       type: "text",
       cls: "dp-title-input",
-      attr: { placeholder: "Task title…" },
+      attr: { placeholder: "Task title…", autocomplete: "off" },
     });
     input.value = this.opts.initialTitle;
 
@@ -3021,6 +3176,13 @@ class TaskEditModal extends Modal {
     });
     projInput.value = this.opts.initialProject ?? "";
     attachProjectSuggest(projInput, projWrap, this.opts.projects);
+    attachTitleProjectSuggest(
+      input,
+      titleWrap,
+      projInput,
+      this.opts.projects,
+      this.opts.projectTrigger,
+    );
     const clearBtn = projRow.createEl("button", {
       cls: "dp-project-clear",
       attr: { "aria-label": "Clear project" },
