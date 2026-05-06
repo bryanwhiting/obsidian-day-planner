@@ -2086,7 +2086,74 @@ export class TodayView extends ItemView {
         onChoose: () => this.moveTaskWholeToDate(file, task, nextWeek),
       });
     }
+    choices.push({
+      label: "calendar",
+      hotkey: "c",
+      onChoose: async () => {
+        const picked = await this.promptForDate(sel);
+        if (!picked) return false;
+        return this.moveTaskWholeToDate(file, task, picked);
+      },
+    });
     return choices;
+  }
+
+  // Pops a native date picker and resolves to the chosen date (or null if
+  // dismissed). The hidden input is attached to body so it works regardless of
+  // which modal is currently focused; `showPicker()` opens the OS-native
+  // calendar widget on Electron / modern Chromium.
+  private promptForDate(initial: Date): Promise<Date | null> {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "date";
+      const yyyy = initial.getFullYear();
+      const mm = String(initial.getMonth() + 1).padStart(2, "0");
+      const dd = String(initial.getDate()).padStart(2, "0");
+      input.value = `${yyyy}-${mm}-${dd}`;
+      input.style.position = "fixed";
+      input.style.left = "50%";
+      input.style.top = "50%";
+      input.style.opacity = "0";
+      input.style.pointerEvents = "none";
+      input.style.width = "1px";
+      input.style.height = "1px";
+      document.body.appendChild(input);
+      let settled = false;
+      const cleanup = (): void => {
+        if (input.parentElement) input.parentElement.removeChild(input);
+      };
+      const finish = (date: Date | null): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(date);
+      };
+      input.addEventListener("change", () => {
+        const v = input.value;
+        if (!v) return finish(null);
+        const [y, m, d] = v.split("-").map(Number);
+        if (!y || !m || !d) return finish(null);
+        finish(new Date(y, m - 1, d));
+      });
+      input.addEventListener("cancel", () => finish(null));
+      input.addEventListener("blur", () => {
+        // Some platforms don't fire a `cancel` event; close on blur as a
+        // fallback after a tick (so a `change` event still wins).
+        window.setTimeout(() => finish(null), 150);
+      });
+      const showPicker = (input as unknown as { showPicker?: () => void })
+        .showPicker;
+      if (typeof showPicker === "function") {
+        try {
+          showPicker.call(input);
+          return;
+        } catch {
+          // fall through to focus/click fallback
+        }
+      }
+      input.focus();
+      input.click();
+    });
   }
 
   // Moves a task line (and its sub-task lines) from `file` to the daily note
