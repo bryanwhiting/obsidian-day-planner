@@ -1748,10 +1748,20 @@
     max-height: 220px;
     padding: 4px;
     overflow-y: auto;
-    background: var(--color-paper);
+    /* Hardcode an opaque base so themes with translucent --background-primary
+     * (Minimal, Things, Blue Topaz) don't bleed modal content through the
+     * popover; paint the theme color on top so it still adapts. */
+    background-color: #ffffff;
+    background-image:
+      linear-gradient(var(--color-paper), var(--color-paper));
+    isolation: isolate;
     border: 1px solid var(--color-hairline);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-float);
+  }
+
+  .theme-dark .dp-project-suggest {
+    background-color: #1e1e1e;
   }
 
   .dp-project-suggest-item {
