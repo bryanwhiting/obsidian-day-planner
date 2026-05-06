@@ -2657,35 +2657,35 @@ var TodayView = class extends import_obsidian4.ItemView {
   createTaskAtTime(file, startMin, defaultDurationMin) {
     const prefixes = this.plugin.settings.prefixes;
     this.openNewTaskModal(
+      file,
       `New task at ${this.fmtClock(startMin)}`,
       defaultDurationMin,
       (title, description, durationMin, project) => {
         const body = description ? `${title} {${description}}` : title;
-        const newLine = buildTaskLine(body, prefixes, {
+        return buildTaskLine(body, prefixes, {
           startMin,
           durationMin,
           project
         });
-        void this.appendTaskAfterLast(file, newLine);
       }
     );
   }
   createUnscheduledTask(file) {
     const prefixes = this.plugin.settings.prefixes;
     this.openNewTaskModal(
+      file,
       "New unscheduled task",
       this.plugin.settings.defaultDurationMin,
       (title, description, durationMin, project) => {
         const body = description ? `${title} {${description}}` : title;
-        const newLine = buildTaskLine(body, prefixes, {
+        return buildTaskLine(body, prefixes, {
           durationMin,
           project
         });
-        void this.appendTaskAfterLast(file, newLine);
       }
     );
   }
-  openNewTaskModal(modalTitle, defaultDurationMin, onCreate) {
+  openNewTaskModal(file, modalTitle, defaultDurationMin, buildLine) {
     new TaskEditModal(this.app, {
       mode: "new",
       modalTitle,
@@ -2699,21 +2699,48 @@ var TodayView = class extends import_obsidian4.ItemView {
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project) => {
+      onSave: (title, description, durationMin, project, _checked, extras) => {
+        var _a, _b;
         const proj = project === void 0 || project === "" ? null : project;
         const dur = durationMin != null ? durationMin : defaultDurationMin;
-        onCreate(title, description, dur, proj);
+        const newLine = buildLine(title, description, dur, proj);
+        void this.appendTaskAfterLast(
+          file,
+          newLine,
+          (_a = extras == null ? void 0 : extras.subtaskRawLines) != null ? _a : [],
+          (_b = extras == null ? void 0 : extras.postAction) != null ? _b : "none"
+        );
       }
     }).open();
   }
-  async appendTaskAfterLast(file, newLine) {
+  async appendTaskAfterLast(file, newLine, subtaskLines = [], postAction = "none") {
+    let taskLineNumber = -1;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       const lastIdx = findLastTaskLine(content);
       const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
-      lines.splice(insertAt, 0, newLine);
+      taskLineNumber = insertAt;
+      lines.splice(insertAt, 0, newLine, ...subtaskLines);
       return lines.join("\n");
     });
+    if (postAction === "none" || taskLineNumber < 0)
+      return;
+    if (postAction === "show") {
+      void this.openLine(file, taskLineNumber, this.endOfTitleCh(newLine));
+      return;
+    }
+    if (postAction === "pomodoro") {
+      const content = await this.app.vault.read(file);
+      const tasks = parseFileTasks(
+        file.path,
+        content,
+        this.plugin.settings.prefixes,
+        this.plugin.settings.defaultDurationMin
+      );
+      const fresh = tasks.find((t) => t.lineNumber === taskLineNumber);
+      if (fresh)
+        this.enterPomodoro(file, fresh);
+    }
   }
   // A timed note renders as a thin one-line block on the timeline at its
   // start time — a dot, the time, and the title, all visible inline. Click
@@ -4217,18 +4244,23 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         return null;
       return raw;
     };
-    const submit = () => {
+    const submit = (postAction = "none") => {
       const title = input.value.trim();
       if (this.opts.mode === "new" && !title) {
         input.focus();
         return;
       }
+      const extras = this.opts.mode === "new" ? {
+        subtaskRawLines: subs.map((s) => s.rawLine),
+        postAction
+      } : void 0;
       this.opts.onSave(
         title,
         resolveDescription(),
         this.opts.mode === "new" || this.durationChanged ? this.selectedDurationMin : null,
         resolveProject(),
-        this.checkedChanged ? this.checked : null
+        this.checkedChanged ? this.checked : null,
+        extras
       );
       this.close();
     };
@@ -4246,286 +4278,312 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         submit();
       }
     });
-    if (this.opts.mode === "edit") {
-      const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
-      const subLabel = subHeader.createDiv({
-        cls: "dp-prompt-step-label",
-        text: "Sub-tasks"
+    const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
+    const subLabel = subHeader.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Sub-tasks"
+    });
+    subLabel.setAttribute("aria-hidden", "true");
+    const sortBtn = subHeader.createEl("button", {
+      cls: "dp-edit-subtask-sort",
+      text: "Sort by time"
+    });
+    sortBtn.type = "button";
+    const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
+    const subs = this.opts.subtasks.slice();
+    const prefixes = this.opts.prefixes;
+    const cleanBody = this.opts.cleanBody;
+    let dragSourceIdx = null;
+    let pendingSubLineCounter = -1;
+    const persistOrder = () => {
+      if (!this.opts.onReorderSubtasks)
+        return;
+      const slots = subs.map((s) => s.lineNumber).slice().sort((a, b) => a - b);
+      const ordered = subs.slice();
+      void this.opts.onReorderSubtasks(ordered);
+      ordered.forEach((s, i) => {
+        s.lineNumber = slots[i];
       });
-      subLabel.setAttribute("aria-hidden", "true");
-      const sortBtn = subHeader.createEl("button", {
-        cls: "dp-edit-subtask-sort",
-        text: "Sort by time"
+    };
+    const renderList = () => {
+      list.empty();
+      subs.forEach((sub, idx) => renderSubtask(sub, idx));
+    };
+    const renderSubtask = (sub, idx) => {
+      let checked = sub.checked;
+      const row2 = list.createDiv({ cls: "dp-edit-subtask" });
+      row2.dataset.idx = String(idx);
+      if (checked)
+        row2.addClass("is-done");
+      const box = row2.createSpan({ cls: "dp-edit-check" });
+      if (checked)
+        box.addClass("is-checked");
+      const timeChip = row2.createSpan({ cls: "dp-edit-subtask-time" });
+      const renderTimeChip = () => {
+        const min = parseTime(sub.text, prefixes);
+        if (min === null) {
+          timeChip.setText("+ time");
+          timeChip.addClass("is-empty");
+        } else {
+          timeChip.setText(fmtClockShort(min));
+          timeChip.removeClass("is-empty");
+        }
+      };
+      renderTimeChip();
+      const textEl = row2.createSpan({
+        cls: "dp-edit-subtask-text",
+        text: cleanBody(sub.text)
       });
-      sortBtn.type = "button";
-      const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
-      const subs = this.opts.subtasks.slice();
-      const prefixes = this.opts.prefixes;
-      const cleanBody = this.opts.cleanBody;
-      let dragSourceIdx = null;
-      const persistOrder = () => {
-        const slots = subs.map((s) => s.lineNumber).slice().sort((a, b) => a - b);
-        const ordered = subs.slice();
-        void this.opts.onReorderSubtasks(ordered);
-        ordered.forEach((s, i) => {
-          s.lineNumber = slots[i];
+      const handle = row2.createSpan({ cls: "dp-edit-subtask-handle" });
+      (0, import_obsidian4.setIcon)(handle, "grip-vertical");
+      handle.draggable = true;
+      const toggleChecked2 = () => {
+        checked = !checked;
+        row2.toggleClass("is-done", checked);
+        box.toggleClass("is-checked", checked);
+        sub.checked = checked;
+        sub.rawLine = sub.rawLine.replace(
+          /^(\s*-\s*\[)[^\]](\])/,
+          `$1${checked ? "x" : " "}$2`
+        );
+        if (this.opts.onToggleSubtask) {
+          void this.opts.onToggleSubtask(sub, checked);
+        }
+      };
+      box.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        toggleChecked2();
+      });
+      timeChip.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const current = parseTime(sub.text, prefixes);
+        const editor = row2.createEl("input", {
+          type: "text",
+          cls: "dp-edit-subtask-time-input",
+          attr: { placeholder: "e.g. 7p, 6:30p" }
         });
-      };
-      const renderList = () => {
-        list.empty();
-        subs.forEach((sub, idx) => renderSubtask(sub, idx));
-      };
-      const renderSubtask = (sub, idx) => {
-        let checked = sub.checked;
-        const row2 = list.createDiv({ cls: "dp-edit-subtask" });
-        row2.dataset.idx = String(idx);
-        if (checked)
-          row2.addClass("is-done");
-        const box = row2.createSpan({ cls: "dp-edit-check" });
-        if (checked)
-          box.addClass("is-checked");
-        const timeChip = row2.createSpan({ cls: "dp-edit-subtask-time" });
-        const renderTimeChip = () => {
-          const min = parseTime(sub.text, prefixes);
-          if (min === null) {
-            timeChip.setText("+ time");
-            timeChip.addClass("is-empty");
-          } else {
-            timeChip.setText(fmtClockShort(min));
-            timeChip.removeClass("is-empty");
+        editor.value = current === null ? "" : fmtClockShort(current);
+        timeChip.style.display = "none";
+        editor.focus();
+        editor.select();
+        let done = false;
+        const finish = (commit) => {
+          if (done)
+            return;
+          done = true;
+          const raw = editor.value.trim();
+          editor.remove();
+          timeChip.style.display = "";
+          if (!commit)
+            return;
+          let totalMin = null;
+          if (raw !== "") {
+            const cleaned = raw.toLowerCase().replace(/[\s:]/g, "");
+            const tagPrefix = `#${prefixes.time}/`;
+            const stripped = cleaned.startsWith(tagPrefix) ? cleaned.slice(tagPrefix.length) : cleaned;
+            const parsed = parseTime(`${tagPrefix}${stripped}`, prefixes);
+            if (parsed === null) {
+              new import_obsidian4.Notice("Invalid time, try e.g. 7p or 6:30p");
+              return;
+            }
+            totalMin = parsed;
+          }
+          if (totalMin === current)
+            return;
+          sub.rawLine = totalMin === null ? removeTimeTag(sub.rawLine, prefixes) : setTimeTag(sub.rawLine, totalMin, prefixes);
+          const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
+          if (m)
+            sub.text = m[1];
+          renderTimeChip();
+          if (this.opts.onSetSubtaskTime) {
+            void this.opts.onSetSubtaskTime(sub, totalMin);
           }
         };
-        renderTimeChip();
-        const textEl = row2.createSpan({
-          cls: "dp-edit-subtask-text",
-          text: cleanBody(sub.text)
+        editor.addEventListener("keydown", (kev) => {
+          if (kev.key === "Enter") {
+            kev.preventDefault();
+            finish(true);
+          } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(false);
+          }
         });
-        const handle = row2.createSpan({ cls: "dp-edit-subtask-handle" });
-        (0, import_obsidian4.setIcon)(handle, "grip-vertical");
-        handle.draggable = true;
-        const toggleChecked2 = () => {
-          checked = !checked;
-          row2.toggleClass("is-done", checked);
-          box.toggleClass("is-checked", checked);
-          void this.opts.onToggleSubtask(sub, checked);
-        };
-        box.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          toggleChecked2();
+        editor.addEventListener("blur", () => finish(true));
+      });
+      textEl.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const editor = row2.createEl("input", {
+          type: "text",
+          cls: "dp-edit-subtask-text-input"
         });
-        timeChip.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const current = parseTime(sub.text, prefixes);
-          const editor = row2.createEl("input", {
-            type: "text",
-            cls: "dp-edit-subtask-time-input",
-            attr: { placeholder: "e.g. 7p, 6:30p" }
-          });
-          editor.value = current === null ? "" : fmtClockShort(current);
-          timeChip.style.display = "none";
-          editor.focus();
-          editor.select();
-          let done = false;
-          const finish = (commit) => {
-            if (done)
-              return;
-            done = true;
-            const raw = editor.value.trim();
-            editor.remove();
-            timeChip.style.display = "";
-            if (!commit)
-              return;
-            let totalMin = null;
-            if (raw !== "") {
-              const cleaned = raw.toLowerCase().replace(/[\s:]/g, "");
-              const tagPrefix = `#${prefixes.time}/`;
-              const stripped = cleaned.startsWith(tagPrefix) ? cleaned.slice(tagPrefix.length) : cleaned;
-              const parsed = parseTime(`${tagPrefix}${stripped}`, prefixes);
-              if (parsed === null) {
-                new import_obsidian4.Notice("Invalid time, try e.g. 7p or 6:30p");
-                return;
-              }
-              totalMin = parsed;
-            }
-            if (totalMin === current)
-              return;
-            sub.rawLine = totalMin === null ? removeTimeTag(sub.rawLine, prefixes) : setTimeTag(sub.rawLine, totalMin, prefixes);
+        editor.value = cleanBody(sub.text);
+        textEl.style.display = "none";
+        editor.focus();
+        editor.select();
+        let done = false;
+        const finish = (commit) => {
+          if (done)
+            return;
+          done = true;
+          const next = editor.value.trim();
+          editor.remove();
+          const before = cleanBody(sub.text);
+          if (commit && next && next !== before) {
+            sub.rawLine = setTaskTitle(sub.rawLine, next, prefixes);
             const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
             if (m)
               sub.text = m[1];
-            renderTimeChip();
-            void this.opts.onSetSubtaskTime(sub, totalMin);
-          };
-          editor.addEventListener("keydown", (kev) => {
-            if (kev.key === "Enter") {
-              kev.preventDefault();
-              finish(true);
-            } else if (kev.key === "Escape") {
-              kev.preventDefault();
-              finish(false);
-            }
-          });
-          editor.addEventListener("blur", () => finish(true));
-        });
-        textEl.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const editor = row2.createEl("input", {
-            type: "text",
-            cls: "dp-edit-subtask-text-input"
-          });
-          editor.value = cleanBody(sub.text);
-          textEl.style.display = "none";
-          editor.focus();
-          editor.select();
-          let done = false;
-          const finish = (commit) => {
-            if (done)
-              return;
-            done = true;
-            const next = editor.value.trim();
-            editor.remove();
-            const before = cleanBody(sub.text);
-            if (commit && next && next !== before) {
-              sub.rawLine = setTaskTitle(sub.rawLine, next, prefixes);
-              const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
-              if (m)
-                sub.text = m[1];
-              textEl.setText(cleanBody(sub.text));
+            textEl.setText(cleanBody(sub.text));
+            if (this.opts.onEditSubtask) {
               void this.opts.onEditSubtask(sub, next);
             }
-            textEl.style.display = "";
-          };
-          editor.addEventListener("keydown", (kev) => {
-            if (kev.key === "Enter") {
-              kev.preventDefault();
-              finish(true);
-            } else if (kev.key === "Escape") {
-              kev.preventDefault();
-              finish(false);
-            }
-          });
-          editor.addEventListener("blur", () => finish(true));
-        });
-        handle.addEventListener("dragstart", (ev) => {
-          dragSourceIdx = idx;
-          row2.addClass("is-dragging");
-          if (ev.dataTransfer) {
-            ev.dataTransfer.effectAllowed = "move";
-            ev.dataTransfer.setData("text/plain", String(idx));
-            const rect = row2.getBoundingClientRect();
-            ev.dataTransfer.setDragImage(
-              row2,
-              ev.clientX - rect.left,
-              ev.clientY - rect.top
-            );
+          }
+          textEl.style.display = "";
+        };
+        editor.addEventListener("keydown", (kev) => {
+          if (kev.key === "Enter") {
+            kev.preventDefault();
+            finish(true);
+          } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(false);
           }
         });
-        handle.addEventListener("dragend", () => {
-          dragSourceIdx = null;
-          list.querySelectorAll(".dp-edit-subtask").forEach((el) => {
-            el.classList.remove("is-dragging");
-            el.classList.remove("drop-above");
-            el.classList.remove("drop-below");
-          });
-        });
-        row2.addEventListener("dragover", (ev) => {
-          if (dragSourceIdx === null || dragSourceIdx === idx)
-            return;
-          ev.preventDefault();
-          if (ev.dataTransfer)
-            ev.dataTransfer.dropEffect = "move";
+        editor.addEventListener("blur", () => finish(true));
+      });
+      handle.addEventListener("dragstart", (ev) => {
+        dragSourceIdx = idx;
+        row2.addClass("is-dragging");
+        if (ev.dataTransfer) {
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", String(idx));
           const rect = row2.getBoundingClientRect();
-          const isAbove = ev.clientY < rect.top + rect.height / 2;
-          row2.toggleClass("drop-above", isAbove);
-          row2.toggleClass("drop-below", !isAbove);
+          ev.dataTransfer.setDragImage(
+            row2,
+            ev.clientX - rect.left,
+            ev.clientY - rect.top
+          );
+        }
+      });
+      handle.addEventListener("dragend", () => {
+        dragSourceIdx = null;
+        list.querySelectorAll(".dp-edit-subtask").forEach((el) => {
+          el.classList.remove("is-dragging");
+          el.classList.remove("drop-above");
+          el.classList.remove("drop-below");
         });
-        row2.addEventListener("dragleave", () => {
-          row2.removeClass("drop-above");
-          row2.removeClass("drop-below");
-        });
-        row2.addEventListener("drop", (ev) => {
-          if (dragSourceIdx === null || dragSourceIdx === idx)
-            return;
-          ev.preventDefault();
-          const rect = row2.getBoundingClientRect();
-          const isAbove = ev.clientY < rect.top + rect.height / 2;
-          const from = dragSourceIdx;
-          const moved = subs.splice(from, 1)[0];
-          let to = idx;
-          if (from < idx)
-            to = idx - 1;
-          if (!isAbove)
-            to += 1;
-          subs.splice(to, 0, moved);
-          dragSourceIdx = null;
-          renderList();
-          persistOrder();
-        });
-      };
-      renderList();
-      sortBtn.addEventListener("click", () => {
-        subs.sort((a, b) => {
-          const ta = parseTime(a.text, prefixes);
-          const tb = parseTime(b.text, prefixes);
-          if (ta === null && tb === null)
-            return 0;
-          if (ta === null)
-            return 1;
-          if (tb === null)
-            return -1;
-          return ta - tb;
-        });
+      });
+      row2.addEventListener("dragover", (ev) => {
+        if (dragSourceIdx === null || dragSourceIdx === idx)
+          return;
+        ev.preventDefault();
+        if (ev.dataTransfer)
+          ev.dataTransfer.dropEffect = "move";
+        const rect = row2.getBoundingClientRect();
+        const isAbove = ev.clientY < rect.top + rect.height / 2;
+        row2.toggleClass("drop-above", isAbove);
+        row2.toggleClass("drop-below", !isAbove);
+      });
+      row2.addEventListener("dragleave", () => {
+        row2.removeClass("drop-above");
+        row2.removeClass("drop-below");
+      });
+      row2.addEventListener("drop", (ev) => {
+        if (dragSourceIdx === null || dragSourceIdx === idx)
+          return;
+        ev.preventDefault();
+        const rect = row2.getBoundingClientRect();
+        const isAbove = ev.clientY < rect.top + rect.height / 2;
+        const from = dragSourceIdx;
+        const moved = subs.splice(from, 1)[0];
+        let to = idx;
+        if (from < idx)
+          to = idx - 1;
+        if (!isAbove)
+          to += 1;
+        subs.splice(to, 0, moved);
+        dragSourceIdx = null;
         renderList();
         persistOrder();
       });
-      const addRow = this.contentEl.createDiv({ cls: "dp-edit-subtask-add" });
-      const addInput = addRow.createEl("input", {
-        type: "text",
-        cls: "dp-edit-subtask-input",
-        attr: { placeholder: "New sub-task\u2026" }
+    };
+    renderList();
+    sortBtn.addEventListener("click", () => {
+      subs.sort((a, b) => {
+        const ta = parseTime(a.text, prefixes);
+        const tb = parseTime(b.text, prefixes);
+        if (ta === null && tb === null)
+          return 0;
+        if (ta === null)
+          return 1;
+        if (tb === null)
+          return -1;
+        return ta - tb;
       });
-      const addBtn = addRow.createEl("button", {
-        cls: "dp-edit-subtask-add-btn",
-        text: "Add"
-      });
-      addBtn.type = "button";
-      const submitNewSubtask = async () => {
-        const text = addInput.value.trim();
-        if (!text)
-          return;
-        addInput.disabled = true;
-        addBtn.disabled = true;
-        const sub = await this.opts.onAddSubtask(text);
-        addInput.disabled = false;
-        addBtn.disabled = false;
-        if (sub) {
-          subs.push(sub);
-          renderSubtask(sub, subs.length - 1);
-          addInput.value = "";
-        }
-        addInput.focus();
-      };
-      addBtn.addEventListener("click", () => {
+      renderList();
+      persistOrder();
+    });
+    const addRow = this.contentEl.createDiv({ cls: "dp-edit-subtask-add" });
+    const addInput = addRow.createEl("input", {
+      type: "text",
+      cls: "dp-edit-subtask-input",
+      attr: { placeholder: "New sub-task\u2026" }
+    });
+    const addBtn = addRow.createEl("button", {
+      cls: "dp-edit-subtask-add-btn",
+      text: "Add"
+    });
+    addBtn.type = "button";
+    const submitNewSubtask = async () => {
+      const text = addInput.value.trim();
+      if (!text)
+        return;
+      addInput.disabled = true;
+      addBtn.disabled = true;
+      let sub;
+      if (this.opts.onAddSubtask) {
+        sub = await this.opts.onAddSubtask(text);
+      } else {
+        sub = {
+          lineNumber: pendingSubLineCounter--,
+          rawLine: `	- [ ] ${text}`,
+          text,
+          checked: false
+        };
+      }
+      addInput.disabled = false;
+      addBtn.disabled = false;
+      if (sub) {
+        subs.push(sub);
+        renderSubtask(sub, subs.length - 1);
+        addInput.value = "";
+      }
+      addInput.focus();
+    };
+    addBtn.addEventListener("click", () => {
+      void submitNewSubtask();
+    });
+    addInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
         void submitNewSubtask();
-      });
-      addInput.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") {
-          ev.preventDefault();
-          void submitNewSubtask();
-        }
-      });
-    }
+      }
+    });
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+    const showBtn = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Show in note"
+    });
+    showBtn.type = "button";
+    showBtn.addEventListener("click", () => {
+      if (this.opts.mode === "new") {
+        submit("show");
+        return;
+      }
+      this.close();
+      this.opts.onShowInNote();
+    });
     if (this.opts.mode === "edit") {
-      const showBtn = actions.createEl("button", {
-        cls: "dp-edit-show-btn",
-        text: "Show in note"
-      });
-      showBtn.type = "button";
-      showBtn.addEventListener("click", () => {
-        this.close();
-        this.opts.onShowInNote();
-      });
       const moveBtn = actions.createEl("button", {
         cls: "dp-edit-show-btn",
         text: "Move to tomorrow"
@@ -4539,22 +4597,26 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         else
           moveBtn.disabled = false;
       });
-      const pomoBtn = actions.createEl("button", {
-        cls: "dp-edit-pomo-btn",
-        text: "Pomodoro"
-      });
-      pomoBtn.type = "button";
-      pomoBtn.addEventListener("click", () => {
-        this.close();
-        this.opts.onStartPomodoro();
-      });
     }
+    const pomoBtn = actions.createEl("button", {
+      cls: "dp-edit-pomo-btn",
+      text: "Pomodoro"
+    });
+    pomoBtn.type = "button";
+    pomoBtn.addEventListener("click", () => {
+      if (this.opts.mode === "new") {
+        submit("pomodoro");
+        return;
+      }
+      this.close();
+      this.opts.onStartPomodoro();
+    });
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: this.opts.mode === "new" ? "Add task" : "Save"
     });
     saveBtn.type = "button";
-    saveBtn.addEventListener("click", submit);
+    saveBtn.addEventListener("click", () => submit());
     window.setTimeout(() => {
       input.focus();
       input.select();

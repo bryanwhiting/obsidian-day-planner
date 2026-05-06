@@ -859,18 +859,16 @@ export class TodayView extends ItemView {
   ): void {
     const prefixes = this.plugin.settings.prefixes;
     this.openNewTaskModal(
+      file,
       `New task at ${this.fmtClock(startMin)}`,
       defaultDurationMin,
       (title, description, durationMin, project) => {
-        const body = description
-          ? `${title} {${description}}`
-          : title;
-        const newLine = buildTaskLine(body, prefixes, {
+        const body = description ? `${title} {${description}}` : title;
+        return buildTaskLine(body, prefixes, {
           startMin,
           durationMin,
           project,
         });
-        void this.appendTaskAfterLast(file, newLine);
       },
     );
   }
@@ -878,30 +876,29 @@ export class TodayView extends ItemView {
   private createUnscheduledTask(file: TFile): void {
     const prefixes = this.plugin.settings.prefixes;
     this.openNewTaskModal(
+      file,
       "New unscheduled task",
       this.plugin.settings.defaultDurationMin,
       (title, description, durationMin, project) => {
-        const body = description
-          ? `${title} {${description}}`
-          : title;
-        const newLine = buildTaskLine(body, prefixes, {
+        const body = description ? `${title} {${description}}` : title;
+        return buildTaskLine(body, prefixes, {
           durationMin,
           project,
         });
-        void this.appendTaskAfterLast(file, newLine);
       },
     );
   }
 
   private openNewTaskModal(
+    file: TFile,
     modalTitle: string,
     defaultDurationMin: number,
-    onCreate: (
+    buildLine: (
       title: string,
       description: string | null,
       durationMin: number,
       project: string | null,
-    ) => void,
+    ) => string,
   ): void {
     new TaskEditModal(this.app, {
       mode: "new",
@@ -916,11 +913,17 @@ export class TodayView extends ItemView {
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project) => {
+      onSave: (title, description, durationMin, project, _checked, extras) => {
         const proj =
           project === undefined || project === "" ? null : project;
         const dur = durationMin ?? defaultDurationMin;
-        onCreate(title, description, dur, proj);
+        const newLine = buildLine(title, description, dur, proj);
+        void this.appendTaskAfterLast(
+          file,
+          newLine,
+          extras?.subtaskRawLines ?? [],
+          extras?.postAction ?? "none",
+        );
       },
     }).open();
   }
@@ -928,14 +931,36 @@ export class TodayView extends ItemView {
   private async appendTaskAfterLast(
     file: TFile,
     newLine: string,
+    subtaskLines: string[] = [],
+    postAction: NewTaskPostAction = "none",
   ): Promise<void> {
+    let taskLineNumber = -1;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       const lastIdx = findLastTaskLine(content);
       const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
-      lines.splice(insertAt, 0, newLine);
+      taskLineNumber = insertAt;
+      lines.splice(insertAt, 0, newLine, ...subtaskLines);
       return lines.join("\n");
     });
+    if (postAction === "none" || taskLineNumber < 0) return;
+    if (postAction === "show") {
+      void this.openLine(file, taskLineNumber, this.endOfTitleCh(newLine));
+      return;
+    }
+    if (postAction === "pomodoro") {
+      // Re-parse the file so we can hand enterPomodoro a real ParsedTask
+      // (with the freshly assigned lineNumber and any sub-tasks attached).
+      const content = await this.app.vault.read(file);
+      const tasks = parseFileTasks(
+        file.path,
+        content,
+        this.plugin.settings.prefixes,
+        this.plugin.settings.defaultDurationMin,
+      );
+      const fresh = tasks.find((t) => t.lineNumber === taskLineNumber);
+      if (fresh) this.enterPomodoro(file, fresh);
+    }
   }
 
   // A timed note renders as a thin one-line block on the timeline at its
@@ -2408,10 +2433,22 @@ export class TodayView extends ItemView {
   }
 }
 
+type NewTaskPostAction = "none" | "show" | "pomodoro";
+
+interface NewTaskExtras {
+  // Pending sub-task lines accumulated in-memory (the parent task does not yet
+  // exist on disk). The caller is responsible for writing these underneath the
+  // newly created task line.
+  subtaskRawLines: string[];
+  // What to do once the task line is on disk: stay (none), reveal it in the
+  // note (show), or launch the pomodoro view on it (pomodoro).
+  postAction: NewTaskPostAction;
+}
+
 interface TaskEditOpts {
-  // "edit" attaches to an existing task line and exposes the subtask list
-  // plus footer actions. "new" reuses the same modal layout for task creation
-  // — no subtasks (no parent yet), no "show in note", no "move to tomorrow".
+  // Both modes share the same layout. In "new" mode sub-task ops mutate the
+  // local list in memory and are flushed on save; in "edit" mode they persist
+  // immediately via the optional callbacks.
   mode: "edit" | "new";
   modalTitle: string;
   initialTitle: string;
@@ -2431,14 +2468,17 @@ interface TaskEditOpts {
   // string clears the {…} block).
   // project is undefined when unchanged; "" means remove the tag; otherwise set.
   // checked is null when unchanged.
+  // extras is supplied only in "new" mode and carries any pending sub-tasks
+  // plus the post-save action the user picked (Add / Show in note / Pomodoro).
   onSave: (
     title: string,
     description: string | null,
     durationMin: number | null,
     project: string | null | undefined,
     checked: boolean | null,
+    extras?: NewTaskExtras,
   ) => void;
-  // Edit-only callbacks. Required in "edit" mode, ignored in "new" mode.
+  // Edit-only callbacks. Required in "edit" mode, omitted in "new" mode.
   onToggleSubtask?: (sub: ParsedSubtask, checked: boolean) => Promise<void>;
   onAddSubtask?: (text: string) => Promise<ParsedSubtask | null>;
   onEditSubtask?: (sub: ParsedSubtask, newText: string) => Promise<void>;
@@ -2734,12 +2774,19 @@ class TaskEditModal extends Modal {
       return raw;
     };
 
-    const submit = (): void => {
+    const submit = (postAction: NewTaskPostAction = "none"): void => {
       const title = input.value.trim();
       if (this.opts.mode === "new" && !title) {
         input.focus();
         return;
       }
+      const extras: NewTaskExtras | undefined =
+        this.opts.mode === "new"
+          ? {
+              subtaskRawLines: subs.map((s) => s.rawLine),
+              postAction,
+            }
+          : undefined;
       this.opts.onSave(
         title,
         resolveDescription(),
@@ -2748,6 +2795,7 @@ class TaskEditModal extends Modal {
           : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null,
+        extras,
       );
       this.close();
     };
@@ -2769,7 +2817,6 @@ class TaskEditModal extends Modal {
       }
     });
 
-    if (this.opts.mode === "edit") {
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({
       cls: "dp-prompt-step-label",
@@ -2790,14 +2837,19 @@ class TaskEditModal extends Modal {
     const prefixes = this.opts.prefixes;
     const cleanBody = this.opts.cleanBody;
     let dragSourceIdx: number | null = null;
+    // Negative line numbers tag in-memory sub-tasks added in "new" mode so
+    // they don't collide with real file line numbers (always >= 0). These
+    // get serialized into rawLines and appended on save.
+    let pendingSubLineCounter = -1;
 
     const persistOrder = (): void => {
+      if (!this.opts.onReorderSubtasks) return;
       const slots = subs
         .map((s) => s.lineNumber)
         .slice()
         .sort((a, b) => a - b);
       const ordered = subs.slice();
-      void this.opts.onReorderSubtasks!(ordered);
+      void this.opts.onReorderSubtasks(ordered);
       // Update each sub's lineNumber to its new slot so subsequent edits
       // target the right line.
       ordered.forEach((s, i) => {
@@ -2845,7 +2897,16 @@ class TaskEditModal extends Modal {
         checked = !checked;
         row.toggleClass("is-done", checked);
         box.toggleClass("is-checked", checked);
-        void this.opts.onToggleSubtask!(sub, checked);
+        sub.checked = checked;
+        // Keep the in-memory rawLine in sync so "new" mode serializes the
+        // right checkbox state on save. Edit mode then persists via callback.
+        sub.rawLine = sub.rawLine.replace(
+          /^(\s*-\s*\[)[^\]](\])/,
+          `$1${checked ? "x" : " "}$2`,
+        );
+        if (this.opts.onToggleSubtask) {
+          void this.opts.onToggleSubtask(sub, checked);
+        }
       };
       box.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -2894,7 +2955,9 @@ class TaskEditModal extends Modal {
           const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
           if (m) sub.text = m[1];
           renderTimeChip();
-          void this.opts.onSetSubtaskTime!(sub, totalMin);
+          if (this.opts.onSetSubtaskTime) {
+            void this.opts.onSetSubtaskTime(sub, totalMin);
+          }
         };
         editor.addEventListener("keydown", (kev) => {
           if (kev.key === "Enter") {
@@ -2930,7 +2993,9 @@ class TaskEditModal extends Modal {
             const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
             if (m) sub.text = m[1];
             textEl.setText(cleanBody(sub.text));
-            void this.opts.onEditSubtask!(sub, next);
+            if (this.opts.onEditSubtask) {
+              void this.opts.onEditSubtask(sub, next);
+            }
           }
           textEl.style.display = "";
         };
@@ -3034,7 +3099,19 @@ class TaskEditModal extends Modal {
       if (!text) return;
       addInput.disabled = true;
       addBtn.disabled = true;
-      const sub = await this.opts.onAddSubtask!(text);
+      let sub: ParsedSubtask | null;
+      if (this.opts.onAddSubtask) {
+        sub = await this.opts.onAddSubtask(text);
+      } else {
+        // New mode: build the sub-task in memory; it'll be flushed to the
+        // file alongside the parent task when the user saves.
+        sub = {
+          lineNumber: pendingSubLineCounter--,
+          rawLine: `\t- [ ] ${text}`,
+          text,
+          checked: false,
+        };
+      }
       addInput.disabled = false;
       addBtn.disabled = false;
       if (sub) {
@@ -3053,20 +3130,25 @@ class TaskEditModal extends Modal {
         void submitNewSubtask();
       }
     });
-    } // end if (edit mode)
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
-    if (this.opts.mode === "edit") {
-      const showBtn = actions.createEl("button", {
-        cls: "dp-edit-show-btn",
-        text: "Show in note",
-      });
-      showBtn.type = "button";
-      showBtn.addEventListener("click", () => {
-        this.close();
-        this.opts.onShowInNote!();
-      });
+    const showBtn = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Show in note",
+    });
+    showBtn.type = "button";
+    showBtn.addEventListener("click", () => {
+      if (this.opts.mode === "new") {
+        // Persist the task first, then jump to it; the caller wires the
+        // post-action through after appending the line.
+        submit("show");
+        return;
+      }
+      this.close();
+      this.opts.onShowInNote!();
+    });
 
+    if (this.opts.mode === "edit") {
       const moveBtn = actions.createEl("button", {
         cls: "dp-edit-show-btn",
         text: "Move to tomorrow",
@@ -3078,24 +3160,28 @@ class TaskEditModal extends Modal {
         if (moved) this.close();
         else moveBtn.disabled = false;
       });
-
-      const pomoBtn = actions.createEl("button", {
-        cls: "dp-edit-pomo-btn",
-        text: "Pomodoro",
-      });
-      pomoBtn.type = "button";
-      pomoBtn.addEventListener("click", () => {
-        this.close();
-        this.opts.onStartPomodoro!();
-      });
     }
+
+    const pomoBtn = actions.createEl("button", {
+      cls: "dp-edit-pomo-btn",
+      text: "Pomodoro",
+    });
+    pomoBtn.type = "button";
+    pomoBtn.addEventListener("click", () => {
+      if (this.opts.mode === "new") {
+        submit("pomodoro");
+        return;
+      }
+      this.close();
+      this.opts.onStartPomodoro!();
+    });
 
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: this.opts.mode === "new" ? "Add task" : "Save",
     });
     saveBtn.type = "button";
-    saveBtn.addEventListener("click", submit);
+    saveBtn.addEventListener("click", () => submit());
 
     // Defer so we win over Obsidian's default modal focus, which otherwise
     // lands on the close button and forces the user to click into the title.
