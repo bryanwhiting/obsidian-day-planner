@@ -157,6 +157,7 @@ export class TodaySettingTab extends PluginSettingTab {
 
     this.renderDefaultsSection(containerEl);
     this.renderPomodoroSection(containerEl);
+    this.renderTaskIdSection(containerEl);
     this.renderAutocompleteSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
@@ -325,19 +326,10 @@ export class TodaySettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName("Task ID tag prefix")
-      .setDesc(buildTaskIdDesc())
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.prefixes.taskId)
-          .onChange(async (v) => {
-            if (/^[a-zA-Z]+$/.test(v)) {
-              this.plugin.settings.prefixes.taskId = v;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
+  }
+
+  private renderPomodoroSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Pomodoro").setHeading();
 
     new Setting(containerEl)
       .setName("Actual time tag prefix")
@@ -354,29 +346,6 @@ export class TodaySettingTab extends PluginSettingTab {
             }
           }),
       );
-
-    new Setting(containerEl)
-      .setName("Task ID length")
-      .setDesc(
-        "Number of alphanumeric characters in IDs minted by Migrate incomplete. Shorter is easier to scan; longer reduces collision odds. Existing IDs in your notes are still recognized regardless of length.",
-      )
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.taskIdLength.toString())
-          .onChange(async (v) => {
-            this.plugin.settings.taskIdLength = clampInt(
-              v,
-              2,
-              12,
-              this.plugin.settings.taskIdLength,
-            );
-            await this.plugin.saveSettings();
-          }),
-      );
-  }
-
-  private renderPomodoroSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Pomodoro").setHeading();
 
     new Setting(containerEl)
       .setName("Work duration (minutes)")
@@ -448,6 +417,43 @@ export class TodaySettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.pomodoroAutoReturn)
           .onChange(async (v) => {
             this.plugin.settings.pomodoroAutoReturn = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+
+  private renderTaskIdSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Task ID").setHeading();
+
+    new Setting(containerEl)
+      .setName("Task ID tag prefix")
+      .setDesc(buildTaskIdDesc())
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.prefixes.taskId)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.prefixes.taskId = v;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Task ID length")
+      .setDesc(
+        "Number of alphanumeric characters in IDs minted by Migrate incomplete. Shorter is easier to scan; longer reduces collision odds. Existing IDs in your notes are still recognized regardless of length.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.taskIdLength.toString())
+          .onChange(async (v) => {
+            this.plugin.settings.taskIdLength = clampInt(
+              v,
+              2,
+              12,
+              this.plugin.settings.taskIdLength,
+            );
             await this.plugin.saveSettings();
           }),
       );
