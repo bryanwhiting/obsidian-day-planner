@@ -6324,7 +6324,13 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     });
     saveBtn.type = "button";
     saveBtn.addEventListener("click", () => submit());
+    const focusInputAtEnd = (el) => {
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    };
     const onModalKey = (ev) => {
+      var _a2;
       const target = ev.target;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
         return;
@@ -6339,20 +6345,40 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       );
       if (calOpen && calOpen.style.display !== "none")
         return;
-      if ((ev.key === "x" || ev.key === "X") && this.opts.onDelete) {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey)
+        return;
+      const k = ev.key.toLowerCase();
+      if (k === "i") {
+        ev.preventDefault();
+        if (this.opts.mode === "edit" && !/\s$/.test(input.value)) {
+          input.value = input.value + " ";
+        }
+        focusInputAtEnd(input);
+      } else if (k === "s") {
+        ev.preventDefault();
+        focusInputAtEnd(descInput);
+      } else if (k === "p") {
+        ev.preventDefault();
+        focusInputAtEnd(projInput);
+      } else if (k === "d") {
+        ev.preventDefault();
+        const selected = buttons.find(
+          (b) => b.classList.contains("is-selected")
+        );
+        (_a2 = selected != null ? selected : buttons[0]) == null ? void 0 : _a2.focus();
+      } else if (k === "x" && this.opts.onDelete) {
         ev.preventDefault();
         void runDelete();
-      } else if ((ev.key === "u" || ev.key === "U") && this.opts.onUnschedule) {
+      } else if (k === "u" && this.opts.onUnschedule) {
         ev.preventDefault();
         void runUnschedule();
       }
     };
-    this.contentEl.addEventListener("keydown", onModalKey);
+    this.modalEl.addEventListener("keydown", onModalKey);
     window.setTimeout(() => {
+      if (this.opts.mode !== "new")
+        return;
       input.focus();
-      if (this.opts.mode === "edit" && !/\s$/.test(input.value)) {
-        input.value = input.value + " ";
-      }
       const end = input.value.length;
       input.setSelectionRange(end, end);
     }, 0);

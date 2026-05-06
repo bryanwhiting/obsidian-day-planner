@@ -4572,9 +4572,22 @@ class TaskEditModal extends Modal {
     saveBtn.type = "button";
     saveBtn.addEventListener("click", () => submit());
 
-    // Modal-level hotkeys for Delete (x) and Unschedule (u). Defers to the
-    // move stage-two popup when it's open so its own hotkey table wins, and
-    // skips while the user is typing in any input/textarea.
+    // Modal-level hotkeys (edit mode):
+    //   i → focus title          s → focus description
+    //   p → focus project        d → focus selected duration button
+    //   x → delete (with confirm)
+    //   u → unschedule (strip #t/)
+    // Attached to `modalEl` so events from the default-focused close button
+    // (which sits outside contentEl) still bubble in. Defers to the move
+    // stage-two popup / calendar popover when open so their own hotkey
+    // tables win, and skips while the user is typing in any input/textarea.
+    const focusInputAtEnd = (
+      el: HTMLInputElement | HTMLTextAreaElement,
+    ): void => {
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    };
     const onModalKey = (ev: KeyboardEvent): void => {
       const target = ev.target as HTMLElement | null;
       if (
@@ -4591,27 +4604,48 @@ class TaskEditModal extends Modal {
         ".dp-edit-move-calpopover",
       );
       if (calOpen && calOpen.style.display !== "none") return;
-      if ((ev.key === "x" || ev.key === "X") && this.opts.onDelete) {
+      // Modifier-augmented combos belong to the OS / browser, not us.
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      const k = ev.key.toLowerCase();
+      if (k === "i") {
+        ev.preventDefault();
+        // Append a trailing space (edit mode) so typing immediately extends
+        // the title without a manual " " first; submit() trims it.
+        if (this.opts.mode === "edit" && !/\s$/.test(input.value)) {
+          input.value = input.value + " ";
+        }
+        focusInputAtEnd(input);
+      } else if (k === "s") {
+        ev.preventDefault();
+        focusInputAtEnd(descInput);
+      } else if (k === "p") {
+        ev.preventDefault();
+        focusInputAtEnd(projInput);
+      } else if (k === "d") {
+        ev.preventDefault();
+        const selected = buttons.find((b) =>
+          b.classList.contains("is-selected"),
+        );
+        (selected ?? buttons[0])?.focus();
+      } else if (k === "x" && this.opts.onDelete) {
         ev.preventDefault();
         void runDelete();
-      } else if ((ev.key === "u" || ev.key === "U") && this.opts.onUnschedule) {
+      } else if (k === "u" && this.opts.onUnschedule) {
         ev.preventDefault();
         void runUnschedule();
       }
     };
-    this.contentEl.addEventListener("keydown", onModalKey);
+    this.modalEl.addEventListener("keydown", onModalKey);
 
-    // Defer so we win over Obsidian's default modal focus, which otherwise
-    // lands on the close button and forces the user to click into the title.
-    // For existing tasks we append a trailing space and drop the caret at the
-    // end — picks up where the user left off and lets them start typing
-    // immediately. submit() trims trailing whitespace before saving so the
-    // padding never lands in the file. New tasks open with an empty input.
+    // New mode: focus the title input so the user can immediately type the
+    // task name. Edit mode: leave focus on Obsidian's default (the close
+    // button, outside contentEl) so the modal-level hotkeys above fire from
+    // the get-go without the user first having to Escape out of an input.
+    // Press `i` to enter the title; we re-apply the trailing-space trick
+    // inside that hotkey so submit()'s trim still cleans it up.
     window.setTimeout(() => {
+      if (this.opts.mode !== "new") return;
       input.focus();
-      if (this.opts.mode === "edit" && !/\s$/.test(input.value)) {
-        input.value = input.value + " ";
-      }
       const end = input.value.length;
       input.setSelectionRange(end, end);
     }, 0);
