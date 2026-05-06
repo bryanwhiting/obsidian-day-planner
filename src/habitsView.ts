@@ -194,7 +194,7 @@ export class HabitsStatsView extends ItemView {
       out.push({
         start,
         end,
-        label: `${start.getMonth() + 1}/${start.getDate()}`,
+        label: start.getDate().toString(),
         tooltip: `Week of ${start.toLocaleDateString(undefined, {
           month: "short",
           day: "numeric",
@@ -332,6 +332,23 @@ export class HabitsStatsView extends ItemView {
       const cellCols = section.buckets.map(() => "12px").join(" ");
       grid.style.gridTemplateColumns = `140px ${cellCols}`;
 
+      // Month band: groups consecutive buckets in the same calendar month
+      // and renders the month name above them, so the bare-day-number column
+      // labels below stay short. Skipped for the month section (its labels
+      // already are month abbreviations) and the day section (labels are
+      // already 1–2 chars and don't squish).
+      if (section.period === "week") {
+        grid.createDiv({ cls: "dp-heatmap-band-corner" });
+        const bands = buildMonthBands(section.buckets);
+        for (const band of bands) {
+          const bandEl = grid.createDiv({
+            cls: "dp-heatmap-band-label",
+            text: band.label,
+          });
+          bandEl.style.gridColumn = `span ${band.span}`;
+        }
+      }
+
       // Header row: empty corner + bucket labels.
       grid.createDiv({ cls: "dp-heatmap-corner" });
       for (const b of section.buckets) {
@@ -402,6 +419,26 @@ export class HabitsStatsView extends ItemView {
       });
     }
   }
+}
+
+// Groups consecutive buckets that share a calendar month into a single band
+// entry, so the heatmap can render one month label spanning all those columns
+// instead of repeating it on every column header.
+function buildMonthBands(buckets: Bucket[]): { label: string; span: number }[] {
+  const out: { label: string; span: number }[] = [];
+  let current: { key: string; label: string; span: number } | null = null;
+  for (const b of buckets) {
+    const key = `${b.start.getFullYear()}-${b.start.getMonth()}`;
+    if (current && current.key === key) {
+      current.span++;
+    } else {
+      if (current) out.push({ label: current.label, span: current.span });
+      const label = b.start.toLocaleDateString(undefined, { month: "short" });
+      current = { key, label, span: 1 };
+    }
+  }
+  if (current) out.push({ label: current.label, span: current.span });
+  return out;
 }
 
 // Maps a per-cell completion count to one of five color tiers.

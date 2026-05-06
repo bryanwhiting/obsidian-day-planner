@@ -595,6 +595,25 @@
     overflow: visible;
   }
 
+  /* Month band: a row above the bucket labels that names the calendar month
+   * spanning a run of columns. Empty corner under the 140px habit-label
+   * column, then one cell per month-run with `grid-column: span N`. */
+  .dp-heatmap-band-corner {
+    /* Empty placeholder under the label column; sized by the grid track. */
+  }
+
+  .dp-heatmap-band-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-ink-faint);
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    padding-bottom: 1px;
+    overflow: visible;
+  }
+
   .dp-heatmap-col-label.is-current {
     color: var(--color-ink);
     font-weight: 600;

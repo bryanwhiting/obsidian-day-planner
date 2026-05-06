@@ -2,6 +2,7 @@
 
 ## 2026-05-06
 
+- [feat]: Habit-stats heatmap, week section: simplify column labels. Each week column now shows just the day number ("1", "8", "15") with a month band ("MAR", "APR") spanning above the columns that fall in each month. Lets the cells stay at their current 12px width while keeping the time orientation legible. The user asked: "can you somehow simplify the Week headers? … mar              Apr / 1   8   15  …  5".
 - [fix]: Habit-stats heatmap: bump cell size 10→12px and column-gap 8→10px so week ("3/13") and month ("Aug") column labels stop squishing into their neighbors. Track width 18→22px. The user asked: "space the squares out horizontally a little more, as the week headers are still pretty squished. maybe make them 20% wider?"
 - [fix]: Habit-stats heatmap: collapse the q1–q4 saturation gradient into a single solid accent fill — habit satisfaction is binary ("did I do it?"), and the gradient was obscuring the signal the user cares about. The user asked: "can you fill in the squares if the habit was satisfied?"
 - [fix]: Habit-stats heatmap: completed cells were nearly invisible on light themes (q1 = 50% accent + paper-2 read as near-white), and column labels (`3/13`, `Aug`, etc.) were squished against each other in the 13px tracks. Bumped column-gap from 3px → 8px so labels have breathing room, and bumped saturations to q1 = 75%, q2 = 88%, q3 = 95% so a single completion clearly pops. The user asked: "the cells are blank - also, the titles are squished. Space them out a little more."

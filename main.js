@@ -6281,7 +6281,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       out.push({
         start,
         end,
-        label: `${start.getMonth() + 1}/${start.getDate()}`,
+        label: start.getDate().toString(),
         tooltip: `Week of ${start.toLocaleDateString(void 0, {
           month: "short",
           day: "numeric",
@@ -6398,6 +6398,17 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       const grid = sectionEl.createDiv({ cls: "dp-heatmap-grid-rows" });
       const cellCols = section.buckets.map(() => "12px").join(" ");
       grid.style.gridTemplateColumns = `140px ${cellCols}`;
+      if (section.period === "week") {
+        grid.createDiv({ cls: "dp-heatmap-band-corner" });
+        const bands = buildMonthBands(section.buckets);
+        for (const band of bands) {
+          const bandEl = grid.createDiv({
+            cls: "dp-heatmap-band-label",
+            text: band.label
+          });
+          bandEl.style.gridColumn = `span ${band.span}`;
+        }
+      }
       grid.createDiv({ cls: "dp-heatmap-corner" });
       for (const b of section.buckets) {
         const labelEl = grid.createDiv({
@@ -6458,6 +6469,24 @@ ${cell.checkedCount} ${word}`;
     }
   }
 };
+function buildMonthBands(buckets) {
+  const out = [];
+  let current = null;
+  for (const b of buckets) {
+    const key = `${b.start.getFullYear()}-${b.start.getMonth()}`;
+    if (current && current.key === key) {
+      current.span++;
+    } else {
+      if (current)
+        out.push({ label: current.label, span: current.span });
+      const label = b.start.toLocaleDateString(void 0, { month: "short" });
+      current = { key, label, span: 1 };
+    }
+  }
+  if (current)
+    out.push({ label: current.label, span: current.span });
+  return out;
+}
 function quintile(count) {
   if (count <= 0)
     return 0;
