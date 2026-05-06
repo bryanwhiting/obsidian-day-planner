@@ -3971,22 +3971,24 @@ class TaskEditModal extends Modal {
       this.close();
     };
 
+    // Plain Enter (no modifier) on the title / project inputs submits.
+    // Cmd/Ctrl+Enter is handled by the modal-level keydown below so it can
+    // also fire from the description textarea (where plain Enter inserts a
+    // newline) and from outside any input.
     const enterToSubmit = (ev: KeyboardEvent): void => {
-      if (ev.key === "Enter") {
+      if (
+        ev.key === "Enter" &&
+        !ev.metaKey &&
+        !ev.ctrlKey &&
+        !ev.altKey &&
+        !ev.shiftKey
+      ) {
         ev.preventDefault();
         submit();
       }
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
-    // Cmd/Ctrl+Enter submits from the description textarea so plain Enter
-    // can still create newlines inside the description.
-    descInput.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
-        ev.preventDefault();
-        submit();
-      }
-    });
 
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({
@@ -4589,6 +4591,14 @@ class TaskEditModal extends Modal {
       el.setSelectionRange(end, end);
     };
     const onModalKey = (ev: KeyboardEvent): void => {
+      // Cmd/Ctrl+Enter saves from anywhere, including from any input or
+      // textarea — so the user can commit without first clicking out of a
+      // focused field.
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+        ev.preventDefault();
+        submit();
+        return;
+      }
       const target = ev.target as HTMLElement | null;
       if (
         target &&

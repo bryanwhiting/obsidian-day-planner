@@ -5789,19 +5789,13 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       this.close();
     };
     const enterToSubmit = (ev) => {
-      if (ev.key === "Enter") {
+      if (ev.key === "Enter" && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !ev.shiftKey) {
         ev.preventDefault();
         submit();
       }
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
-    descInput.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
-        ev.preventDefault();
-        submit();
-      }
-    });
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({
       cls: "dp-prompt-step-label",
@@ -6331,6 +6325,11 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     };
     const onModalKey = (ev) => {
       var _a2;
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+        ev.preventDefault();
+        submit();
+        return;
+      }
       const target = ev.target;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
         return;
