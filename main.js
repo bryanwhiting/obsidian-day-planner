@@ -725,26 +725,51 @@ var DEFAULT_PALETTE = [
   "#A4985E",
   "#B25DA8"
 ];
-function resolveProjectColors(projects, userMappings, palette = DEFAULT_PALETTE) {
+function resolveProjectColors(tasks, userMappings, palette = DEFAULT_PALETTE) {
   var _a, _b;
   const result = /* @__PURE__ */ new Map();
   const userMap = /* @__PURE__ */ new Map();
   for (const m of userMappings) {
-    const project = (_a = m.project) == null ? void 0 : _a.trim();
+    const key = (_a = m.project) == null ? void 0 : _a.trim();
     const color = (_b = m.color) == null ? void 0 : _b.trim();
-    if (project && color)
-      userMap.set(project.toLowerCase(), color);
+    if (key && color)
+      userMap.set(key.toLowerCase(), color);
   }
-  const unique = Array.from(new Set(projects));
+  const projectsFromTasks = [];
+  const subKeysFromTasks = [];
+  const seenProj = /* @__PURE__ */ new Set();
+  const seenSub = /* @__PURE__ */ new Set();
+  for (const t of tasks) {
+    if (!t.project)
+      continue;
+    if (!seenProj.has(t.project)) {
+      seenProj.add(t.project);
+      projectsFromTasks.push(t.project);
+    }
+    if (t.subproject) {
+      const k = `${t.project}/${t.subproject}`;
+      if (!seenSub.has(k)) {
+        seenSub.add(k);
+        subKeysFromTasks.push(k);
+      }
+    }
+  }
   const userColorsUsed = /* @__PURE__ */ new Set();
-  for (const proj of unique) {
+  for (const proj of projectsFromTasks) {
     const userColor = userMap.get(proj.toLowerCase());
     if (userColor) {
       result.set(proj, userColor);
       userColorsUsed.add(userColor.toLowerCase());
     }
   }
-  const remaining = unique.filter((p) => !userMap.has(p.toLowerCase())).sort((a, b) => a.localeCompare(b));
+  for (const subKey of subKeysFromTasks) {
+    const userColor = userMap.get(subKey.toLowerCase());
+    if (userColor) {
+      result.set(subKey, userColor);
+      userColorsUsed.add(userColor.toLowerCase());
+    }
+  }
+  const remaining = projectsFromTasks.filter((p) => !userMap.has(p.toLowerCase())).sort((a, b) => a.localeCompare(b));
   const available = palette.filter(
     (c) => !userColorsUsed.has(c.toLowerCase())
   );
@@ -753,6 +778,17 @@ function resolveProjectColors(projects, userMappings, palette = DEFAULT_PALETTE)
     result.set(proj, pool[i % pool.length]);
   });
   return result;
+}
+function getTaskColor(project, subproject, colorMap) {
+  var _a;
+  if (!project)
+    return null;
+  if (subproject) {
+    const sub = colorMap.get(`${project}/${subproject}`);
+    if (sub)
+      return sub;
+  }
+  return (_a = colorMap.get(project)) != null ? _a : null;
 }
 function contrastingTextColor(hex) {
   const c = parseHex(hex);
@@ -1283,7 +1319,16 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode(`#${prefix}/sally`),
       ". Don't include the ",
       makeCode(`${prefix}/`),
-      " prefix; it's added automatically. Projects without a pinned color get distinct auto-assigned colors alphabetically."
+      " prefix; it's added automatically. Projects without a pinned color get distinct auto-assigned colors alphabetically. ",
+      "Sub-projects inherit their parent project's color by default \u2014 to override a single sub-project, enter ",
+      makeCode("project/subproject"),
+      " (e.g. ",
+      makeCode("silvermine/back-end"),
+      " to recolor only ",
+      makeCode(`#${prefix}/silvermine/back-end`),
+      " while other ",
+      makeCode(`#${prefix}/silvermine/\u2026`),
+      " tasks keep the parent color)."
     );
     new import_obsidian2.Setting(containerEl).setName("Project colors").setDesc(desc).addButton(
       (b) => b.setButtonText("Add project color").setCta().onClick(async () => {
@@ -1306,7 +1351,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       });
       const nameInput = nameWrap.createEl("input", {
         cls: "dp-project-color-name",
-        attr: { type: "text", placeholder: "project-name" }
+        attr: { type: "text", placeholder: "project or project/subproject" }
       });
       nameInput.value = entry.project;
       const stripPrefix = (s) => s.replace(new RegExp(`^#?${prefix}/`, "i"), "");
@@ -1978,9 +2023,10 @@ var TodayView = class extends import_obsidian4.ItemView {
     const activeFile = this.app.workspace.getActiveFile();
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
     this.renderDateNav(root);
-    const projects = tasks.map((t) => t.project).filter((p) => p !== null);
     const colorMap = resolveProjectColors(
-      projects,
+      tasks.filter(
+        (t) => t.project !== null
+      ),
       this.plugin.settings.projectColors
     );
     this.renderSection(
@@ -2428,7 +2474,11 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (block.task.durationMin < 25)
       el.addClass("is-compact");
     const ctx = this.findContextTag(block.task);
-    const projectColor = block.task.project ? colorMap.get(block.task.project) : null;
+    const projectColor = getTaskColor(
+      block.task.project,
+      block.task.subproject,
+      colorMap
+    );
     const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
     if (color) {
       el.style.setProperty("--dp-color", color);
@@ -2682,7 +2732,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (!task.hasExplicitDuration)
         card.addClass("is-implicit-duration");
       const ctx = this.findContextTag(task);
-      const projectColor = task.project ? colorMap.get(task.project) : null;
+      const projectColor = getTaskColor(task.project, task.subproject, colorMap);
       const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
       if (color) {
         card.style.setProperty("--dp-color", color);

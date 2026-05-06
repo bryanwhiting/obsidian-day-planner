@@ -40,7 +40,12 @@ import {
   layoutTimeline,
   LayoutBlock,
 } from "./scheduler";
-import { resolveProjectColors, contrastingTextColor, ContextTag } from "./colors";
+import {
+  resolveProjectColors,
+  getTaskColor,
+  contrastingTextColor,
+  ContextTag,
+} from "./colors";
 import {
   resolveDailyNote,
   ensureDailyNote,
@@ -219,11 +224,10 @@ export class TodayView extends ItemView {
 
     this.renderDateNav(root);
 
-    const projects = tasks
-      .map((t) => t.project)
-      .filter((p): p is string => p !== null);
     const colorMap = resolveProjectColors(
-      projects,
+      tasks.filter(
+        (t): t is typeof t & { project: string } => t.project !== null,
+      ),
       this.plugin.settings.projectColors,
     );
 
@@ -739,9 +743,11 @@ export class TodayView extends ItemView {
     if (!block.task.hasExplicitDuration) el.addClass("is-implicit-duration");
     if (block.task.durationMin < 25) el.addClass("is-compact");
     const ctx = this.findContextTag(block.task);
-    const projectColor = block.task.project
-      ? colorMap.get(block.task.project)
-      : null;
+    const projectColor = getTaskColor(
+      block.task.project,
+      block.task.subproject,
+      colorMap,
+    );
     // Context-tag color overrides the project color so a meeting/walk visibly
     // pops on top of an otherwise-uniform project palette.
     const color = ctx?.color ?? projectColor ?? null;
@@ -1035,7 +1041,7 @@ export class TodayView extends ItemView {
       if (task.checked) card.addClass("is-done");
       if (!task.hasExplicitDuration) card.addClass("is-implicit-duration");
       const ctx = this.findContextTag(task);
-      const projectColor = task.project ? colorMap.get(task.project) : null;
+      const projectColor = getTaskColor(task.project, task.subproject, colorMap);
       const color = ctx?.color ?? projectColor ?? null;
       if (color) {
         card.style.setProperty("--dp-color", color);

@@ -495,7 +495,16 @@ export class TodaySettingTab extends PluginSettingTab {
       makeCode(`#${prefix}/sally`),
       ". Don't include the ",
       makeCode(`${prefix}/`),
-      " prefix; it's added automatically. Projects without a pinned color get distinct auto-assigned colors alphabetically.",
+      " prefix; it's added automatically. Projects without a pinned color get distinct auto-assigned colors alphabetically. ",
+      "Sub-projects inherit their parent project's color by default — to override a single sub-project, enter ",
+      makeCode("project/subproject"),
+      " (e.g. ",
+      makeCode("silvermine/back-end"),
+      " to recolor only ",
+      makeCode(`#${prefix}/silvermine/back-end`),
+      " while other ",
+      makeCode(`#${prefix}/silvermine/…`),
+      " tasks keep the parent color).",
     );
 
     new Setting(containerEl)
@@ -530,7 +539,7 @@ export class TodaySettingTab extends PluginSettingTab {
       });
       const nameInput = nameWrap.createEl("input", {
         cls: "dp-project-color-name",
-        attr: { type: "text", placeholder: "project-name" },
+        attr: { type: "text", placeholder: "project or project/subproject" },
       });
       nameInput.value = entry.project;
       const stripPrefix = (s: string): string =>

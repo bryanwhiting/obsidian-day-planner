@@ -30,22 +30,45 @@ export const DEFAULT_PALETTE: string[] = [
 ];
 
 export function resolveProjectColors(
-  projects: Iterable<string>,
+  tasks: Iterable<{ project: string; subproject?: string | null }>,
   userMappings: ProjectColor[],
   palette: string[] = DEFAULT_PALETTE,
 ): Map<string, string> {
+  // Returns a map keyed by either "<project>" or "<project>/<subproject>".
+  // Top-level projects always get an entry (user-pinned or auto-assigned).
+  // Sub-projects only appear when the user has pinned a color to that exact
+  // "project/subproject" pair — otherwise callers fall back to the parent
+  // project's color via getTaskColor().
   const result = new Map<string, string>();
   const userMap = new Map<string, string>();
   for (const m of userMappings) {
-    const project = m.project?.trim();
+    const key = m.project?.trim();
     const color = m.color?.trim();
-    if (project && color) userMap.set(project.toLowerCase(), color);
+    if (key && color) userMap.set(key.toLowerCase(), color);
   }
 
-  const unique = Array.from(new Set(projects));
+  const projectsFromTasks: string[] = [];
+  const subKeysFromTasks: string[] = [];
+  const seenProj = new Set<string>();
+  const seenSub = new Set<string>();
+  for (const t of tasks) {
+    if (!t.project) continue;
+    if (!seenProj.has(t.project)) {
+      seenProj.add(t.project);
+      projectsFromTasks.push(t.project);
+    }
+    if (t.subproject) {
+      const k = `${t.project}/${t.subproject}`;
+      if (!seenSub.has(k)) {
+        seenSub.add(k);
+        subKeysFromTasks.push(k);
+      }
+    }
+  }
+
   const userColorsUsed = new Set<string>();
 
-  for (const proj of unique) {
+  for (const proj of projectsFromTasks) {
     const userColor = userMap.get(proj.toLowerCase());
     if (userColor) {
       result.set(proj, userColor);
@@ -53,7 +76,15 @@ export function resolveProjectColors(
     }
   }
 
-  const remaining = unique
+  for (const subKey of subKeysFromTasks) {
+    const userColor = userMap.get(subKey.toLowerCase());
+    if (userColor) {
+      result.set(subKey, userColor);
+      userColorsUsed.add(userColor.toLowerCase());
+    }
+  }
+
+  const remaining = projectsFromTasks
     .filter((p) => !userMap.has(p.toLowerCase()))
     .sort((a, b) => a.localeCompare(b));
   const available = palette.filter(
@@ -64,6 +95,22 @@ export function resolveProjectColors(
     result.set(proj, pool[i % pool.length]);
   });
   return result;
+}
+
+// Look up a task's color, honoring sub-project overrides while falling back
+// to the parent project's color (which is itself either user-pinned or
+// auto-assigned). Returns null when the task has no project at all.
+export function getTaskColor(
+  project: string | null | undefined,
+  subproject: string | null | undefined,
+  colorMap: Map<string, string>,
+): string | null {
+  if (!project) return null;
+  if (subproject) {
+    const sub = colorMap.get(`${project}/${subproject}`);
+    if (sub) return sub;
+  }
+  return colorMap.get(project) ?? null;
 }
 
 export function contrastingTextColor(hex: string): string {
