@@ -4263,6 +4263,12 @@ var TodayView = class extends import_obsidian4.ItemView {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
       moveChoices: this.buildMoveChoices(file, task),
+      moveCalendarPick: {
+        hotkey: "c",
+        initialMonth: this.selectedDate,
+        selectedDate: this.selectedDate,
+        onPick: (d) => this.moveTaskWholeToDate(file, task, d)
+      },
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
       onUnschedule: () => this.unscheduleTask(file, task)
@@ -4339,74 +4345,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         onChoose: () => this.moveTaskWholeToDate(file, task, nextWeek)
       });
     }
-    choices.push({
-      label: "calendar",
-      hotkey: "c",
-      onChoose: async () => {
-        const picked = await this.promptForDate(sel);
-        if (!picked)
-          return false;
-        return this.moveTaskWholeToDate(file, task, picked);
-      }
-    });
     return choices;
-  }
-  // Pops a native date picker and resolves to the chosen date (or null if
-  // dismissed). The hidden input is attached to body so it works regardless of
-  // which modal is currently focused; `showPicker()` opens the OS-native
-  // calendar widget on Electron / modern Chromium.
-  promptForDate(initial) {
-    return new Promise((resolve) => {
-      const input = document.createElement("input");
-      input.type = "date";
-      const yyyy = initial.getFullYear();
-      const mm = String(initial.getMonth() + 1).padStart(2, "0");
-      const dd = String(initial.getDate()).padStart(2, "0");
-      input.value = `${yyyy}-${mm}-${dd}`;
-      input.style.position = "fixed";
-      input.style.left = "50%";
-      input.style.top = "50%";
-      input.style.opacity = "0";
-      input.style.pointerEvents = "none";
-      input.style.width = "1px";
-      input.style.height = "1px";
-      document.body.appendChild(input);
-      let settled = false;
-      const cleanup = () => {
-        if (input.parentElement)
-          input.parentElement.removeChild(input);
-      };
-      const finish = (date) => {
-        if (settled)
-          return;
-        settled = true;
-        cleanup();
-        resolve(date);
-      };
-      input.addEventListener("change", () => {
-        const v = input.value;
-        if (!v)
-          return finish(null);
-        const [y, m, d] = v.split("-").map(Number);
-        if (!y || !m || !d)
-          return finish(null);
-        finish(new Date(y, m - 1, d));
-      });
-      input.addEventListener("cancel", () => finish(null));
-      input.addEventListener("blur", () => {
-        window.setTimeout(() => finish(null), 150);
-      });
-      const showPicker = input.showPicker;
-      if (typeof showPicker === "function") {
-        try {
-          showPicker.call(input);
-          return;
-        } catch (e) {
-        }
-      }
-      input.focus();
-      input.click();
-    });
   }
   // Moves a task line (and its sub-task lines) from `file` to the daily note
   // for `targetDate`. No-op if source and target are the same file.
@@ -5189,6 +5128,71 @@ var TodayView = class extends import_obsidian4.ItemView {
     await leaf.openFile(file);
   }
 };
+function renderPickerCalendar(parent, opts) {
+  let month = startOfMonth(opts.initialMonth);
+  const draw = () => {
+    parent.empty();
+    const cal = parent.createDiv({ cls: "dp-calendar" });
+    const head = cal.createDiv({ cls: "dp-cal-head" });
+    const prev = head.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
+    prev.type = "button";
+    const monthLabel = head.createDiv({ cls: "dp-cal-month" });
+    monthLabel.textContent = month.toLocaleDateString(void 0, {
+      month: "long",
+      year: "numeric"
+    });
+    const next = head.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
+    next.type = "button";
+    prev.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      month = addMonths(month, -1);
+      draw();
+    });
+    next.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      month = addMonths(month, 1);
+      draw();
+    });
+    const grid = cal.createDiv({ cls: "dp-cal-grid" });
+    for (const dow of ["S", "M", "T", "W", "T", "F", "S"]) {
+      grid.createDiv({ cls: "dp-cal-dow", text: dow });
+    }
+    const monthStart = startOfMonth(month);
+    const startDow = monthStart.getDay();
+    const monthEnd = endOfMonth(month);
+    const today = new Date();
+    const renderDay = (d, isOtherMonth) => {
+      const cell = grid.createDiv({
+        cls: "dp-cal-day",
+        text: d.getDate().toString()
+      });
+      if (isOtherMonth)
+        cell.addClass("is-other-month");
+      if (sameDay(d, today))
+        cell.addClass("is-today");
+      if (sameDay(d, opts.selectedDate))
+        cell.addClass("is-selected");
+      cell.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        opts.onPickDay(d);
+      });
+    };
+    for (let i = startDow - 1; i >= 0; i--) {
+      renderDay(addDays(monthStart, -i - 1), true);
+    }
+    for (let i = 1; i <= monthEnd.getDate(); i++) {
+      renderDay(new Date(month.getFullYear(), month.getMonth(), i), false);
+    }
+    const totalCells = startDow + monthEnd.getDate();
+    const trailing = (7 - totalCells % 7) % 7;
+    for (let i = 1; i <= trailing; i++)
+      renderDay(addDays(monthEnd, i), true);
+  };
+  draw();
+}
 function attachProjectSuggest(input, wrap, projects) {
   const popover = wrap.createDiv({ cls: "dp-project-suggest" });
   popover.style.display = "none";
@@ -6130,6 +6134,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     });
     if (this.opts.mode === "edit") {
       const moveChoices = (_b = this.opts.moveChoices) != null ? _b : [];
+      const calendarPick = this.opts.moveCalendarPick;
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-icon-btn",
@@ -6139,6 +6144,10 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       (0, import_obsidian4.setIcon)(moveBtn, "forward");
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
+      const calPopover = moveWrap.createDiv({
+        cls: "dp-edit-move-calpopover"
+      });
+      calPopover.style.display = "none";
       const choiceBtns = [];
       for (const choice of moveChoices) {
         const btn = choices.createEl("button", {
@@ -6157,7 +6166,27 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         btn.addEventListener("click", () => void runWith(choice.onChoose));
         choiceBtns.push(btn);
       }
+      let calBtn = null;
+      if (calendarPick) {
+        calBtn = choices.createEl("button", {
+          cls: "dp-edit-move-choice is-calendar",
+          attr: {
+            "aria-label": `Pick date (${calendarPick.hotkey})`,
+            title: `Pick date (${calendarPick.hotkey})`
+          }
+        });
+        calBtn.type = "button";
+        calBtn.createEl("span", {
+          cls: "dp-edit-move-hotkey",
+          text: `(${calendarPick.hotkey})`
+        });
+        const iconWrap = calBtn.createSpan({ cls: "dp-edit-move-calicon" });
+        (0, import_obsidian4.setIcon)(iconWrap, "calendar");
+        calBtn.addEventListener("click", () => openCalendar());
+        choiceBtns.push(calBtn);
+      }
       let stageTwoActive = false;
+      let calendarActive = false;
       let keyHandler = null;
       const setSubBtnsDisabled = (disabled) => {
         for (const b of choiceBtns)
@@ -6167,18 +6196,49 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         stageTwoActive = false;
         choices.style.display = "none";
         choices.removeClass("is-open");
+        closeCalendar();
         if (keyHandler) {
           this.contentEl.removeEventListener("keydown", keyHandler, true);
           keyHandler = null;
         }
+      };
+      const closeCalendar = () => {
+        if (!calendarActive)
+          return;
+        calendarActive = false;
+        calPopover.style.display = "none";
+        calPopover.empty();
+      };
+      const openCalendar = () => {
+        if (!calendarPick)
+          return;
+        choices.style.display = "none";
+        choices.removeClass("is-open");
+        calendarActive = true;
+        calPopover.style.display = "";
+        renderPickerCalendar(calPopover, {
+          initialMonth: calendarPick.initialMonth,
+          selectedDate: calendarPick.selectedDate,
+          onPickDay: (date) => {
+            void runWith(() => calendarPick.onPick(date));
+          }
+        });
       };
       const runWith = async (action) => {
         setSubBtnsDisabled(true);
         const moved = await action();
         if (moved)
           this.close();
-        else
+        else {
           setSubBtnsDisabled(false);
+          if (calendarActive) {
+            closeCalendar();
+            choices.style.display = "";
+            choices.removeClass("is-open");
+            void choices.offsetWidth;
+            choices.addClass("is-open");
+          }
+        }
       };
       moveBtn.addEventListener("click", () => {
         if (stageTwoActive) {
@@ -6204,10 +6264,20 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
+            if (calendarActive) {
+              closeCalendar();
+              choices.style.display = "";
+              choices.removeClass("is-open");
+              void choices.offsetWidth;
+              choices.addClass("is-open");
+              return;
+            }
             exitStageTwo();
             moveBtn.focus();
             return;
           }
+          if (calendarActive)
+            return;
           for (const choice of moveChoices) {
             if (ev.key === choice.hotkey) {
               ev.preventDefault();
@@ -6215,6 +6285,11 @@ var TaskEditModal = class extends import_obsidian4.Modal {
               void runWith(choice.onChoose);
               return;
             }
+          }
+          if (calendarPick && ev.key.toLowerCase() === calendarPick.hotkey.toLowerCase()) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openCalendar();
           }
         };
         this.contentEl.addEventListener("keydown", keyHandler, true);
@@ -6258,6 +6333,11 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         ".dp-edit-move-choices"
       );
       if (moveOpen && moveOpen.style.display !== "none")
+        return;
+      const calOpen = this.contentEl.querySelector(
+        ".dp-edit-move-calpopover"
+      );
+      if (calOpen && calOpen.style.display !== "none")
         return;
       if ((ev.key === "x" || ev.key === "X") && this.opts.onDelete) {
         ev.preventDefault();

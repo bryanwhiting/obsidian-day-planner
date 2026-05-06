@@ -2791,6 +2791,56 @@
     background: var(--color-surface-hover);
   }
 
+  /* Calendar choice: render the (c) hotkey alongside a calendar icon (no
+   * trailing label). The icon picks up the same color transition as the
+   * other choice buttons. */
+  .dp-edit-move-choice.is-calendar {
+    gap: 6px;
+  }
+
+  .dp-edit-move-choice .dp-edit-move-calicon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dp-edit-move-choice .dp-edit-move-calicon .svg-icon {
+    width: 14px;
+    height: 14px;
+    color: currentColor;
+  }
+
+  /* Sibling popover that hosts the calendar grid when the user picks (c).
+   * Uses the same anchor and pointer styling as the choices row; the inner
+   * `.dp-calendar` keeps its existing absolute positioning by overriding it
+   * back to static so the wrapper sets the placement. */
+  .dp-edit-move-calpopover {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 11;
+    /* The inner .dp-calendar already paints background/border/shadow. */
+  }
+
+  .dp-edit-move-calpopover .dp-calendar {
+    position: static;
+    width: 260px;
+  }
+
+  .dp-edit-move-calpopover::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    background: var(--color-paper);
+    border-right: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline);
+    transform: translateX(-50%) translateY(-50%) rotate(45deg);
+  }
+
   .dp-edit-move-choices.is-open .dp-edit-move-choice {
     animation: dp-move-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
