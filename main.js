@@ -4263,8 +4263,41 @@ var TodayView = class extends import_obsidian4.ItemView {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
       moveChoices: this.buildMoveChoices(file, task),
-      onStartPomodoro: () => this.enterPomodoro(file, task)
+      onStartPomodoro: () => this.enterPomodoro(file, task),
+      onDelete: () => this.deleteTaskLines(file, task),
+      onUnschedule: () => this.unscheduleTask(file, task)
     }).open();
+  }
+  // Removes the task's parent line and all of its sub-task lines from `file`.
+  // Highest line number first so earlier indices stay valid as we splice.
+  async deleteTaskLines(file, task) {
+    const lineNumbers = [
+      task.lineNumber,
+      ...task.subtasks.map((s) => s.lineNumber)
+    ].sort((a, b) => b - a);
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      for (const n of lineNumbers) {
+        if (n < lines.length)
+          lines.splice(n, 1);
+      }
+      return lines.join("\n");
+    });
+    new import_obsidian4.Notice("Task deleted");
+  }
+  // Strips the `#t/` time tag from the task's parent line. The modal closes
+  // afterwards; the caller (Today view) re-renders on file modify, dropping
+  // the now-untimed task into the unscheduled list.
+  async unscheduleTask(file, task) {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (task.lineNumber >= lines.length)
+        return content;
+      lines[task.lineNumber] = removeTimeTag(lines[task.lineNumber], prefixes);
+      return lines.join("\n");
+    });
+    new import_obsidian4.Notice("Unscheduled");
   }
   // Computes the date-picker entries for the edit modal's "Move" button:
   // tomorrow, +2 days, +3 days, and the first day of next week (driven by
@@ -6057,6 +6090,30 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       }
     });
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+    const runDelete = async () => {
+      if (!this.opts.onDelete)
+        return;
+      const ok = window.confirm("Delete this task and its sub-tasks?");
+      if (!ok)
+        return;
+      await this.opts.onDelete();
+      this.close();
+    };
+    const runUnschedule = async () => {
+      if (!this.opts.onUnschedule)
+        return;
+      await this.opts.onUnschedule();
+      this.close();
+    };
+    if (this.opts.mode === "edit" && this.opts.onDelete) {
+      const deleteBtn = actions.createEl("button", {
+        cls: "dp-edit-delete-btn",
+        text: "Delete",
+        attr: { "aria-label": "Delete task (x)", title: "Delete task (x)" }
+      });
+      deleteBtn.type = "button";
+      deleteBtn.addEventListener("click", () => void runDelete());
+    }
     const showBtn = actions.createEl("button", {
       cls: "dp-edit-icon-btn",
       attr: { "aria-label": "Show in note", title: "Show in note" }
@@ -6177,12 +6234,40 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       this.close();
       this.opts.onStartPomodoro();
     });
+    if (this.opts.mode === "edit" && this.opts.onUnschedule) {
+      const unschedBtn = actions.createEl("button", {
+        cls: "dp-edit-icon-btn",
+        attr: { "aria-label": "Unschedule (u)", title: "Unschedule (u)" }
+      });
+      unschedBtn.type = "button";
+      (0, import_obsidian4.setIcon)(unschedBtn, "calendar-x");
+      unschedBtn.addEventListener("click", () => void runUnschedule());
+    }
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: this.opts.mode === "new" ? "Add task" : "Save"
     });
     saveBtn.type = "button";
     saveBtn.addEventListener("click", () => submit());
+    const onModalKey = (ev) => {
+      const target = ev.target;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+        return;
+      }
+      const moveOpen = this.contentEl.querySelector(
+        ".dp-edit-move-choices"
+      );
+      if (moveOpen && moveOpen.style.display !== "none")
+        return;
+      if ((ev.key === "x" || ev.key === "X") && this.opts.onDelete) {
+        ev.preventDefault();
+        void runDelete();
+      } else if ((ev.key === "u" || ev.key === "U") && this.opts.onUnschedule) {
+        ev.preventDefault();
+        void runUnschedule();
+      }
+    };
+    this.contentEl.addEventListener("keydown", onModalKey);
     window.setTimeout(() => {
       input.focus();
       if (this.opts.mode === "edit" && !/\s$/.test(input.value)) {

@@ -2039,7 +2039,40 @@ export class TodayView extends ItemView {
       },
       moveChoices: this.buildMoveChoices(file, task),
       onStartPomodoro: () => this.enterPomodoro(file, task),
+      onDelete: () => this.deleteTaskLines(file, task),
+      onUnschedule: () => this.unscheduleTask(file, task),
     }).open();
+  }
+
+  // Removes the task's parent line and all of its sub-task lines from `file`.
+  // Highest line number first so earlier indices stay valid as we splice.
+  private async deleteTaskLines(file: TFile, task: ParsedTask): Promise<void> {
+    const lineNumbers = [
+      task.lineNumber,
+      ...task.subtasks.map((s) => s.lineNumber),
+    ].sort((a, b) => b - a);
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      for (const n of lineNumbers) {
+        if (n < lines.length) lines.splice(n, 1);
+      }
+      return lines.join("\n");
+    });
+    new Notice("Task deleted");
+  }
+
+  // Strips the `#t/` time tag from the task's parent line. The modal closes
+  // afterwards; the caller (Today view) re-renders on file modify, dropping
+  // the now-untimed task into the unscheduled list.
+  private async unscheduleTask(file: TFile, task: ParsedTask): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (task.lineNumber >= lines.length) return content;
+      lines[task.lineNumber] = removeTimeTag(lines[task.lineNumber], prefixes);
+      return lines.join("\n");
+    });
+    new Notice("Unscheduled");
   }
 
   // Computes the date-picker entries for the edit modal's "Move" button:
@@ -3182,6 +3215,12 @@ interface TaskEditOpts {
   // caller decides which dates appear and what happens on click.
   moveChoices?: MoveChoice[];
   onStartPomodoro?: () => void;
+  // Drops the task line and any sub-tasks. The modal handles confirmation;
+  // the caller just performs the file mutation.
+  onDelete?: () => Promise<void>;
+  // Strips the `#t/` time tag from the task line so it falls out of the
+  // schedule and back into the unscheduled bucket.
+  onUnschedule?: () => Promise<void>;
 }
 
 interface MoveChoice {
@@ -4237,6 +4276,34 @@ class TaskEditModal extends Modal {
     });
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+
+    // Delete: bottom-left of the action row, danger styling. Confirms before
+    // dropping the line so accidental clicks / hotkey presses are recoverable.
+    // `margin-right: auto` (in CSS) pushes the rest of the actions to the
+    // right edge.
+    const runDelete = async (): Promise<void> => {
+      if (!this.opts.onDelete) return;
+      const ok = window.confirm("Delete this task and its sub-tasks?");
+      if (!ok) return;
+      await this.opts.onDelete();
+      this.close();
+    };
+    const runUnschedule = async (): Promise<void> => {
+      if (!this.opts.onUnschedule) return;
+      await this.opts.onUnschedule();
+      this.close();
+    };
+
+    if (this.opts.mode === "edit" && this.opts.onDelete) {
+      const deleteBtn = actions.createEl("button", {
+        cls: "dp-edit-delete-btn",
+        text: "Delete",
+        attr: { "aria-label": "Delete task (x)", title: "Delete task (x)" },
+      });
+      deleteBtn.type = "button";
+      deleteBtn.addEventListener("click", () => void runDelete());
+    }
+
     const showBtn = actions.createEl("button", {
       cls: "dp-edit-icon-btn",
       attr: { "aria-label": "Show in note", title: "Show in note" },
@@ -4373,12 +4440,47 @@ class TaskEditModal extends Modal {
       this.opts.onStartPomodoro!();
     });
 
+    if (this.opts.mode === "edit" && this.opts.onUnschedule) {
+      const unschedBtn = actions.createEl("button", {
+        cls: "dp-edit-icon-btn",
+        attr: { "aria-label": "Unschedule (u)", title: "Unschedule (u)" },
+      });
+      unschedBtn.type = "button";
+      setIcon(unschedBtn, "calendar-x");
+      unschedBtn.addEventListener("click", () => void runUnschedule());
+    }
+
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: this.opts.mode === "new" ? "Add task" : "Save",
     });
     saveBtn.type = "button";
     saveBtn.addEventListener("click", () => submit());
+
+    // Modal-level hotkeys for Delete (x) and Unschedule (u). Defers to the
+    // move stage-two popup when it's open so its own hotkey table wins, and
+    // skips while the user is typing in any input/textarea.
+    const onModalKey = (ev: KeyboardEvent): void => {
+      const target = ev.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        return;
+      }
+      const moveOpen = this.contentEl.querySelector<HTMLElement>(
+        ".dp-edit-move-choices",
+      );
+      if (moveOpen && moveOpen.style.display !== "none") return;
+      if ((ev.key === "x" || ev.key === "X") && this.opts.onDelete) {
+        ev.preventDefault();
+        void runDelete();
+      } else if ((ev.key === "u" || ev.key === "U") && this.opts.onUnschedule) {
+        ev.preventDefault();
+        void runUnschedule();
+      }
+    };
+    this.contentEl.addEventListener("keydown", onModalKey);
 
     // Defer so we win over Obsidian's default modal focus, which otherwise
     // lands on the close button and forces the user to click into the title.
