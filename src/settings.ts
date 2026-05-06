@@ -15,17 +15,23 @@ import {
 import { ContextTag, ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
 import { TagMigrationModal, PrefixChange } from "./migrate";
 
-// Inline-autocomplete trigger strings. Stored as a record so future shortcut
-// triggers (duration, time, etc.) can be added without changing the Settings
-// shape.
+// Inline-autocomplete trigger strings. Each opens a different picker when
+// typed in the task title input or directly in a daily note. Stored as a
+// record so future shortcut triggers can be added without changing the
+// Settings shape.
 export interface AutocompleteSettings {
-  // Typed in the task title input or directly in a daily note to open the
-  // project picker. Default "##".
+  // Default "##" — opens the project picker.
   projectTrigger: string;
+  // Default "#@" — opens the time picker.
+  timeTrigger: string;
+  // Default "#$" — opens the duration picker.
+  durationTrigger: string;
 }
 
 export const DEFAULT_AUTOCOMPLETE: AutocompleteSettings = {
   projectTrigger: "##",
+  timeTrigger: "#@",
+  durationTrigger: "#$",
 };
 
 export interface TodaySettings {
@@ -151,6 +157,7 @@ export class TodaySettingTab extends PluginSettingTab {
 
     this.renderDefaultsSection(containerEl);
     this.renderPomodoroSection(containerEl);
+    this.renderAutocompleteSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
     this.renderNotesSection(containerEl);
@@ -631,6 +638,74 @@ export class TodaySettingTab extends PluginSettingTab {
       );
   }
 
+  private renderAutocompleteSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Autocomplete").setHeading();
+
+    const intro = containerEl.createEl("p", { cls: "setting-item-description" });
+    intro.append(
+      "Type a trigger string in a task title (in the new/edit modal) or in any markdown file to open a picker. Trigger strings can be anything that's unlikely to appear naturally — defaults are ",
+      makeCode("##"),
+      ", ",
+      makeCode("#@"),
+      ", and ",
+      makeCode("#$"),
+      ". Selecting a suggestion either fills the matching field in the modal or inserts the corresponding ",
+      makeCode("#prefix/value"),
+      " tag inline.",
+    );
+
+    new Setting(containerEl)
+      .setName("Project trigger")
+      .setDesc(
+        "Opens the project picker. Modal: fills the project field. Editor: inserts #p/<name>.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("##")
+          .setValue(this.plugin.settings.autocomplete.projectTrigger)
+          .onChange(async (v) => {
+            const trimmed = v.trim();
+            if (!trimmed) return;
+            this.plugin.settings.autocomplete.projectTrigger = trimmed;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Time trigger")
+      .setDesc(
+        "Opens the time picker. Suggestions are drawn from your visible-hours range at hour and half-hour marks. Inserts #t/<value>.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("#@")
+          .setValue(this.plugin.settings.autocomplete.timeTrigger)
+          .onChange(async (v) => {
+            const trimmed = v.trim();
+            if (!trimmed) return;
+            this.plugin.settings.autocomplete.timeTrigger = trimmed;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Duration trigger")
+      .setDesc(
+        "Opens the duration picker. Suggestions come from your quick-duration chips. Modal: updates the duration selection. Editor: inserts #d/<value>.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("#$")
+          .setValue(this.plugin.settings.autocomplete.durationTrigger)
+          .onChange(async (v) => {
+            const trimmed = v.trim();
+            if (!trimmed) return;
+            this.plugin.settings.autocomplete.durationTrigger = trimmed;
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+
   private renderProjectsSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Projects").setHeading();
 
@@ -645,21 +720,6 @@ export class TodaySettingTab extends PluginSettingTab {
             this.display();
           }
         }),
-      );
-
-    new Setting(containerEl)
-      .setName("Project autocomplete trigger")
-      .setDesc(buildProjectTriggerDesc())
-      .addText((t) =>
-        t
-          .setPlaceholder("##")
-          .setValue(this.plugin.settings.autocomplete.projectTrigger)
-          .onChange(async (v) => {
-            const trimmed = v.trim();
-            if (trimmed.length === 0) return;
-            this.plugin.settings.autocomplete.projectTrigger = trimmed;
-            await this.plugin.saveSettings();
-          }),
       );
 
     const prefix = this.plugin.settings.prefixes.project;
@@ -1044,18 +1104,6 @@ function buildTaskIdDesc(): DocumentFragment {
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
     makeCode("#tid/a3xK9p"),
     ". The migrate-incomplete flow lets you check off the work you finished today while carrying the task title and unfinished sub-tasks (without the completed ones) into tomorrow's note — useful for showing partial progress while continuing the task. If all sub-tasks are already done, the original is still marked complete and a fresh empty parent is queued for tomorrow, so you can keep working on it.",
-  );
-  return f;
-}
-
-function buildProjectTriggerDesc(): DocumentFragment {
-  const f = document.createDocumentFragment();
-  f.append(
-    "Type this in a task title (in the new/edit modal) or in a daily note to open a project picker. Default ",
-    makeCode("##"),
-    ". Selecting a project sets the project field in the modal, or inserts ",
-    makeCode("#p/<name>"),
-    " into the note.",
   );
   return f;
 }

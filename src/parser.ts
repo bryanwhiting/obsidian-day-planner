@@ -488,7 +488,7 @@ export function setTaskTitle(
     `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
-  const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
+  let tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
   const beforeTags = tagMatch ? body.slice(0, tagMatch.index) : body;
 
   // Preserve any inline {description} so editing the title doesn't drop it.
@@ -500,6 +500,25 @@ export function setTaskTitle(
   const bareTags: string[] = [];
   for (const bm of beforeTags.matchAll(/#[A-Za-z][\w-]*(?![\w/-])/g)) {
     bareTags.push(bm[0]);
+  }
+
+  // If the new title contains a tag of a single-instance prefix
+  // (duration/time/order/project), drop the matching tag from tagsPart so
+  // the user's typed value wins instead of being stacked alongside the old
+  // one. Exercise and task-id are left alone since they can repeat.
+  const singletonPrefixes = [
+    prefixes.duration,
+    prefixes.time,
+    prefixes.order,
+    prefixes.project,
+  ];
+  for (const p of singletonPrefixes) {
+    if (new RegExp(`#${esc(p)}\\/\\S+`).test(newTitle)) {
+      tagsPart = tagsPart
+        .replace(new RegExp(`#${esc(p)}\\/\\S+`, "g"), "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
   }
 
   const trimmedTitle = newTitle.trim();
@@ -569,6 +588,39 @@ export function formatTotal(totalMin: number): string {
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+// Compact 12-hour clock label: "7a" (no minutes), "12p" (noon), "7:30p"
+// (half-hour). The colon goes in for display; strip it before writing as a
+// `#t/` tag body (the parser regex doesn't allow ":").
+export function formatClockShort(totalMin: number): string {
+  const h24 = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
+  const ampm = h24 < 12 ? "a" : "p";
+  let h12 = h24 % 12;
+  if (h12 === 0) h12 = 12;
+  return m === 0
+    ? `${h12}${ampm}`
+    : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
+}
+
+// Hour and half-hour clock labels across [startHour, endHour). Used by the
+// time-trigger autocomplete in both the modal title and the markdown editor.
+export function buildTimeOptions(startHour: number, endHour: number): string[] {
+  const out: string[] = [];
+  const lo = Math.max(0, Math.min(23, Math.floor(startHour)));
+  const hi = Math.max(lo + 1, Math.min(24, Math.floor(endHour)));
+  for (let h = lo; h < hi; h++) {
+    out.push(formatClockShort(h * 60));
+    out.push(formatClockShort(h * 60 + 30));
+  }
+  return out;
+}
+
+// "7p" stays "7p"; "7:30p" → "730p". Drops the colon so the result fits the
+// `#t/` tag's regex (which expects digits + am/pm only).
+export function timeDisplayToTagBody(display: string): string {
+  return display.replace(":", "");
 }
 
 // Compact form used on quick-duration chips: "15m", "1h", "1h30m" (no space).

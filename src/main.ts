@@ -17,7 +17,12 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_AUTOCOMPLETE,
 } from "./settings";
-import { DEFAULT_PREFIXES } from "./parser";
+import {
+  DEFAULT_PREFIXES,
+  buildTimeOptions,
+  formatCompactDuration,
+  timeDisplayToTagBody,
+} from "./parser";
 
 let polyfillInstalled = false;
 
@@ -57,7 +62,7 @@ export default class TodayPlugin extends Plugin {
     });
 
     this.addSettingTab(new TodaySettingTab(this.app, this));
-    this.registerEditorSuggest(new ProjectEditorSuggest(this));
+    this.registerEditorSuggest(new InlineSuggest(this));
   }
 
   async onunload(): Promise<void> {}
@@ -111,11 +116,25 @@ export default class TodayPlugin extends Plugin {
   }
 }
 
-// In-editor suggest for the project trigger (default "##"). Triggers when the
-// configured string appears mid-line preceded by some non-whitespace content,
-// so plain markdown headings ("## My heading" at column 0) are left alone.
-// Selecting a suggestion replaces the trigger + query with "#<projectPrefix>/<name> ".
-class ProjectEditorSuggest extends EditorSuggest<string> {
+type SuggestKind = "project" | "time" | "duration";
+
+interface SuggestItem {
+  kind: SuggestKind;
+  // Display string shown in the popover (e.g. "sally", "7:30p", "1h30m").
+  display: string;
+  // The text that gets inserted in place of the trigger+query. Always a full
+  // tag with trailing space so the cursor lands ready for the next word.
+  insert: string;
+  // Optional sub-segment shown muted alongside the display (e.g. "/back-end"
+  // for a sub-project).
+  subDisplay?: string;
+}
+
+// Single editor-suggest that handles every configured inline trigger
+// (project / time / duration). Whichever trigger appears latest in the line
+// before the cursor wins, and the resulting selection replaces that trigger
+// range with the corresponding "#prefix/value " tag.
+class InlineSuggest extends EditorSuggest<SuggestItem> {
   private plugin: TodayPlugin;
 
   constructor(plugin: TodayPlugin) {
@@ -128,62 +147,109 @@ class ProjectEditorSuggest extends EditorSuggest<string> {
     editor: Editor,
     _file: TFile | null,
   ): EditorSuggestTriggerInfo | null {
-    const trigger = this.plugin.settings.autocomplete.projectTrigger;
-    if (!trigger) return null;
+    const auto = this.plugin.settings.autocomplete;
+    const candidates: { trigger: string; kind: SuggestKind }[] = [
+      { trigger: auto.projectTrigger, kind: "project" },
+      { trigger: auto.timeTrigger, kind: "time" },
+      { trigger: auto.durationTrigger, kind: "duration" },
+    ];
     const line = editor.getLine(cursor.line);
     const before = line.slice(0, cursor.ch);
-    const idx = before.lastIndexOf(trigger);
-    if (idx < 0) return null;
-    // Require non-whitespace earlier on the line so "## heading" at column 0
-    // never opens the picker.
-    if (!/\S/.test(before.slice(0, idx))) return null;
-    const query = before.slice(idx + trigger.length);
-    // Whitespace or a "#" terminates the query — bail so the popover closes
-    // once the user moves on.
+    let best: { idx: number; kind: SuggestKind; trigger: string } | null = null;
+    for (const c of candidates) {
+      if (!c.trigger) continue;
+      const idx = before.lastIndexOf(c.trigger);
+      if (idx < 0) continue;
+      if (!best || idx > best.idx) {
+        best = { idx, kind: c.kind, trigger: c.trigger };
+      }
+    }
+    if (!best) return null;
+    // Require non-whitespace earlier on the line so a column-0 "##" stays a
+    // markdown heading rather than opening the picker.
+    if (!/\S/.test(before.slice(0, best.idx))) return null;
+    const query = before.slice(best.idx + best.trigger.length);
     if (/[\s#]/.test(query)) return null;
     return {
-      start: { line: cursor.line, ch: idx },
+      start: { line: cursor.line, ch: best.idx },
       end: cursor,
-      query,
+      // Smuggle the kind through the query string so getSuggestions knows
+      // which list to build. Format: "<kind>:<query>".
+      query: `${best.kind}:${query}`,
     };
   }
 
-  getSuggestions(ctx: EditorSuggestContext): string[] {
-    const projects = this.collectProjects();
-    const q = ctx.query.trim().toLowerCase();
-    if (!q) return projects.slice(0, 12);
-    const starts = projects.filter((p) => p.toLowerCase().startsWith(q));
-    const contains = projects.filter(
-      (p) =>
-        !p.toLowerCase().startsWith(q) && p.toLowerCase().includes(q),
+  getSuggestions(ctx: EditorSuggestContext): SuggestItem[] {
+    const colon = ctx.query.indexOf(":");
+    if (colon < 0) return [];
+    const kind = ctx.query.slice(0, colon) as SuggestKind;
+    const query = ctx.query.slice(colon + 1);
+    const prefixes = this.plugin.settings.prefixes;
+    if (kind === "project") {
+      const pool = this.collectProjects();
+      return this.filter(pool, query).map((name) => {
+        const slash = name.indexOf("/");
+        return {
+          kind,
+          display: slash >= 0 ? name.slice(0, slash) : name,
+          subDisplay: slash >= 0 ? name.slice(slash) : undefined,
+          insert: `#${prefixes.project}/${name} `,
+        };
+      });
+    }
+    if (kind === "time") {
+      const settings = this.plugin.settings;
+      const pool = buildTimeOptions(
+        settings.visibleStartHour,
+        settings.visibleEndHour,
+      );
+      return this.filter(pool, query).map((display) => ({
+        kind,
+        display,
+        insert: `#${prefixes.time}/${timeDisplayToTagBody(display)} `,
+      }));
+    }
+    const pool = this.plugin.settings.quickDurationsMin.map((m) =>
+      formatCompactDuration(m),
     );
-    return [...starts, ...contains].slice(0, 12);
+    return this.filter(pool, query).map((display) => ({
+      kind,
+      display,
+      insert: `#${prefixes.duration}/${display} `,
+    }));
   }
 
-  renderSuggestion(name: string, el: HTMLElement): void {
+  renderSuggestion(item: SuggestItem, el: HTMLElement): void {
     el.addClass("dp-project-suggest-item");
-    const slash = name.indexOf("/");
-    if (slash >= 0) {
-      el.createSpan({ text: name.slice(0, slash) });
-      el.createSpan({
-        cls: "dp-project-suggest-sub",
-        text: name.slice(slash),
-      });
-    } else {
-      el.createSpan({ text: name });
+    el.createSpan({ text: item.display });
+    if (item.subDisplay) {
+      el.createSpan({ cls: "dp-project-suggest-sub", text: item.subDisplay });
     }
   }
 
-  selectSuggestion(name: string, _evt: MouseEvent | KeyboardEvent): void {
+  selectSuggestion(
+    item: SuggestItem,
+    _evt: MouseEvent | KeyboardEvent,
+  ): void {
     if (!this.context) return;
-    const editor = this.context.editor;
-    const prefix = this.plugin.settings.prefixes.project;
-    editor.replaceRange(
-      `#${prefix}/${name} `,
+    this.context.editor.replaceRange(
+      item.insert,
       this.context.start,
       this.context.end,
     );
     this.close();
+  }
+
+  private filter(pool: string[], query: string, limit = 12): string[] {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return pool.slice(0, limit);
+    const starts = pool.filter((p) => p.toLowerCase().startsWith(needle));
+    const contains = pool.filter(
+      (p) =>
+        !p.toLowerCase().startsWith(needle) &&
+        p.toLowerCase().includes(needle),
+    );
+    return [...starts, ...contains].slice(0, limit);
   }
 
   private collectProjects(): string[] {

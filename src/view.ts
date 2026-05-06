@@ -36,6 +36,10 @@ import {
   snapToInterval,
   formatTotal,
   formatCompactDuration,
+  parseCompactDuration,
+  formatClockShort,
+  buildTimeOptions,
+  timeDisplayToTagBody,
   findLastTaskLine,
   buildTaskLine,
 } from "./parser";
@@ -978,6 +982,11 @@ export class TodayView extends ItemView {
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
+      timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
+      durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
+      visibleStartHour: this.plugin.settings.visibleStartHour,
+      visibleEndHour: this.plugin.settings.visibleEndHour,
+      quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, _checked, extras) => {
         const proj =
@@ -1927,6 +1936,11 @@ export class TodayView extends ItemView {
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
+      timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
+      durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
+      visibleStartHour: this.plugin.settings.visibleStartHour,
+      visibleEndHour: this.plugin.settings.visibleEndHour,
+      quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, checked) => {
         void this.applyTaskEdit(
@@ -1957,27 +1971,31 @@ export class TodayView extends ItemView {
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
-      onMoveToTomorrowWhole: () => this.moveTaskToTomorrow(file, task),
+      onMoveToTomorrowWhole: () =>
+        this.moveTaskWholeToDate(file, task, addDays(this.selectedDate, 1)),
       onMoveToTomorrowIncomplete: () =>
-        this.migrateIncompleteToTomorrow(file, task),
+        this.migrateIncompleteToDate(file, task, addDays(this.selectedDate, 1)),
+      onMoveToToday: this.selectedDate.getTime() > startOfDay(new Date()).getTime()
+        ? () => this.moveTaskWholeToDate(file, task, startOfDay(new Date()))
+        : undefined,
       onStartPomodoro: () => this.enterPomodoro(file, task),
     }).open();
   }
 
-  // Moves a task line (and its sub-task lines) from `file` to tomorrow's daily
-  // note. Tomorrow is computed relative to the day currently being viewed.
-  // No-op if tomorrow's daily note doesn't exist. Returns true on success.
-  private async moveTaskToTomorrow(
+  // Moves a task line (and its sub-task lines) from `file` to the daily note
+  // for `targetDate`. No-op if source and target are the same file.
+  // Returns true on success.
+  private async moveTaskWholeToDate(
     file: TFile,
     task: ParsedTask,
+    targetDate: Date,
   ): Promise<boolean> {
     const fallback = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
     };
-    const target = addDays(this.selectedDate, 1);
-    const targetFile = await ensureDailyNote(this.app, target, fallback);
+    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
       new Notice("Source and target are the same file.");
       return false;
@@ -2018,22 +2036,22 @@ export class TodayView extends ItemView {
   }
 
   // Carries the task title (with most tags) and any unfinished sub-tasks into
-  // tomorrow's note while keeping the completed sub-tasks on the source day as
-  // a record of partial progress. The source parent is checked off and stamped
-  // with a #tid/<id> tag; the new-day copy gets the same tag, so the two can
-  // be cross-referenced via search. The order tag (#o/) is stripped on the
-  // new copy because positioning is per-day.
-  private async migrateIncompleteToTomorrow(
+  // the daily note for `targetDate`, while keeping the completed sub-tasks on
+  // the source day as a record of partial progress. The source parent is
+  // checked off and stamped with a #tid/<id> tag; the new-day copy gets the
+  // same tag, so the two can be cross-referenced via search. The order tag
+  // (#o/) is stripped on the new copy because positioning is per-day.
+  private async migrateIncompleteToDate(
     file: TFile,
     task: ParsedTask,
+    targetDate: Date,
   ): Promise<boolean> {
     const fallback = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
     };
-    const target = addDays(this.selectedDate, 1);
-    const targetFile = await ensureDailyNote(this.app, target, fallback);
+    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
       new Notice("Source and target are the same file.");
       return false;
@@ -2745,8 +2763,16 @@ interface TaskEditOpts {
   projects: string[];
   durations: { label: string; min: number }[];
   prefixes: TagPrefixes;
-  // Trigger string for the in-title project autocomplete (e.g. "##").
+  // Trigger strings for the in-title autocompletes (e.g. "##", "#@", "#$").
   projectTrigger: string;
+  timeTrigger: string;
+  durationTrigger: string;
+  // Hours that anchor the title-input time picker (visibleStartHour through
+  // visibleEndHour from settings).
+  visibleStartHour: number;
+  visibleEndHour: number;
+  // Quick durations the title-input duration picker offers.
+  quickDurationsMin: number[];
   cleanBody: (body: string) => string;
   // durationMin is null when the user did not pick a new duration — leave the
   // existing #d/ tag (or its absence) alone. In "new" mode it's always set
@@ -2777,6 +2803,9 @@ interface TaskEditOpts {
   onShowInNote?: () => void;
   onMoveToTomorrowWhole?: () => Promise<boolean>;
   onMoveToTomorrowIncomplete?: () => Promise<boolean>;
+  // Set when the task is on a future-dated daily note; lets the user pull it
+  // back to today's note instead of pushing it further out.
+  onMoveToToday?: () => Promise<boolean>;
   onStartPomodoro?: () => void;
 }
 
@@ -2905,57 +2934,51 @@ function attachProjectSuggest(
   });
 }
 
-// Watches a free-text input (the modal's title field) for an inline trigger
-// like "##" followed by a project query, and surfaces the same project picker
-// as the dedicated project input. Picking a suggestion strips the
-// "##<query>" out of the title and writes the project name into projectInput,
-// so the user can capture the project and the title in one keystroke flow.
-function attachTitleProjectSuggest(
+// Description of a single inline trigger: how to detect it, what to show,
+// what to do when an item is picked. The helper below accepts any number of
+// these per input.
+interface TitleSuggestRule {
+  trigger: string;
+  // Suggestions for the typed query (the chars after the trigger, up to the
+  // cursor — guaranteed not to contain whitespace or "#").
+  getSuggestions: (query: string) => string[];
+  // Decorate the popover row for one suggestion. The wrapper element has
+  // already been created.
+  renderItem: (el: HTMLElement, value: string) => void;
+  // Called when the user picks `value`. The callback decides what to do with
+  // the [triggerStart, cursor] range — typically either rewrites it to the
+  // resolved tag text or strips it and updates a separate field.
+  commit: (value: string, triggerStart: number, cursor: number) => void;
+}
+
+// Watches a free-text input (the modal's title field) for any of the
+// configured triggers. Whichever trigger appears latest in the text before
+// the cursor wins, so the user can stack multiple shortcuts inside one title
+// without them stepping on each other.
+function attachTitleSuggest(
   input: HTMLInputElement,
   wrap: HTMLElement,
-  projectInput: HTMLInputElement,
-  projects: string[],
-  trigger: string,
+  rules: TitleSuggestRule[],
 ): void {
-  if (!trigger) return;
+  const live = rules.filter((r) => r.trigger);
+  if (live.length === 0) return;
   const popover = wrap.createDiv({ cls: "dp-project-suggest" });
   popover.style.display = "none";
   let visible: string[] = [];
   let activeIdx = -1;
-  // Index in input.value where the trigger begins for the active match. -1
-  // when no match is active.
   let triggerStart = -1;
-
-  const filter = (q: string): string[] => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return projects.slice(0, 12);
-    const starts = projects.filter((p) => p.toLowerCase().startsWith(needle));
-    const contains = projects.filter(
-      (p) =>
-        !p.toLowerCase().startsWith(needle) &&
-        p.toLowerCase().includes(needle),
-    );
-    return [...starts, ...contains].slice(0, 12);
-  };
+  let activeRule: TitleSuggestRule | null = null;
 
   const renderItems = (): void => {
     popover.empty();
-    visible.forEach((name, i) => {
+    if (!activeRule) return;
+    visible.forEach((value, i) => {
       const item = popover.createDiv({ cls: "dp-project-suggest-item" });
       if (i === activeIdx) item.addClass("is-active");
-      const slash = name.indexOf("/");
-      if (slash >= 0) {
-        item.createSpan({ text: name.slice(0, slash) });
-        item.createSpan({
-          cls: "dp-project-suggest-sub",
-          text: name.slice(slash),
-        });
-      } else {
-        item.createSpan({ text: name });
-      }
+      activeRule!.renderItem(item, value);
       item.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
-        commit(name);
+        commit(value);
       });
       item.addEventListener("mousemove", () => {
         if (activeIdx === i) return;
@@ -2972,16 +2995,23 @@ function attachTitleProjectSuggest(
     items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
   };
 
-  const detect = (): { start: number; query: string } | null => {
+  const detect = ():
+    | { rule: TitleSuggestRule; start: number; query: string }
+    | null => {
     const cursor = input.selectionStart ?? input.value.length;
     const before = input.value.slice(0, cursor);
-    const idx = before.lastIndexOf(trigger);
-    if (idx < 0) return null;
-    const query = before.slice(idx + trigger.length);
-    // Whitespace or another "#" terminates the query — treat the trigger as
-    // already-resolved text.
-    if (/[\s#]/.test(query)) return null;
-    return { start: idx, query };
+    let best: { rule: TitleSuggestRule; start: number; query: string } | null =
+      null;
+    for (const rule of live) {
+      const idx = before.lastIndexOf(rule.trigger);
+      if (idx < 0) continue;
+      const query = before.slice(idx + rule.trigger.length);
+      if (/[\s#]/.test(query)) continue;
+      if (!best || idx > best.start) {
+        best = { rule, start: idx, query };
+      }
+    }
+    return best;
   };
 
   const refresh = (): void => {
@@ -2990,8 +3020,9 @@ function attachTitleProjectSuggest(
       hide();
       return;
     }
+    activeRule = det.rule;
     triggerStart = det.start;
-    visible = filter(det.query);
+    visible = det.rule.getSuggestions(det.query);
     if (visible.length === 0) {
       hide();
       return;
@@ -3005,21 +3036,16 @@ function attachTitleProjectSuggest(
     popover.style.display = "none";
     activeIdx = -1;
     triggerStart = -1;
+    activeRule = null;
   };
 
-  const commit = (name: string): void => {
-    if (triggerStart < 0) return;
+  const commit = (value: string): void => {
+    if (!activeRule || triggerStart < 0) return;
     const cursor = input.selectionStart ?? input.value.length;
-    const before = input.value.slice(0, triggerStart);
-    const after = input.value.slice(cursor);
-    // Trim a trailing space we'd otherwise leave behind ("foo ##bar" → "foo")
-    // so the title doesn't end up with a dangling space.
-    const trimmedBefore = before.replace(/\s+$/, "");
-    input.value = trimmedBefore + after;
-    const newCursor = trimmedBefore.length;
-    input.setSelectionRange(newCursor, newCursor);
-    projectInput.value = name;
+    const rule = activeRule;
+    const start = triggerStart;
     hide();
+    rule.commit(value, start, cursor);
     input.focus();
   };
 
@@ -3055,6 +3081,24 @@ function attachTitleProjectSuggest(
   });
 }
 
+// Filters `pool` against `query` with a "starts-with first, then contains"
+// ordering, capped at `limit`. Used by every inline-suggest list.
+function filterSuggestions(
+  pool: string[],
+  query: string,
+  limit = 12,
+): string[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return pool.slice(0, limit);
+  const starts = pool.filter((p) => p.toLowerCase().startsWith(needle));
+  const contains = pool.filter(
+    (p) =>
+      !p.toLowerCase().startsWith(needle) && p.toLowerCase().includes(needle),
+  );
+  return [...starts, ...contains].slice(0, limit);
+}
+
+
 // Project segments only allow [\w-]; "/" separates a sub-project segment so
 // users can type "My Project/Sub" and end up with #p/My-Project/Sub. Anything
 // else becomes a dash; runs of dashes/slashes collapse and trim.
@@ -3066,17 +3110,6 @@ function sanitizeProjectName(raw: string): string {
     .replace(/\/+/g, "/")
     .replace(/-?\/-?/g, "/")
     .replace(/^[-/]+|[-/]+$/g, "");
-}
-
-function fmtClockShort(totalMin: number): string {
-  const h24 = Math.floor(totalMin / 60) % 24;
-  const m = totalMin % 60;
-  const ampm = h24 < 12 ? "a" : "p";
-  let h12 = h24 % 12;
-  if (h12 === 0) h12 = 12;
-  return m === 0
-    ? `${h12}${ampm}`
-    : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
 }
 
 class TaskEditModal extends Modal {
@@ -3179,13 +3212,6 @@ class TaskEditModal extends Modal {
     });
     projInput.value = this.opts.initialProject ?? "";
     attachProjectSuggest(projInput, projWrap, this.opts.projects);
-    attachTitleProjectSuggest(
-      input,
-      titleWrap,
-      projInput,
-      this.opts.projects,
-      this.opts.projectTrigger,
-    );
     const clearBtn = projRow.createEl("button", {
       cls: "dp-project-clear",
       attr: { "aria-label": "Clear project" },
@@ -3220,6 +3246,84 @@ class TaskEditModal extends Modal {
       });
       buttons.push(btn);
     });
+
+    const projectPool = this.opts.projects;
+    const timePool = buildTimeOptions(
+      this.opts.visibleStartHour,
+      this.opts.visibleEndHour,
+    );
+    const durationPool = this.opts.quickDurationsMin.map((m) =>
+      formatCompactDuration(m),
+    );
+    // Replaces the [triggerStart, cursor] range in the title input. When
+    // `replacement` is empty we also trim a trailing space we'd otherwise
+    // leave behind (so "foo ##bar" → "foo", not "foo ").
+    const replaceTriggerRange = (
+      start: number,
+      cursor: number,
+      replacement: string,
+    ): void => {
+      let before = input.value.slice(0, start);
+      const after = input.value.slice(cursor);
+      if (!replacement) before = before.replace(/\s+$/, "");
+      input.value = before + replacement + after;
+      const newCursor = before.length + replacement.length;
+      input.setSelectionRange(newCursor, newCursor);
+    };
+    attachTitleSuggest(input, titleWrap, [
+      {
+        trigger: this.opts.projectTrigger,
+        getSuggestions: (q) => filterSuggestions(projectPool, q),
+        renderItem: (el, name) => {
+          const slash = name.indexOf("/");
+          if (slash >= 0) {
+            el.createSpan({ text: name.slice(0, slash) });
+            el.createSpan({
+              cls: "dp-project-suggest-sub",
+              text: name.slice(slash),
+            });
+          } else {
+            el.createSpan({ text: name });
+          }
+        },
+        commit: (name, start, cursor) => {
+          replaceTriggerRange(start, cursor, "");
+          projInput.value = name;
+        },
+      },
+      {
+        trigger: this.opts.timeTrigger,
+        getSuggestions: (q) => filterSuggestions(timePool, q),
+        renderItem: (el, value) => {
+          el.createSpan({ text: value });
+        },
+        commit: (display, start, cursor) => {
+          const tag = `#${this.opts.prefixes.time}/${timeDisplayToTagBody(display)} `;
+          replaceTriggerRange(start, cursor, tag);
+        },
+      },
+      {
+        trigger: this.opts.durationTrigger,
+        getSuggestions: (q) => filterSuggestions(durationPool, q),
+        renderItem: (el, value) => {
+          el.createSpan({ text: value });
+        },
+        commit: (display, start, cursor) => {
+          const min = parseCompactDuration(display);
+          if (min !== null) {
+            this.selectedDurationMin = min;
+            this.durationChanged = true;
+            buttons.forEach((b, i) => {
+              b.toggleClass(
+                "is-selected",
+                this.opts.durations[i]?.min === min,
+              );
+            });
+          }
+          replaceTriggerRange(start, cursor, "");
+        },
+      },
+    ]);
 
     const resolveProject = (): string | null | undefined => {
       const raw = projInput.value.trim();
@@ -3345,7 +3449,7 @@ class TaskEditModal extends Modal {
           timeChip.setText("+ time");
           timeChip.addClass("is-empty");
         } else {
-          timeChip.setText(fmtClockShort(min));
+          timeChip.setText(formatClockShort(min));
           timeChip.removeClass("is-empty");
         }
       };
@@ -3388,7 +3492,7 @@ class TaskEditModal extends Modal {
           cls: "dp-edit-subtask-time-input",
           attr: { placeholder: "e.g. 7p, 6:30p" },
         });
-        editor.value = current === null ? "" : fmtClockShort(current);
+        editor.value = current === null ? "" : formatClockShort(current);
         timeChip.style.display = "none";
         editor.focus();
         editor.select();

@@ -672,13 +672,24 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
     `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`
   );
   const tagMatch = tagRe.exec(body);
-  const tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
+  let tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
   const beforeTags = tagMatch ? body.slice(0, tagMatch.index) : body;
   const descMatch = DESCRIPTION_RE.exec(beforeTags);
   const descPart = descMatch ? `{${descMatch[1].trim()}}` : "";
   const bareTags = [];
   for (const bm of beforeTags.matchAll(/#[A-Za-z][\w-]*(?![\w/-])/g)) {
     bareTags.push(bm[0]);
+  }
+  const singletonPrefixes = [
+    prefixes.duration,
+    prefixes.time,
+    prefixes.order,
+    prefixes.project
+  ];
+  for (const p of singletonPrefixes) {
+    if (new RegExp(`#${esc(p)}\\/\\S+`).test(newTitle)) {
+      tagsPart = tagsPart.replace(new RegExp(`#${esc(p)}\\/\\S+`, "g"), "").replace(/\s+/g, " ").trim();
+    }
   }
   const trimmedTitle = newTitle.trim();
   const parts = [trimmedTitle];
@@ -738,6 +749,28 @@ function formatTotal(totalMin) {
   if (m === 0)
     return `${h}h`;
   return `${h}h ${m}m`;
+}
+function formatClockShort(totalMin) {
+  const h24 = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
+  const ampm = h24 < 12 ? "a" : "p";
+  let h12 = h24 % 12;
+  if (h12 === 0)
+    h12 = 12;
+  return m === 0 ? `${h12}${ampm}` : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
+}
+function buildTimeOptions(startHour, endHour) {
+  const out = [];
+  const lo = Math.max(0, Math.min(23, Math.floor(startHour)));
+  const hi = Math.max(lo + 1, Math.min(24, Math.floor(endHour)));
+  for (let h = lo; h < hi; h++) {
+    out.push(formatClockShort(h * 60));
+    out.push(formatClockShort(h * 60 + 30));
+  }
+  return out;
+}
+function timeDisplayToTagBody(display) {
+  return display.replace(":", "");
 }
 function formatCompactDuration(totalMin) {
   if (totalMin <= 0)
@@ -1046,7 +1079,9 @@ function keyLabel(key) {
 
 // src/settings.ts
 var DEFAULT_AUTOCOMPLETE = {
-  projectTrigger: "##"
+  projectTrigger: "##",
+  timeTrigger: "#@",
+  durationTrigger: "#$"
 };
 var DEFAULT_SETTINGS = {
   visibleStartHour: 6,
@@ -1126,6 +1161,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     containerEl.empty();
     this.renderDefaultsSection(containerEl);
     this.renderPomodoroSection(containerEl);
+    this.renderAutocompleteSection(containerEl);
     this.renderProjectsSection(containerEl);
     this.renderContextTagsSection(containerEl);
     this.renderNotesSection(containerEl);
@@ -1443,6 +1479,54 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       })
     );
   }
+  renderAutocompleteSection(containerEl) {
+    new import_obsidian2.Setting(containerEl).setName("Autocomplete").setHeading();
+    const intro = containerEl.createEl("p", { cls: "setting-item-description" });
+    intro.append(
+      "Type a trigger string in a task title (in the new/edit modal) or in any markdown file to open a picker. Trigger strings can be anything that's unlikely to appear naturally \u2014 defaults are ",
+      makeCode("##"),
+      ", ",
+      makeCode("#@"),
+      ", and ",
+      makeCode("#$"),
+      ". Selecting a suggestion either fills the matching field in the modal or inserts the corresponding ",
+      makeCode("#prefix/value"),
+      " tag inline."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Project trigger").setDesc(
+      "Opens the project picker. Modal: fills the project field. Editor: inserts #p/<name>."
+    ).addText(
+      (t) => t.setPlaceholder("##").setValue(this.plugin.settings.autocomplete.projectTrigger).onChange(async (v) => {
+        const trimmed = v.trim();
+        if (!trimmed)
+          return;
+        this.plugin.settings.autocomplete.projectTrigger = trimmed;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Time trigger").setDesc(
+      "Opens the time picker. Suggestions are drawn from your visible-hours range at hour and half-hour marks. Inserts #t/<value>."
+    ).addText(
+      (t) => t.setPlaceholder("#@").setValue(this.plugin.settings.autocomplete.timeTrigger).onChange(async (v) => {
+        const trimmed = v.trim();
+        if (!trimmed)
+          return;
+        this.plugin.settings.autocomplete.timeTrigger = trimmed;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Duration trigger").setDesc(
+      "Opens the duration picker. Suggestions come from your quick-duration chips. Modal: updates the duration selection. Editor: inserts #d/<value>."
+    ).addText(
+      (t) => t.setPlaceholder("#$").setValue(this.plugin.settings.autocomplete.durationTrigger).onChange(async (v) => {
+        const trimmed = v.trim();
+        if (!trimmed)
+          return;
+        this.plugin.settings.autocomplete.durationTrigger = trimmed;
+        await this.plugin.saveSettings();
+      })
+    );
+  }
   renderProjectsSection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Projects").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Project tag prefix").setDesc(buildProjectPrefixDesc()).addText(
@@ -1452,15 +1536,6 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           await this.plugin.saveSettings();
           this.display();
         }
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("Project autocomplete trigger").setDesc(buildProjectTriggerDesc()).addText(
-      (t) => t.setPlaceholder("##").setValue(this.plugin.settings.autocomplete.projectTrigger).onChange(async (v) => {
-        const trimmed = v.trim();
-        if (trimmed.length === 0)
-          return;
-        this.plugin.settings.autocomplete.projectTrigger = trimmed;
-        await this.plugin.saveSettings();
       })
     );
     const prefix = this.plugin.settings.prefixes.project;
@@ -1795,17 +1870,6 @@ function buildTaskIdDesc() {
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
     makeCode("#tid/a3xK9p"),
     ". The migrate-incomplete flow lets you check off the work you finished today while carrying the task title and unfinished sub-tasks (without the completed ones) into tomorrow's note \u2014 useful for showing partial progress while continuing the task. If all sub-tasks are already done, the original is still marked complete and a fresh empty parent is queued for tomorrow, so you can keep working on it."
-  );
-  return f;
-}
-function buildProjectTriggerDesc() {
-  const f = document.createDocumentFragment();
-  f.append(
-    "Type this in a task title (in the new/edit modal) or in a daily note to open a project picker. Default ",
-    makeCode("##"),
-    ". Selecting a project sets the project field in the modal, or inserts ",
-    makeCode("#p/<name>"),
-    " into the note."
   );
   return f;
 }
@@ -2871,6 +2935,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
+      timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
+      durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
+      visibleStartHour: this.plugin.settings.visibleStartHour,
+      visibleEndHour: this.plugin.settings.visibleEndHour,
+      quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, _checked, extras) => {
         var _a, _b;
@@ -3700,6 +3769,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
+      timeTrigger: this.plugin.settings.autocomplete.timeTrigger,
+      durationTrigger: this.plugin.settings.autocomplete.durationTrigger,
+      visibleStartHour: this.plugin.settings.visibleStartHour,
+      visibleEndHour: this.plugin.settings.visibleEndHour,
+      quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, checked) => {
         void this.applyTaskEdit(
@@ -3735,17 +3809,16 @@ var TodayView = class extends import_obsidian4.ItemView {
       onStartPomodoro: () => this.enterPomodoro(file, task)
     }).open();
   }
-  // Moves a task line (and its sub-task lines) from `file` to tomorrow's daily
-  // note. Tomorrow is computed relative to the day currently being viewed.
-  // No-op if tomorrow's daily note doesn't exist. Returns true on success.
-  async moveTaskToTomorrow(file, task) {
+  // Moves a task line (and its sub-task lines) from `file` to the daily note
+  // for `targetDate`. No-op if source and target are the same file.
+  // Returns true on success.
+  async moveTaskWholeToDate(file, task, targetDate) {
     const fallback = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate
     };
-    const target = addDays(this.selectedDate, 1);
-    const targetFile = await ensureDailyNote(this.app, target, fallback);
+    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
       new import_obsidian4.Notice("Source and target are the same file.");
       return false;
@@ -4466,43 +4539,28 @@ function attachProjectSuggest(input, wrap, projects) {
     }
   });
 }
-function attachTitleProjectSuggest(input, wrap, projectInput, projects, trigger) {
-  if (!trigger)
+function attachTitleSuggest(input, wrap, rules) {
+  const live = rules.filter((r) => r.trigger);
+  if (live.length === 0)
     return;
   const popover = wrap.createDiv({ cls: "dp-project-suggest" });
   popover.style.display = "none";
   let visible = [];
   let activeIdx = -1;
   let triggerStart = -1;
-  const filter = (q) => {
-    const needle = q.trim().toLowerCase();
-    if (!needle)
-      return projects.slice(0, 12);
-    const starts = projects.filter((p) => p.toLowerCase().startsWith(needle));
-    const contains = projects.filter(
-      (p) => !p.toLowerCase().startsWith(needle) && p.toLowerCase().includes(needle)
-    );
-    return [...starts, ...contains].slice(0, 12);
-  };
+  let activeRule = null;
   const renderItems = () => {
     popover.empty();
-    visible.forEach((name, i) => {
+    if (!activeRule)
+      return;
+    visible.forEach((value, i) => {
       const item = popover.createDiv({ cls: "dp-project-suggest-item" });
       if (i === activeIdx)
         item.addClass("is-active");
-      const slash = name.indexOf("/");
-      if (slash >= 0) {
-        item.createSpan({ text: name.slice(0, slash) });
-        item.createSpan({
-          cls: "dp-project-suggest-sub",
-          text: name.slice(slash)
-        });
-      } else {
-        item.createSpan({ text: name });
-      }
+      activeRule.renderItem(item, value);
       item.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
-        commit(name);
+        commit(value);
       });
       item.addEventListener("mousemove", () => {
         if (activeIdx === i)
@@ -4522,13 +4580,19 @@ function attachTitleProjectSuggest(input, wrap, projectInput, projects, trigger)
     var _a;
     const cursor = (_a = input.selectionStart) != null ? _a : input.value.length;
     const before = input.value.slice(0, cursor);
-    const idx = before.lastIndexOf(trigger);
-    if (idx < 0)
-      return null;
-    const query = before.slice(idx + trigger.length);
-    if (/[\s#]/.test(query))
-      return null;
-    return { start: idx, query };
+    let best = null;
+    for (const rule of live) {
+      const idx = before.lastIndexOf(rule.trigger);
+      if (idx < 0)
+        continue;
+      const query = before.slice(idx + rule.trigger.length);
+      if (/[\s#]/.test(query))
+        continue;
+      if (!best || idx > best.start) {
+        best = { rule, start: idx, query };
+      }
+    }
+    return best;
   };
   const refresh = () => {
     const det = detect();
@@ -4536,8 +4600,9 @@ function attachTitleProjectSuggest(input, wrap, projectInput, projects, trigger)
       hide();
       return;
     }
+    activeRule = det.rule;
     triggerStart = det.start;
-    visible = filter(det.query);
+    visible = det.rule.getSuggestions(det.query);
     if (visible.length === 0) {
       hide();
       return;
@@ -4551,20 +4616,17 @@ function attachTitleProjectSuggest(input, wrap, projectInput, projects, trigger)
     popover.style.display = "none";
     activeIdx = -1;
     triggerStart = -1;
+    activeRule = null;
   };
-  const commit = (name) => {
+  const commit = (value) => {
     var _a;
-    if (triggerStart < 0)
+    if (!activeRule || triggerStart < 0)
       return;
     const cursor = (_a = input.selectionStart) != null ? _a : input.value.length;
-    const before = input.value.slice(0, triggerStart);
-    const after = input.value.slice(cursor);
-    const trimmedBefore = before.replace(/\s+$/, "");
-    input.value = trimmedBefore + after;
-    const newCursor = trimmedBefore.length;
-    input.setSelectionRange(newCursor, newCursor);
-    projectInput.value = name;
+    const rule = activeRule;
+    const start = triggerStart;
     hide();
+    rule.commit(value, start, cursor);
     input.focus();
   };
   input.addEventListener("input", refresh);
@@ -4600,17 +4662,18 @@ function attachTitleProjectSuggest(input, wrap, projectInput, projects, trigger)
     }
   });
 }
+function filterSuggestions(pool, query, limit = 12) {
+  const needle = query.trim().toLowerCase();
+  if (!needle)
+    return pool.slice(0, limit);
+  const starts = pool.filter((p) => p.toLowerCase().startsWith(needle));
+  const contains = pool.filter(
+    (p) => !p.toLowerCase().startsWith(needle) && p.toLowerCase().includes(needle)
+  );
+  return [...starts, ...contains].slice(0, limit);
+}
 function sanitizeProjectName(raw) {
   return raw.trim().replace(/[^\w/-]+/g, "-").replace(/-+/g, "-").replace(/\/+/g, "/").replace(/-?\/-?/g, "/").replace(/^[-/]+|[-/]+$/g, "");
-}
-function fmtClockShort(totalMin) {
-  const h24 = Math.floor(totalMin / 60) % 24;
-  const m = totalMin % 60;
-  const ampm = h24 < 12 ? "a" : "p";
-  let h12 = h24 % 12;
-  if (h12 === 0)
-    h12 = 12;
-  return m === 0 ? `${h12}${ampm}` : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
 }
 var TaskEditModal = class extends import_obsidian4.Modal {
   constructor(app, opts) {
@@ -4698,13 +4761,6 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     });
     projInput.value = (_a = this.opts.initialProject) != null ? _a : "";
     attachProjectSuggest(projInput, projWrap, this.opts.projects);
-    attachTitleProjectSuggest(
-      input,
-      titleWrap,
-      projInput,
-      this.opts.projects,
-      this.opts.projectTrigger
-    );
     const clearBtn = projRow.createEl("button", {
       cls: "dp-project-clear",
       attr: { "aria-label": "Clear project" }
@@ -4738,6 +4794,78 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       });
       buttons.push(btn);
     });
+    const projectPool = this.opts.projects;
+    const timePool = buildTimeOptions(
+      this.opts.visibleStartHour,
+      this.opts.visibleEndHour
+    );
+    const durationPool = this.opts.quickDurationsMin.map(
+      (m) => formatCompactDuration(m)
+    );
+    const replaceTriggerRange = (start, cursor, replacement) => {
+      let before = input.value.slice(0, start);
+      const after = input.value.slice(cursor);
+      if (!replacement)
+        before = before.replace(/\s+$/, "");
+      input.value = before + replacement + after;
+      const newCursor = before.length + replacement.length;
+      input.setSelectionRange(newCursor, newCursor);
+    };
+    attachTitleSuggest(input, titleWrap, [
+      {
+        trigger: this.opts.projectTrigger,
+        getSuggestions: (q) => filterSuggestions(projectPool, q),
+        renderItem: (el, name) => {
+          const slash = name.indexOf("/");
+          if (slash >= 0) {
+            el.createSpan({ text: name.slice(0, slash) });
+            el.createSpan({
+              cls: "dp-project-suggest-sub",
+              text: name.slice(slash)
+            });
+          } else {
+            el.createSpan({ text: name });
+          }
+        },
+        commit: (name, start, cursor) => {
+          replaceTriggerRange(start, cursor, "");
+          projInput.value = name;
+        }
+      },
+      {
+        trigger: this.opts.timeTrigger,
+        getSuggestions: (q) => filterSuggestions(timePool, q),
+        renderItem: (el, value) => {
+          el.createSpan({ text: value });
+        },
+        commit: (display, start, cursor) => {
+          const tag = `#${this.opts.prefixes.time}/${timeDisplayToTagBody(display)} `;
+          replaceTriggerRange(start, cursor, tag);
+        }
+      },
+      {
+        trigger: this.opts.durationTrigger,
+        getSuggestions: (q) => filterSuggestions(durationPool, q),
+        renderItem: (el, value) => {
+          el.createSpan({ text: value });
+        },
+        commit: (display, start, cursor) => {
+          const min = parseCompactDuration(display);
+          if (min !== null) {
+            this.selectedDurationMin = min;
+            this.durationChanged = true;
+            buttons.forEach((b, i) => {
+              var _a2;
+              b.toggleClass(
+                "is-selected",
+                ((_a2 = this.opts.durations[i]) == null ? void 0 : _a2.min) === min
+              );
+            });
+          }
+          replaceTriggerRange(start, cursor, "");
+        }
+      }
+    ]);
     const resolveProject = () => {
       var _a2;
       const raw = projInput.value.trim();
@@ -4840,7 +4968,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           timeChip.setText("+ time");
           timeChip.addClass("is-empty");
         } else {
-          timeChip.setText(fmtClockShort(min));
+          timeChip.setText(formatClockShort(min));
           timeChip.removeClass("is-empty");
         }
       };
@@ -4877,7 +5005,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           cls: "dp-edit-subtask-time-input",
           attr: { placeholder: "e.g. 7p, 6:30p" }
         });
-        editor.value = current === null ? "" : fmtClockShort(current);
+        editor.value = current === null ? "" : formatClockShort(current);
         timeChip.style.display = "none";
         editor.focus();
         editor.select();
@@ -5284,7 +5412,7 @@ var TodayPlugin = class extends import_obsidian5.Plugin {
       callback: () => void this.activateView({ openCalendar: true })
     });
     this.addSettingTab(new TodaySettingTab(this.app, this));
-    this.registerEditorSuggest(new ProjectEditorSuggest(this));
+    this.registerEditorSuggest(new InlineSuggest(this));
   }
   async onunload() {
   }
@@ -5334,66 +5462,112 @@ var TodayPlugin = class extends import_obsidian5.Plugin {
     }
   }
 };
-var ProjectEditorSuggest = class extends import_obsidian5.EditorSuggest {
+var InlineSuggest = class extends import_obsidian5.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
   }
   onTrigger(cursor, editor, _file) {
-    const trigger = this.plugin.settings.autocomplete.projectTrigger;
-    if (!trigger)
-      return null;
+    const auto = this.plugin.settings.autocomplete;
+    const candidates = [
+      { trigger: auto.projectTrigger, kind: "project" },
+      { trigger: auto.timeTrigger, kind: "time" },
+      { trigger: auto.durationTrigger, kind: "duration" }
+    ];
     const line = editor.getLine(cursor.line);
     const before = line.slice(0, cursor.ch);
-    const idx = before.lastIndexOf(trigger);
-    if (idx < 0)
+    let best = null;
+    for (const c of candidates) {
+      if (!c.trigger)
+        continue;
+      const idx = before.lastIndexOf(c.trigger);
+      if (idx < 0)
+        continue;
+      if (!best || idx > best.idx) {
+        best = { idx, kind: c.kind, trigger: c.trigger };
+      }
+    }
+    if (!best)
       return null;
-    if (!/\S/.test(before.slice(0, idx)))
+    if (!/\S/.test(before.slice(0, best.idx)))
       return null;
-    const query = before.slice(idx + trigger.length);
+    const query = before.slice(best.idx + best.trigger.length);
     if (/[\s#]/.test(query))
       return null;
     return {
-      start: { line: cursor.line, ch: idx },
+      start: { line: cursor.line, ch: best.idx },
       end: cursor,
-      query
+      // Smuggle the kind through the query string so getSuggestions knows
+      // which list to build. Format: "<kind>:<query>".
+      query: `${best.kind}:${query}`
     };
   }
   getSuggestions(ctx) {
-    const projects = this.collectProjects();
-    const q = ctx.query.trim().toLowerCase();
-    if (!q)
-      return projects.slice(0, 12);
-    const starts = projects.filter((p) => p.toLowerCase().startsWith(q));
-    const contains = projects.filter(
-      (p) => !p.toLowerCase().startsWith(q) && p.toLowerCase().includes(q)
-    );
-    return [...starts, ...contains].slice(0, 12);
-  }
-  renderSuggestion(name, el) {
-    el.addClass("dp-project-suggest-item");
-    const slash = name.indexOf("/");
-    if (slash >= 0) {
-      el.createSpan({ text: name.slice(0, slash) });
-      el.createSpan({
-        cls: "dp-project-suggest-sub",
-        text: name.slice(slash)
+    const colon = ctx.query.indexOf(":");
+    if (colon < 0)
+      return [];
+    const kind = ctx.query.slice(0, colon);
+    const query = ctx.query.slice(colon + 1);
+    const prefixes = this.plugin.settings.prefixes;
+    if (kind === "project") {
+      const pool2 = this.collectProjects();
+      return this.filter(pool2, query).map((name) => {
+        const slash = name.indexOf("/");
+        return {
+          kind,
+          display: slash >= 0 ? name.slice(0, slash) : name,
+          subDisplay: slash >= 0 ? name.slice(slash) : void 0,
+          insert: `#${prefixes.project}/${name} `
+        };
       });
-    } else {
-      el.createSpan({ text: name });
+    }
+    if (kind === "time") {
+      const settings = this.plugin.settings;
+      const pool2 = buildTimeOptions(
+        settings.visibleStartHour,
+        settings.visibleEndHour
+      );
+      return this.filter(pool2, query).map((display) => ({
+        kind,
+        display,
+        insert: `#${prefixes.time}/${timeDisplayToTagBody(display)} `
+      }));
+    }
+    const pool = this.plugin.settings.quickDurationsMin.map(
+      (m) => formatCompactDuration(m)
+    );
+    return this.filter(pool, query).map((display) => ({
+      kind,
+      display,
+      insert: `#${prefixes.duration}/${display} `
+    }));
+  }
+  renderSuggestion(item, el) {
+    el.addClass("dp-project-suggest-item");
+    el.createSpan({ text: item.display });
+    if (item.subDisplay) {
+      el.createSpan({ cls: "dp-project-suggest-sub", text: item.subDisplay });
     }
   }
-  selectSuggestion(name, _evt) {
+  selectSuggestion(item, _evt) {
     if (!this.context)
       return;
-    const editor = this.context.editor;
-    const prefix = this.plugin.settings.prefixes.project;
-    editor.replaceRange(
-      `#${prefix}/${name} `,
+    this.context.editor.replaceRange(
+      item.insert,
       this.context.start,
       this.context.end
     );
     this.close();
+  }
+  filter(pool, query, limit = 12) {
+    const needle = query.trim().toLowerCase();
+    if (!needle)
+      return pool.slice(0, limit);
+    const starts = pool.filter((p) => p.toLowerCase().startsWith(needle));
+    const contains = pool.filter(
+      (p) => !p.toLowerCase().startsWith(needle) && p.toLowerCase().includes(needle)
+    );
+    return [...starts, ...contains].slice(0, limit);
   }
   collectProjects() {
     var _a, _b;
