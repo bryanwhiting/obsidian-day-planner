@@ -14,8 +14,10 @@ import {
   ParsedTask,
   ParsedSubtask,
   ExerciseSummary,
+  TagPrefixes,
   parseFileTasks,
   parseExercises,
+  parseTime,
   formatExerciseLine,
   setTimeTag,
   removeTimeTag,
@@ -1570,6 +1572,8 @@ export class TodayView extends ItemView {
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
+      prefixes: this.plugin.settings.prefixes,
+      cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, checked) => {
         void this.applyTaskEdit(
           file,
@@ -1589,6 +1593,12 @@ export class TodayView extends ItemView {
       },
       onEditSubtask: async (sub, newText) => {
         await this.applySubtaskText(file, sub.lineNumber, newText);
+      },
+      onSetSubtaskTime: async (sub, totalMin) => {
+        await this.applySubtaskTime(file, sub.lineNumber, totalMin);
+      },
+      onReorderSubtasks: async (ordered) => {
+        await this.applySubtaskReorder(file, ordered);
       },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
@@ -1767,12 +1777,50 @@ export class TodayView extends ItemView {
   ): Promise<void> {
     const trimmed = newText.trim();
     if (!trimmed) return;
+    const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       if (lineNumber >= lines.length) return content;
-      const m = /^(\s*-\s*\[[^\]]\]\s+)(.*)$/.exec(lines[lineNumber]);
-      if (!m) return content;
-      lines[lineNumber] = `${m[1]}${trimmed}`;
+      lines[lineNumber] = setTaskTitle(lines[lineNumber], trimmed, prefixes);
+      return lines.join("\n");
+    });
+  }
+
+  private async applySubtaskTime(
+    file: TFile,
+    lineNumber: number,
+    totalMin: number | null,
+  ): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length) return content;
+      lines[lineNumber] =
+        totalMin === null
+          ? removeTimeTag(lines[lineNumber], prefixes)
+          : setTimeTag(lines[lineNumber], totalMin, prefixes);
+      return lines.join("\n");
+    });
+  }
+
+  // Reorders sub-task lines in the file. The slots are the existing line
+  // numbers (sorted ascending); we write each ordered sub's current rawLine
+  // into the corresponding slot. This preserves any blank/non-task lines
+  // interleaved between sub-tasks.
+  private async applySubtaskReorder(
+    file: TFile,
+    orderedSubs: ParsedSubtask[],
+  ): Promise<void> {
+    const slots = orderedSubs
+      .map((s) => s.lineNumber)
+      .slice()
+      .sort((a, b) => a - b);
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      for (let i = 0; i < orderedSubs.length; i++) {
+        const slot = slots[i];
+        if (slot < lines.length) lines[slot] = orderedSubs[i].rawLine;
+      }
       return lines.join("\n");
     });
   }
@@ -1963,6 +2011,8 @@ interface TaskEditOpts {
   subtasks: ParsedSubtask[];
   projects: string[];
   durations: { label: string; min: number }[];
+  prefixes: TagPrefixes;
+  cleanBody: (body: string) => string;
   // durationMin is null when the user did not pick a new duration — leave the
   // existing #d/ tag (or its absence) alone.
   // description is null when unchanged; otherwise it's the new value (empty
@@ -1979,6 +2029,11 @@ interface TaskEditOpts {
   onToggleSubtask: (sub: ParsedSubtask, checked: boolean) => Promise<void>;
   onAddSubtask: (text: string) => Promise<ParsedSubtask | null>;
   onEditSubtask: (sub: ParsedSubtask, newText: string) => Promise<void>;
+  onSetSubtaskTime: (
+    sub: ParsedSubtask,
+    totalMin: number | null,
+  ) => Promise<void>;
+  onReorderSubtasks: (ordered: ParsedSubtask[]) => Promise<void>;
   onShowInNote: () => void;
   onMoveToTomorrow: () => Promise<boolean>;
 }
@@ -1991,6 +2046,131 @@ function sanitizeProjectName(raw: string): string {
     .replace(/[^\w-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function fmtClockShort(totalMin: number): string {
+  const h24 = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
+  const ampm = h24 < 12 ? "a" : "p";
+  let h12 = h24 % 12;
+  if (h12 === 0) h12 = 12;
+  return m === 0
+    ? `${h12}${ampm}`
+    : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
+}
+
+function totalMinToHHMM(min: number): string {
+  const h = Math.floor(min / 60).toString().padStart(2, "0");
+  const m = (min % 60).toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function parseHHMM(value: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
+  return h * 60 + mm;
+}
+
+const TIME_PICKER_PRESETS_MIN: number[] = [
+  6 * 60, 7 * 60, 8 * 60, 9 * 60,
+  10 * 60, 11 * 60, 12 * 60, 13 * 60,
+  14 * 60, 15 * 60, 16 * 60, 17 * 60,
+  18 * 60, 19 * 60, 20 * 60, 21 * 60,
+];
+
+class TimePickerModal extends Modal {
+  private initialMin: number | null;
+  private onPick: (totalMin: number | null) => void;
+
+  constructor(
+    app: App,
+    opts: {
+      initialMin: number | null;
+      onPick: (totalMin: number | null) => void;
+    },
+  ) {
+    super(app);
+    this.initialMin = opts.initialMin;
+    this.onPick = opts.onPick;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-time-picker-modal");
+    this.titleEl.setText("Set time");
+    this.contentEl.empty();
+
+    const presets = this.contentEl.createDiv({ cls: "dp-time-picker-presets" });
+    TIME_PICKER_PRESETS_MIN.forEach((min) => {
+      const btn = presets.createEl("button", {
+        cls: "dp-time-picker-preset",
+        text: fmtClockShort(min),
+      });
+      btn.type = "button";
+      if (min === this.initialMin) btn.addClass("is-selected");
+      btn.addEventListener("click", () => {
+        this.onPick(min);
+        this.close();
+      });
+    });
+
+    const customLabel = this.contentEl.createDiv({
+      cls: "dp-prompt-step-label",
+      text: "Custom",
+    });
+    customLabel.setAttribute("aria-hidden", "true");
+
+    const customRow = this.contentEl.createDiv({
+      cls: "dp-time-picker-custom",
+    });
+    const input = customRow.createEl("input", {
+      type: "time",
+      cls: "dp-time-picker-input",
+    });
+    if (this.initialMin !== null) {
+      input.value = totalMinToHHMM(this.initialMin);
+    }
+    const submitCustom = (): void => {
+      const v = parseHHMM(input.value);
+      if (v === null) {
+        new Notice("Enter a valid time");
+        return;
+      }
+      this.onPick(v);
+      this.close();
+    };
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        submitCustom();
+      }
+    });
+
+    const actions = this.contentEl.createDiv({ cls: "dp-time-picker-actions" });
+    const clearBtn = actions.createEl("button", {
+      cls: "dp-time-picker-clear",
+      text: "Clear",
+    });
+    clearBtn.type = "button";
+    clearBtn.addEventListener("click", () => {
+      this.onPick(null);
+      this.close();
+    });
+    const saveBtn = actions.createEl("button", {
+      cls: "dp-time-picker-save mod-cta",
+      text: "Save",
+    });
+    saveBtn.type = "button";
+    saveBtn.addEventListener("click", submitCustom);
+
+    input.focus();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
 }
 
 class TaskEditModal extends Modal {
@@ -2159,23 +2339,77 @@ class TaskEditModal extends Modal {
       }
     });
 
-    const subLabel = this.contentEl.createDiv({
+    const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
+    const subLabel = subHeader.createDiv({
       cls: "dp-prompt-step-label",
       text: "Sub-tasks",
     });
     subLabel.setAttribute("aria-hidden", "true");
-    const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
+    const sortBtn = subHeader.createEl("button", {
+      cls: "dp-edit-subtask-sort",
+      text: "Sort by time",
+    });
+    sortBtn.type = "button";
 
-    const renderSubtask = (sub: ParsedSubtask): void => {
+    const list = this.contentEl.createDiv({ cls: "dp-edit-subtasks" });
+    // Local mutable state — the array order reflects the visual order; each
+    // sub keeps its original lineNumber as its file slot until a reorder is
+    // persisted, at which point we rewrite each sub's lineNumber to match.
+    const subs: ParsedSubtask[] = this.opts.subtasks.slice();
+    const prefixes = this.opts.prefixes;
+    const cleanBody = this.opts.cleanBody;
+    let dragSourceIdx: number | null = null;
+
+    const persistOrder = (): void => {
+      const slots = subs
+        .map((s) => s.lineNumber)
+        .slice()
+        .sort((a, b) => a - b);
+      const ordered = subs.slice();
+      void this.opts.onReorderSubtasks(ordered);
+      // Update each sub's lineNumber to its new slot so subsequent edits
+      // target the right line.
+      ordered.forEach((s, i) => {
+        s.lineNumber = slots[i];
+      });
+    };
+
+    const renderList = (): void => {
+      list.empty();
+      subs.forEach((sub, idx) => renderSubtask(sub, idx));
+    };
+
+    const renderSubtask = (sub: ParsedSubtask, idx: number): void => {
       let checked = sub.checked;
       const row = list.createDiv({ cls: "dp-edit-subtask" });
+      row.dataset.idx = String(idx);
       if (checked) row.addClass("is-done");
+
       const box = row.createSpan({ cls: "dp-edit-check" });
       if (checked) box.addClass("is-checked");
+
+      const timeChip = row.createSpan({ cls: "dp-edit-subtask-time" });
+      const renderTimeChip = (): void => {
+        const min = parseTime(sub.text, prefixes);
+        if (min === null) {
+          timeChip.setText("+ time");
+          timeChip.addClass("is-empty");
+        } else {
+          timeChip.setText(fmtClockShort(min));
+          timeChip.removeClass("is-empty");
+        }
+      };
+      renderTimeChip();
+
       const textEl = row.createSpan({
         cls: "dp-edit-subtask-text",
-        text: sub.text,
+        text: cleanBody(sub.text),
       });
+
+      const handle = row.createSpan({ cls: "dp-edit-subtask-handle" });
+      setIcon(handle, "grip-vertical");
+      handle.draggable = true;
+
       const toggleChecked = (): void => {
         checked = !checked;
         row.toggleClass("is-done", checked);
@@ -2186,13 +2420,33 @@ class TaskEditModal extends Modal {
         ev.stopPropagation();
         toggleChecked();
       });
+
+      timeChip.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const current = parseTime(sub.text, prefixes);
+        new TimePickerModal(this.app, {
+          initialMin: current,
+          onPick: (totalMin) => {
+            sub.rawLine =
+              totalMin === null
+                ? removeTimeTag(sub.rawLine, prefixes)
+                : setTimeTag(sub.rawLine, totalMin, prefixes);
+            // Re-extract body text so chip and inline edit stay coherent.
+            const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
+            if (m) sub.text = m[1];
+            renderTimeChip();
+            void this.opts.onSetSubtaskTime(sub, totalMin);
+          },
+        }).open();
+      });
+
       textEl.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const editor = row.createEl("input", {
           type: "text",
           cls: "dp-edit-subtask-text-input",
         });
-        editor.value = sub.text;
+        editor.value = cleanBody(sub.text);
         textEl.style.display = "none";
         editor.focus();
         editor.select();
@@ -2202,9 +2456,12 @@ class TaskEditModal extends Modal {
           done = true;
           const next = editor.value.trim();
           editor.remove();
-          if (commit && next && next !== sub.text) {
-            sub.text = next;
-            textEl.setText(next);
+          const before = cleanBody(sub.text);
+          if (commit && next && next !== before) {
+            sub.rawLine = setTaskTitle(sub.rawLine, next, prefixes);
+            const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
+            if (m) sub.text = m[1];
+            textEl.setText(cleanBody(sub.text));
             void this.opts.onEditSubtask(sub, next);
           }
           textEl.style.display = "";
@@ -2220,9 +2477,78 @@ class TaskEditModal extends Modal {
         });
         editor.addEventListener("blur", () => finish(true));
       });
+
+      handle.addEventListener("dragstart", (ev) => {
+        dragSourceIdx = idx;
+        row.addClass("is-dragging");
+        if (ev.dataTransfer) {
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", String(idx));
+          const rect = row.getBoundingClientRect();
+          ev.dataTransfer.setDragImage(
+            row,
+            ev.clientX - rect.left,
+            ev.clientY - rect.top,
+          );
+        }
+      });
+      handle.addEventListener("dragend", () => {
+        dragSourceIdx = null;
+        list
+          .querySelectorAll(".dp-edit-subtask")
+          .forEach((el) => {
+            el.classList.remove("is-dragging");
+            el.classList.remove("drop-above");
+            el.classList.remove("drop-below");
+          });
+      });
+
+      row.addEventListener("dragover", (ev) => {
+        if (dragSourceIdx === null || dragSourceIdx === idx) return;
+        ev.preventDefault();
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+        const rect = row.getBoundingClientRect();
+        const isAbove = ev.clientY < rect.top + rect.height / 2;
+        row.toggleClass("drop-above", isAbove);
+        row.toggleClass("drop-below", !isAbove);
+      });
+      row.addEventListener("dragleave", () => {
+        row.removeClass("drop-above");
+        row.removeClass("drop-below");
+      });
+      row.addEventListener("drop", (ev) => {
+        if (dragSourceIdx === null || dragSourceIdx === idx) return;
+        ev.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const isAbove = ev.clientY < rect.top + rect.height / 2;
+        const from = dragSourceIdx;
+        const moved = subs.splice(from, 1)[0];
+        let to = idx;
+        if (from < idx) to = idx - 1;
+        if (!isAbove) to += 1;
+        subs.splice(to, 0, moved);
+        dragSourceIdx = null;
+        renderList();
+        persistOrder();
+      });
     };
 
-    this.opts.subtasks.forEach(renderSubtask);
+    renderList();
+
+    sortBtn.addEventListener("click", () => {
+      // Stable sort: preserves relative order among subs without a time, and
+      // pushes them to the end.
+      subs.sort((a, b) => {
+        const ta = parseTime(a.text, prefixes);
+        const tb = parseTime(b.text, prefixes);
+        if (ta === null && tb === null) return 0;
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        return ta - tb;
+      });
+      renderList();
+      persistOrder();
+    });
 
     const addRow = this.contentEl.createDiv({ cls: "dp-edit-subtask-add" });
     const addInput = addRow.createEl("input", {
@@ -2244,7 +2570,8 @@ class TaskEditModal extends Modal {
       addInput.disabled = false;
       addBtn.disabled = false;
       if (sub) {
-        renderSubtask(sub);
+        subs.push(sub);
+        renderSubtask(sub, subs.length - 1);
         addInput.value = "";
       }
       addInput.focus();
