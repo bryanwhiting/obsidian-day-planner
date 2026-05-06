@@ -2244,43 +2244,76 @@
     right: 8px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
   }
 
-  .today-root .dp-pomo-exit,
-  .today-root .dp-pomo-popout {
+  .today-root .dp-pomo-iconbtn {
     background: transparent;
     border: none;
     color: var(--color-ink-muted);
     cursor: pointer;
     padding: 6px;
     border-radius: var(--radius-card);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .today-root .dp-pomo-exit:hover,
-  .today-root .dp-pomo-popout:hover {
+  .today-root .dp-pomo-iconbtn:hover {
     background: var(--color-surface-hover);
     color: var(--color-ink);
   }
 
-  .today-root .dp-popout-return {
-    align-self: flex-end;
-    margin-bottom: 6px;
-    padding: 4px 10px;
-    font-family: var(--font-sans);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-ink);
-    background: var(--color-paper);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-card);
-    cursor: pointer;
-    transition: border-color 120ms ease, color 120ms ease;
+  .today-root .dp-pomo-iconbtn .svg-icon {
+    width: 15px;
+    height: 15px;
   }
 
-  .today-root .dp-popout-return:hover {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+  .today-root .dp-popout-btn .svg-icon,
+  .today-root .dp-pomo-resume .svg-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .today-root .dp-pomo-hints {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    padding: 24px 16px 16px;
+    opacity: 0;
+    transition: opacity 200ms ease;
+    color: var(--color-ink-muted);
+    font-size: 12px;
+    pointer-events: auto;
+  }
+
+  .today-root .dp-pomo-hints:hover {
+    opacity: 1;
+  }
+
+  .today-root .dp-pomo-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .today-root .dp-pomo-kbd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-tab);
+    color: var(--color-ink);
+    background: var(--color-paper);
+  }
+
+  .today-root .dp-pomo-hint-label {
+    color: var(--color-ink-muted);
   }
 
   .today-root .dp-pomo-phase {

@@ -1999,6 +1999,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.hasRendered = false;
     this.pomodoroState = null;
     this.pomodoroTickHandle = null;
+    this.pomodoroHidden = false;
+    this.pomodoroSubtaskHistory = [];
     this.plugin = plugin;
   }
   getViewType() {
@@ -2036,14 +2038,121 @@ var TodayView = class extends import_obsidian4.ItemView {
   handleKeydown(ev) {
     if (ev.metaKey || ev.ctrlKey || ev.altKey)
       return;
-    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight")
-      return;
     const t = ev.target;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
+      return;
+    if (this.pomodoroState && !this.pomodoroHidden) {
+      if (ev.key === "x") {
+        ev.preventDefault();
+        this.exitPomodoro();
+        return;
+      }
+      if (ev.key === "p") {
+        ev.preventDefault();
+        if (this.isPopout())
+          void this.returnLeafToMain();
+        else
+          void this.popOutLeaf();
+        return;
+      }
+      if (ev.key === " ") {
+        ev.preventDefault();
+        this.togglePomodoroPause();
+        return;
+      }
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        void this.advancePomodoroComplete();
+        return;
+      }
+      if (ev.key === "z") {
+        ev.preventDefault();
+        void this.undoLastSubtask();
+        return;
+      }
+    }
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight")
       return;
     ev.preventDefault();
     const delta = ev.key === "ArrowLeft" ? -1 : 1;
     void this.navigateTo(addDays(this.selectedDate, delta));
+  }
+  togglePomodoroPause() {
+    var _a;
+    const state = this.pomodoroState;
+    if (!state)
+      return;
+    const workMs = this.plugin.settings.pomodoroWorkMin * 6e4;
+    const breakMs = this.plugin.settings.pomodoroBreakMin * 6e4;
+    const phaseMs = state.phase === "work" ? workMs : breakMs;
+    const expired = state.paused && state.pausedRemainingMs !== null && state.pausedRemainingMs <= 0;
+    if (expired) {
+      state.phase = state.phase === "work" ? "rest" : "work";
+      state.startedAt = Date.now();
+      state.paused = false;
+      state.pausedRemainingMs = null;
+    } else if (state.paused) {
+      const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
+      state.startedAt = Date.now() - (phaseMs - remain);
+      state.paused = false;
+      state.pausedRemainingMs = null;
+    } else {
+      const elapsed = Date.now() - state.startedAt;
+      state.paused = true;
+      state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
+    }
+    this.scheduleRender();
+  }
+  // Enter-key behavior: check off the next unfinished subtask if there is one,
+  // otherwise mark the parent task done and exit focus mode.
+  async advancePomodoroComplete() {
+    const state = this.pomodoroState;
+    if (!state)
+      return;
+    const file = this.app.vault.getAbstractFileByPath(state.filePath);
+    if (!(file instanceof import_obsidian4.TFile))
+      return;
+    const content = await this.app.vault.read(file);
+    const tasks = parseFileTasks(
+      file.path,
+      content,
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin
+    );
+    let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
+    if (!task || this.cleanBody(task.body) !== state.taskBodySnapshot) {
+      task = tasks.find(
+        (t) => this.cleanBody(t.body) === state.taskBodySnapshot
+      );
+      if (task)
+        state.taskLineNumber = task.lineNumber;
+    }
+    if (!task) {
+      this.exitPomodoro();
+      return;
+    }
+    const nextSub = task.subtasks.find((s) => !s.checked);
+    if (nextSub) {
+      this.pomodoroSubtaskHistory.push(nextSub.lineNumber);
+      await this.applyLineChecked(file, nextSub.lineNumber, true);
+      this.scheduleRender();
+      return;
+    }
+    await this.applyLineChecked(file, task.lineNumber, true);
+    this.exitPomodoro();
+  }
+  async undoLastSubtask() {
+    const lineNumber = this.pomodoroSubtaskHistory.pop();
+    if (lineNumber === void 0)
+      return;
+    const state = this.pomodoroState;
+    if (!state)
+      return;
+    const file = this.app.vault.getAbstractFileByPath(state.filePath);
+    if (!(file instanceof import_obsidian4.TFile))
+      return;
+    await this.applyLineChecked(file, lineNumber, false);
+    this.scheduleRender();
   }
   async onClose() {
     if (this.rerenderTimer !== null)
@@ -2063,7 +2172,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   async render() {
     const root = this.containerEl.children[1];
-    if (this.pomodoroState) {
+    if (this.pomodoroState && !this.pomodoroHidden) {
       const handled = await this.renderPomodoro(root);
       if (handled)
         return;
@@ -2107,7 +2216,6 @@ var TodayView = class extends import_obsidian4.ItemView {
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
     const activeFile = this.app.workspace.getActiveFile();
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
-    this.renderReturnControl(root);
     this.renderDateNav(root);
     const colorMap = resolveProjectColors(
       tasks.filter(
@@ -2148,8 +2256,6 @@ var TodayView = class extends import_obsidian4.ItemView {
       attr: { "aria-label": "Jump to today" }
     });
     (0, import_obsidian4.setIcon)(today, "sun");
-    const label = nav.createDiv({ cls: "dp-datenav-label" });
-    label.textContent = this.formatDateLabel(this.selectedDate);
     const calBtn = nav.createEl("button", {
       cls: "dp-cal-btn",
       attr: { "aria-label": "Toggle calendar" }
@@ -2157,6 +2263,48 @@ var TodayView = class extends import_obsidian4.ItemView {
     (0, import_obsidian4.setIcon)(calBtn, "calendar");
     if (this.calendarOpen)
       calBtn.addClass("is-active");
+    const label = nav.createDiv({ cls: "dp-datenav-label" });
+    label.textContent = this.formatDateLabel(this.selectedDate);
+    if (this.pomodoroState && this.pomodoroHidden) {
+      const focusBtn = nav.createEl("button", {
+        cls: "dp-nav-btn dp-pomo-resume",
+        attr: { "aria-label": "Back to focus" }
+      });
+      (0, import_obsidian4.setIcon)(focusBtn, "timer");
+      focusBtn.addEventListener("click", () => {
+        this.pomodoroHidden = false;
+        this.scheduleRender();
+      });
+    }
+    const collapseBtn = nav.createEl("button", {
+      cls: "dp-nav-btn dp-summaries-toggle",
+      attr: {
+        "aria-label": this.summariesCollapsed ? "Expand summaries" : "Collapse summaries",
+        "aria-expanded": this.summariesCollapsed ? "false" : "true"
+      }
+    });
+    (0, import_obsidian4.setIcon)(
+      collapseBtn,
+      this.summariesCollapsed ? "chevron-down" : "chevron-up"
+    );
+    collapseBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      this.summariesCollapsed = !this.summariesCollapsed;
+      this.scheduleRender();
+    });
+    const popoutBtn = nav.createEl("button", {
+      cls: "dp-nav-btn dp-popout-btn",
+      attr: {
+        "aria-label": this.isPopout() ? "Return to main window" : "Open in new window"
+      }
+    });
+    (0, import_obsidian4.setIcon)(popoutBtn, this.isPopout() ? "monitor" : "picture-in-picture-2");
+    popoutBtn.addEventListener("click", () => {
+      if (this.isPopout())
+        void this.returnLeafToMain();
+      else
+        void this.popOutLeaf();
+    });
     const next = nav.createEl("button", {
       cls: "dp-nav-btn dp-nav-arrow",
       attr: { "aria-label": "Next day" }
@@ -2270,24 +2418,6 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (this.summariesCollapsed)
       section.addClass("is-summaries-collapsed");
     const header = section.createDiv({ cls: "dp-header" });
-    if (isPrimary) {
-      const collapseBtn = header.createEl("button", {
-        cls: "dp-summaries-toggle",
-        attr: {
-          "aria-label": this.summariesCollapsed ? "Expand summaries" : "Collapse summaries",
-          "aria-expanded": this.summariesCollapsed ? "false" : "true"
-        }
-      });
-      (0, import_obsidian4.setIcon)(
-        collapseBtn,
-        this.summariesCollapsed ? "chevron-down" : "chevron-up"
-      );
-      collapseBtn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        this.summariesCollapsed = !this.summariesCollapsed;
-        this.scheduleRender();
-      });
-    }
     if (!isPrimary && title)
       header.createDiv({ cls: "dp-title", text: title });
     if (subtitle || openActiveTarget) {
@@ -3559,8 +3689,11 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.app.workspace.revealLeaf(target);
     if (target.view instanceof TodayView) {
       target.view.selectedDate = selectedDate;
-      if (pomo)
+      if (pomo) {
         target.view.adoptPomodoroState(pomo);
+        target.view.pomodoroHidden = this.pomodoroHidden;
+        target.view.pomodoroSubtaskHistory = [...this.pomodoroSubtaskHistory];
+      }
       target.view.scheduleRender();
     }
     if (this.pomodoroTickHandle !== null) {
@@ -3582,16 +3715,6 @@ var TodayView = class extends import_obsidian4.ItemView {
       this.registerInterval(this.pomodoroTickHandle);
     }
   }
-  renderReturnControl(parent) {
-    if (!this.isPopout())
-      return;
-    const btn = parent.createEl("button", {
-      cls: "dp-popout-return",
-      text: "Return to main"
-    });
-    btn.type = "button";
-    btn.addEventListener("click", () => void this.returnLeafToMain());
-  }
   enterPomodoro(file, task) {
     this.pomodoroState = {
       filePath: file.path,
@@ -3602,6 +3725,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       paused: !this.plugin.settings.pomodoroAutoStart,
       pausedRemainingMs: this.plugin.settings.pomodoroAutoStart ? null : this.plugin.settings.pomodoroWorkMin * 6e4
     };
+    this.pomodoroHidden = false;
+    this.pomodoroSubtaskHistory = [];
     if (this.pomodoroTickHandle === null) {
       this.pomodoroTickHandle = window.setInterval(
         () => this.scheduleRender(),
@@ -3613,6 +3738,8 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   exitPomodoro() {
     this.pomodoroState = null;
+    this.pomodoroHidden = false;
+    this.pomodoroSubtaskHistory = [];
     if (this.pomodoroTickHandle !== null) {
       window.clearInterval(this.pomodoroTickHandle);
       this.pomodoroTickHandle = null;
@@ -3626,6 +3753,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   // Returns true if the pomodoro UI handled the render, false if the caller
   // should fall through to the normal timeline render (task gone, etc.).
   async renderPomodoro(root) {
+    var _a, _b;
     const state = this.pomodoroState;
     if (!state)
       return false;
@@ -3682,23 +3810,30 @@ var TodayView = class extends import_obsidian4.ItemView {
       root.setAttribute("tabindex", "-1");
     const wrap = root.createDiv({ cls: "dp-pomo" });
     const topBar = wrap.createDiv({ cls: "dp-pomo-topbar" });
-    if (this.isPopout()) {
-      const back = topBar.createEl("button", {
-        cls: "dp-popout-return",
-        text: "Return to main"
-      });
-      back.type = "button";
-      back.addEventListener("click", () => void this.returnLeafToMain());
-    } else {
-      const popout = topBar.createEl("button", {
-        cls: "dp-pomo-popout",
-        attr: { "aria-label": "Open in new window" }
-      });
-      (0, import_obsidian4.setIcon)(popout, "picture-in-picture-2");
-      popout.addEventListener("click", () => void this.popOutLeaf());
-    }
+    const showTimeline = topBar.createEl("button", {
+      cls: "dp-pomo-iconbtn",
+      attr: { "aria-label": "Show timeline" }
+    });
+    (0, import_obsidian4.setIcon)(showTimeline, "list");
+    showTimeline.addEventListener("click", () => {
+      this.pomodoroHidden = true;
+      this.scheduleRender();
+    });
+    const popout = topBar.createEl("button", {
+      cls: "dp-pomo-iconbtn",
+      attr: {
+        "aria-label": this.isPopout() ? "Return to main window" : "Open in new window"
+      }
+    });
+    (0, import_obsidian4.setIcon)(popout, this.isPopout() ? "monitor" : "picture-in-picture-2");
+    popout.addEventListener("click", () => {
+      if (this.isPopout())
+        void this.returnLeafToMain();
+      else
+        void this.popOutLeaf();
+    });
     const exit = topBar.createEl("button", {
-      cls: "dp-pomo-exit",
+      cls: "dp-pomo-iconbtn",
       attr: { "aria-label": "Exit focus mode" }
     });
     (0, import_obsidian4.setIcon)(exit, "x");
@@ -3730,6 +3865,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         text: this.cleanBody(nextSub.text) || "(untitled)"
       });
       card.addEventListener("click", async () => {
+        this.pomodoroSubtaskHistory.push(nextSub.lineNumber);
         await this.applyLineChecked(file, nextSub.lineNumber, true);
         this.scheduleRender();
       });
@@ -3747,14 +3883,14 @@ var TodayView = class extends import_obsidian4.ItemView {
     });
     pauseBtn.type = "button";
     pauseBtn.addEventListener("click", () => {
-      var _a;
+      var _a2;
       if (expired) {
         state.phase = state.phase === "work" ? "rest" : "work";
         state.startedAt = Date.now();
         state.paused = false;
         state.pausedRemainingMs = null;
       } else if (state.paused) {
-        const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
+        const remain = (_a2 = state.pausedRemainingMs) != null ? _a2 : phaseMs;
         state.startedAt = Date.now() - (phaseMs - remain);
         state.paused = false;
         state.pausedRemainingMs = null;
@@ -3775,6 +3911,21 @@ var TodayView = class extends import_obsidian4.ItemView {
       await this.applyLineChecked(file, task.lineNumber, true);
       this.exitPomodoro();
     });
+    const hints = wrap.createDiv({ cls: "dp-pomo-hints" });
+    const addHint = (key, label) => {
+      const item = hints.createSpan({ cls: "dp-pomo-hint" });
+      item.createEl("kbd", { cls: "dp-pomo-kbd", text: key });
+      item.createSpan({ cls: "dp-pomo-hint-label", text: label });
+    };
+    addHint("space", state.paused ? "start" : "pause");
+    addHint("enter", nextSub ? "done sub-task" : "complete");
+    if (this.pomodoroSubtaskHistory.length > 0)
+      addHint("z", "undo");
+    addHint("p", this.isPopout() ? "return" : "pop out");
+    addHint("x", "close");
+    if (((_b = (_a = root.ownerDocument) == null ? void 0 : _a.activeElement) == null ? void 0 : _b.tagName) !== "INPUT") {
+      root.focus({ preventScroll: true });
+    }
     return true;
   }
   async applySubtaskText(file, lineNumber, newText) {
