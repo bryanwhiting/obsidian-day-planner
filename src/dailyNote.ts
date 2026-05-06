@@ -259,33 +259,49 @@ const MONTH_NAMES = [
   "july", "august", "september", "october", "november", "december",
 ];
 
-// Resolves a month-name query (e.g. "apr", "april", "may 5") to candidate
-// suggestions. Without a day, defaults day=1. With a day, validates against
-// the month's length. Year is rolled forward when the (year, month, day)
-// would land before today — so "@apr 5" on 2026-05-06 yields 2027-04-05.
+// Resolves a month-name query (e.g. "apr", "april", "may 5") to two candidate
+// suggestions per matching month: the upcoming occurrence (>= today) and the
+// most recent past occurrence (< today), in that order. The year is included
+// in the keyword so the picker can show "apr 5 2027" vs "apr 5 2026" as
+// distinct rows. Without a day in the query, day defaults to 1. Years span
+// today ± 4 so a leap-day query like "feb 29" still finds candidates.
 function buildMonthSuggestions(q: string, today: Date): DateSuggestion[] {
   const m = q.match(/^([a-z]+)(?:\s+(\d{1,2}))?$/);
   if (!m) return [];
   const monthQ = m[1];
   const dayStr = m[2];
   const out: DateSuggestion[] = [];
-  const ref = startOfDay(today);
+  const ref = startOfDay(today).getTime();
   for (const name of MONTH_NAMES) {
     if (!name.startsWith(monthQ)) continue;
     const monthIdx = MONTH_NAMES.indexOf(name);
     const day = dayStr ? parseInt(dayStr, 10) : 1;
-    let chosen: Date | null = null;
-    for (const yr of [today.getFullYear(), today.getFullYear() + 1]) {
+    let future: Date | null = null;
+    let past: Date | null = null;
+    for (let yr = today.getFullYear() - 4; yr <= today.getFullYear() + 4; yr++) {
       const daysInMonth = new Date(yr, monthIdx + 1, 0).getDate();
       if (day < 1 || day > daysInMonth) continue;
       const candidate = new Date(yr, monthIdx, day);
-      if (startOfDay(candidate).getTime() >= ref.getTime()) {
-        chosen = candidate;
-        break;
+      const t = startOfDay(candidate).getTime();
+      if (t >= ref) {
+        if (!future) future = candidate;
+      } else {
+        past = candidate;
       }
     }
-    if (!chosen) continue;
-    out.push({ keyword: `${name.slice(0, 3)} ${day}`, date: chosen });
+    const slug = name.slice(0, 3);
+    if (future) {
+      out.push({
+        keyword: `${slug} ${day} ${future.getFullYear()}`,
+        date: future,
+      });
+    }
+    if (past) {
+      out.push({
+        keyword: `${slug} ${day} ${past.getFullYear()}`,
+        date: past,
+      });
+    }
   }
   return out;
 }

@@ -2421,26 +2421,40 @@ function buildMonthSuggestions(q, today) {
   const monthQ = m[1];
   const dayStr = m[2];
   const out = [];
-  const ref = startOfDay(today);
+  const ref = startOfDay(today).getTime();
   for (const name of MONTH_NAMES) {
     if (!name.startsWith(monthQ))
       continue;
     const monthIdx = MONTH_NAMES.indexOf(name);
     const day = dayStr ? parseInt(dayStr, 10) : 1;
-    let chosen = null;
-    for (const yr of [today.getFullYear(), today.getFullYear() + 1]) {
+    let future = null;
+    let past = null;
+    for (let yr = today.getFullYear() - 4; yr <= today.getFullYear() + 4; yr++) {
       const daysInMonth = new Date(yr, monthIdx + 1, 0).getDate();
       if (day < 1 || day > daysInMonth)
         continue;
       const candidate = new Date(yr, monthIdx, day);
-      if (startOfDay(candidate).getTime() >= ref.getTime()) {
-        chosen = candidate;
-        break;
+      const t = startOfDay(candidate).getTime();
+      if (t >= ref) {
+        if (!future)
+          future = candidate;
+      } else {
+        past = candidate;
       }
     }
-    if (!chosen)
-      continue;
-    out.push({ keyword: `${name.slice(0, 3)} ${day}`, date: chosen });
+    const slug = name.slice(0, 3);
+    if (future) {
+      out.push({
+        keyword: `${slug} ${day} ${future.getFullYear()}`,
+        date: future
+      });
+    }
+    if (past) {
+      out.push({
+        keyword: `${slug} ${day} ${past.getFullYear()}`,
+        date: past
+      });
+    }
   }
   return out;
 }
