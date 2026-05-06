@@ -2040,7 +2040,8 @@ export class TodayView extends ItemView {
     }
 
     const existingId = parseTaskId(current.body, prefixes);
-    const taskId = existingId ?? generateTaskId();
+    const taskId =
+      existingId ?? generateTaskId(this.plugin.settings.taskIdLength);
 
     const orderRe = new RegExp(
       `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`,

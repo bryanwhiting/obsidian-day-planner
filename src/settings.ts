@@ -44,6 +44,7 @@ export interface TodaySettings {
   pomodoroAutoStart: boolean;
   pomodoroAutoCycle: boolean;
   pomodoroAutoReturn: boolean;
+  taskIdLength: number;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -71,6 +72,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   pomodoroAutoStart: true,
   pomodoroAutoCycle: true,
   pomodoroAutoReturn: true,
+  taskIdLength: 4,
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -311,6 +313,25 @@ export class TodaySettingTab extends PluginSettingTab {
               this.plugin.settings.prefixes.taskId = v;
               await this.plugin.saveSettings();
             }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Task ID length")
+      .setDesc(
+        "Number of alphanumeric characters in IDs minted by Migrate incomplete. Shorter is easier to scan; longer reduces collision odds. Existing IDs in your notes are still recognized regardless of length.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.taskIdLength.toString())
+          .onChange(async (v) => {
+            this.plugin.settings.taskIdLength = clampInt(
+              v,
+              2,
+              12,
+              this.plugin.settings.taskIdLength,
+            );
+            await this.plugin.saveSettings();
           }),
       );
   }
@@ -971,7 +992,7 @@ function buildTaskIdDesc(): DocumentFragment {
     makeCode("tid"),
     ". When you migrate a task's incomplete sub-tasks to the next day from the edit modal (",
     makeCode("Move to tomorrow → Migrate incomplete"),
-    "), the plugin marks the original parent as completed, generates a 6-character ID, and stamps ",
+    "), the plugin marks the original parent as completed, generates a short alphanumeric ID (length configurable below), and stamps ",
     makeCode("#tid/<id>"),
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
     makeCode("#tid/a3xK9p"),

@@ -76,7 +76,7 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g",
     ),
-    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]{6})\\b`),
+    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`),
   };
 }
 
@@ -382,11 +382,12 @@ export function setTaskIdTag(
   return appendTag(rawLine, newTag);
 }
 
-export function generateTaskId(): string {
+export function generateTaskId(length: number): string {
   const chars =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const len = Math.max(1, Math.floor(length));
   let id = "";
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < len; i++) {
     id += chars[Math.floor(Math.random() * chars.length)];
   }
   return id;

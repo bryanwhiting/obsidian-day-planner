@@ -358,7 +358,7 @@ function buildTagRegexes(prefixes) {
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g"
     ),
-    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]{6})\\b`)
+    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`)
   };
 }
 function parseExercises(content, prefixes) {
@@ -598,10 +598,11 @@ function setTaskIdTag(rawLine, id, prefixes) {
     return rawLine.replace(re, newTag);
   return appendTag(rawLine, newTag);
 }
-function generateTaskId() {
+function generateTaskId(length) {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const len = Math.max(1, Math.floor(length));
   let id = "";
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < len; i++) {
     id += chars[Math.floor(Math.random() * chars.length)];
   }
   return id;
@@ -1039,7 +1040,8 @@ var DEFAULT_SETTINGS = {
   pomodoroBreakMin: 5,
   pomodoroAutoStart: true,
   pomodoroAutoCycle: true,
-  pomodoroAutoReturn: true
+  pomodoroAutoReturn: true,
+  taskIdLength: 4
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1219,6 +1221,19 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           this.plugin.settings.prefixes.taskId = v;
           await this.plugin.saveSettings();
         }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Task ID length").setDesc(
+      "Number of alphanumeric characters in IDs minted by Migrate incomplete. Shorter is easier to scan; longer reduces collision odds. Existing IDs in your notes are still recognized regardless of length."
+    ).addText(
+      (t) => t.setValue(this.plugin.settings.taskIdLength.toString()).onChange(async (v) => {
+        this.plugin.settings.taskIdLength = clampInt(
+          v,
+          2,
+          12,
+          this.plugin.settings.taskIdLength
+        );
+        await this.plugin.saveSettings();
       })
     );
   }
@@ -1722,7 +1737,7 @@ function buildTaskIdDesc() {
     makeCode("tid"),
     ". When you migrate a task's incomplete sub-tasks to the next day from the edit modal (",
     makeCode("Move to tomorrow \u2192 Migrate incomplete"),
-    "), the plugin marks the original parent as completed, generates a 6-character ID, and stamps ",
+    "), the plugin marks the original parent as completed, generates a short alphanumeric ID (length configurable below), and stamps ",
     makeCode("#tid/<id>"),
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
     makeCode("#tid/a3xK9p"),
@@ -3722,7 +3737,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       return false;
     }
     const existingId = parseTaskId(current.body, prefixes);
-    const taskId = existingId != null ? existingId : generateTaskId();
+    const taskId = existingId != null ? existingId : generateTaskId(this.plugin.settings.taskIdLength);
     const orderRe = new RegExp(
       `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`
     );
