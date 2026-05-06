@@ -2336,9 +2336,17 @@ export class TodayView extends ItemView {
         this.scheduleRender();
       });
     } else if (task.subtasks.length > 0) {
-      wrap.createDiv({
-        cls: "dp-pomo-subtask-empty",
-        text: "All sub-tasks done.",
+      const addBtn = wrap.createEl("button", {
+        cls: "dp-pomo-subtask-add",
+        text: "+ Add sub-task",
+      });
+      addBtn.type = "button";
+      addBtn.addEventListener("click", () => {
+        new SubtaskQuickAddModal(this.app, async (text) => {
+          const sub = await this.appendSubtask(file, task, text);
+          if (sub) this.scheduleRender();
+          return sub !== null;
+        }).open();
       });
     }
 
@@ -3236,6 +3244,59 @@ class TaskEditModal extends Modal {
       input.focus();
       input.select();
     }, 0);
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+// Minimal one-input modal for adding a sub-task from the pomodoro view.
+// Enter submits and clears the field so multiple sub-tasks can be added in
+// a single session; Esc / blur close the modal.
+class SubtaskQuickAddModal extends Modal {
+  private onSubmit: (text: string) => Promise<boolean>;
+
+  constructor(app: App, onSubmit: (text: string) => Promise<boolean>) {
+    super(app);
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-title-modal");
+    this.titleEl.setText("Add sub-task");
+    this.contentEl.empty();
+
+    const input = this.contentEl.createEl("input", {
+      type: "text",
+      cls: "dp-title-input",
+      attr: { placeholder: "New sub-task…" },
+    });
+
+    let submitting = false;
+    const submit = async (): Promise<void> => {
+      if (submitting) return;
+      const text = input.value.trim();
+      if (!text) return;
+      submitting = true;
+      input.disabled = true;
+      const ok = await this.onSubmit(text);
+      input.disabled = false;
+      submitting = false;
+      if (ok) {
+        input.value = "";
+        input.focus();
+      }
+    };
+
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        void submit();
+      }
+    });
+
+    window.setTimeout(() => input.focus(), 0);
   }
 
   onClose(): void {

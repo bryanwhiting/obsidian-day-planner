@@ -2397,10 +2397,22 @@
     text-align: left;
   }
 
-  .today-root .dp-pomo-subtask-empty {
+  .today-root .dp-pomo-subtask-add {
+    background: transparent;
+    border: 1px dashed var(--color-hairline);
+    border-radius: var(--radius-card);
+    padding: 10px 16px;
+    font-family: var(--font-sans);
     font-size: 13px;
-    color: var(--color-ink-faint);
-    font-style: italic;
+    color: var(--color-ink-muted);
+    cursor: pointer;
+    transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+  }
+
+  .today-root .dp-pomo-subtask-add:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-surface-hover);
   }
 
   .today-root .dp-pomo-actions {

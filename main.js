@@ -3938,9 +3938,18 @@ var TodayView = class extends import_obsidian4.ItemView {
         this.scheduleRender();
       });
     } else if (task.subtasks.length > 0) {
-      wrap.createDiv({
-        cls: "dp-pomo-subtask-empty",
-        text: "All sub-tasks done."
+      const addBtn = wrap.createEl("button", {
+        cls: "dp-pomo-subtask-add",
+        text: "+ Add sub-task"
+      });
+      addBtn.type = "button";
+      addBtn.addEventListener("click", () => {
+        new SubtaskQuickAddModal(this.app, async (text) => {
+          const sub = await this.appendSubtask(file, task, text);
+          if (sub)
+            this.scheduleRender();
+          return sub !== null;
+        }).open();
       });
     }
     const actions = wrap.createDiv({ cls: "dp-pomo-actions" });
@@ -4663,6 +4672,49 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       input.focus();
       input.select();
     }, 0);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var SubtaskQuickAddModal = class extends import_obsidian4.Modal {
+  constructor(app, onSubmit) {
+    super(app);
+    this.onSubmit = onSubmit;
+  }
+  onOpen() {
+    this.modalEl.addClass("dp-title-modal");
+    this.titleEl.setText("Add sub-task");
+    this.contentEl.empty();
+    const input = this.contentEl.createEl("input", {
+      type: "text",
+      cls: "dp-title-input",
+      attr: { placeholder: "New sub-task\u2026" }
+    });
+    let submitting = false;
+    const submit = async () => {
+      if (submitting)
+        return;
+      const text = input.value.trim();
+      if (!text)
+        return;
+      submitting = true;
+      input.disabled = true;
+      const ok = await this.onSubmit(text);
+      input.disabled = false;
+      submitting = false;
+      if (ok) {
+        input.value = "";
+        input.focus();
+      }
+    };
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        void submit();
+      }
+    });
+    window.setTimeout(() => input.focus(), 0);
   }
   onClose() {
     this.contentEl.empty();
