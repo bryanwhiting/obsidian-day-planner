@@ -6394,7 +6394,8 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       });
     } else {
       const grid = sectionEl.createDiv({ cls: "dp-heatmap-grid-rows" });
-      grid.style.gridTemplateColumns = `auto repeat(${section.buckets.length}, var(--dp-heatmap-cell))`;
+      const cellCols = section.buckets.map(() => "14px").join(" ");
+      grid.style.gridTemplateColumns = `140px ${cellCols}`;
       grid.createDiv({ cls: "dp-heatmap-corner" });
       for (const b of section.buckets) {
         const labelEl = grid.createDiv({
@@ -6429,21 +6430,22 @@ ${cell.checkedCount} ${word}`;
     const totals = sectionEl.createDiv({ cls: "dp-heatmap-totals" });
     totals.createSpan({
       cls: "dp-heatmap-total-reps",
-      text: `${section.totalReps.toLocaleString()} reps`
+      text: section.totalReps.toLocaleString()
     });
+    totals.appendText(" reps");
     if (section.exerciseTotals.size > 0) {
-      const breakdown = sectionEl.createDiv({ cls: "dp-heatmap-breakdown" });
+      totals.createSpan({ cls: "dp-heatmap-sep", text: " \u2022 " });
       const sorted = Array.from(section.exerciseTotals.entries()).sort(
         (a, b) => b[1] - a[1]
       );
       sorted.forEach(([name, reps], idx) => {
         if (idx > 0) {
-          breakdown.createSpan({
+          totals.createSpan({
             cls: "dp-heatmap-breakdown-sep",
             text: " \xB7 "
           });
         }
-        const item = breakdown.createSpan({ cls: "dp-heatmap-breakdown-item" });
+        const item = totals.createSpan({ cls: "dp-heatmap-breakdown-item" });
         item.createSpan({ cls: "dp-heatmap-breakdown-name", text: name });
         item.appendText(" ");
         item.createSpan({

@@ -323,8 +323,14 @@ export class HabitsStatsView extends ItemView {
         text: `No ${section.name.toLowerCase()} habits.`,
       });
     } else {
+      // Grid uses explicit fixed widths for the label column and each cell
+      // track so the layout is predictable across browsers and doesn't get
+      // distorted by the parent's flex sizing. Inline-grid keeps the grid's
+      // intrinsic width so it doesn't stretch into the available space and
+      // push cells around on wide panes.
       const grid = sectionEl.createDiv({ cls: "dp-heatmap-grid-rows" });
-      grid.style.gridTemplateColumns = `auto repeat(${section.buckets.length}, var(--dp-heatmap-cell))`;
+      const cellCols = section.buckets.map(() => "14px").join(" ");
+      grid.style.gridTemplateColumns = `140px ${cellCols}`;
 
       // Header row: empty corner + bucket labels.
       grid.createDiv({ cls: "dp-heatmap-corner" });
@@ -364,26 +370,29 @@ export class HabitsStatsView extends ItemView {
       }
     }
 
-    // Section totals: reps + per-exercise breakdown.
+    // Section totals on a single line: `675 • Push-ups 250 · Sit-ups 225 · …`.
+    // Total reps first, then a `•` separator, then the per-exercise
+    // breakdown (sorted by reps descending).
     const totals = sectionEl.createDiv({ cls: "dp-heatmap-totals" });
     totals.createSpan({
       cls: "dp-heatmap-total-reps",
-      text: `${section.totalReps.toLocaleString()} reps`,
+      text: section.totalReps.toLocaleString(),
     });
+    totals.appendText(" reps");
 
     if (section.exerciseTotals.size > 0) {
-      const breakdown = sectionEl.createDiv({ cls: "dp-heatmap-breakdown" });
+      totals.createSpan({ cls: "dp-heatmap-sep", text: " • " });
       const sorted = Array.from(section.exerciseTotals.entries()).sort(
         (a, b) => b[1] - a[1],
       );
       sorted.forEach(([name, reps], idx) => {
         if (idx > 0) {
-          breakdown.createSpan({
+          totals.createSpan({
             cls: "dp-heatmap-breakdown-sep",
             text: " · ",
           });
         }
-        const item = breakdown.createSpan({ cls: "dp-heatmap-breakdown-item" });
+        const item = totals.createSpan({ cls: "dp-heatmap-breakdown-item" });
         item.createSpan({ cls: "dp-heatmap-breakdown-name", text: name });
         item.appendText(" ");
         item.createSpan({

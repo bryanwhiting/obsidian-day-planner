@@ -528,6 +528,13 @@
     gap: 6px;
   }
 
+  /* Hairline divider between adjacent period sections (Day → Week → Month). */
+  .dp-heatmap-section + .dp-heatmap-section {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--color-hairline);
+  }
+
   .dp-heatmap-row-title {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -553,21 +560,24 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* GitHub-style stacked grid: one row per habit, cells across time. The
-   * grid-template-columns is set inline (auto + N fixed-width tracks). The
-   * cell size lives on a custom property so layouts can tune density. */
+  /* GitHub-style stacked grid: one row per habit, cells across time.
+   * `inline-grid` keeps the grid's intrinsic content width so it doesn't
+   * stretch into the available space (which previously pushed cells to the
+   * right edge of wide panes). `grid-template-columns` is set inline as
+   * literal `140px <14px tracks…>` so the layout is fully deterministic and
+   * the column widths don't depend on a CSS custom property resolving in
+   * inline style. The label column is fixed at 140px with overflow-ellipsis
+   * so cells across all rows align perfectly. */
   .dp-heatmap-grid-rows {
-    --dp-heatmap-cell: 14px;
-    display: grid;
+    display: inline-grid;
     column-gap: 3px;
     row-gap: 3px;
-    overflow-x: auto;
     align-items: center;
   }
 
   .dp-heatmap-corner {
     /* Empty top-left intersection between the column-label row and the
-     * habit-label column. */
+     * habit-label column. Sized by the grid track. */
   }
 
   .dp-heatmap-col-label {
@@ -579,6 +589,10 @@
     white-space: nowrap;
     padding-bottom: 2px;
     cursor: default;
+    /* Labels can be wider than 14px (e.g. week starts "5/3" or "12/19").
+     * Allow them to overflow visually into adjacent tracks rather than
+     * truncating mid-digit. */
+    overflow: visible;
   }
 
   .dp-heatmap-col-label.is-current {
@@ -592,20 +606,26 @@
     color: var(--color-ink);
     padding-right: 10px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     display: flex;
     align-items: center;
     gap: 6px;
     cursor: default;
+    min-width: 0;
   }
 
   .dp-heatmap-habit-name {
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .dp-heatmap-habit-summary {
     font-size: 9.5px;
     color: var(--color-ink-faint);
     font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
   }
 
   .dp-heatmap-no-habits {
@@ -621,8 +641,8 @@
    * Saturations skew strong from the start (q1 = 50%) since habit data is
    * sparse and a single completion should still pop. */
   .dp-heatmap-cell {
-    width: var(--dp-heatmap-cell, 14px);
-    height: var(--dp-heatmap-cell, 14px);
+    width: 14px;
+    height: 14px;
     border-radius: 3px;
     background-color: var(--color-paper-2);
     border: 1px solid var(--color-hairline);
@@ -665,34 +685,23 @@
     border-color: var(--color-accent);
   }
 
+  /* Single line per section: `675 reps • Push-ups 250 · Sit-ups 225 · …`. */
   .dp-heatmap-totals {
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--color-ink-muted);
     font-variant-numeric: tabular-nums;
-  }
-
-  .dp-heatmap-total {
-    color: var(--color-ink);
-    font-weight: 600;
+    line-height: 1.5;
   }
 
   .dp-heatmap-total-reps {
     color: var(--color-ink);
-    font-weight: 500;
+    font-weight: 600;
   }
 
   .dp-heatmap-sep {
     color: var(--color-ink-faint);
     user-select: none;
-  }
-
-  .dp-heatmap-breakdown {
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    color: var(--color-ink-muted);
-    font-variant-numeric: tabular-nums;
-    line-height: 1.5;
   }
 
   .dp-heatmap-breakdown-name {
