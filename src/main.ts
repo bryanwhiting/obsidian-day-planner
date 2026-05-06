@@ -247,7 +247,13 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
       return null;
     }
     const query = before.slice(best.idx + best.trigger.length);
-    if (/[\s#]/.test(query)) return null;
+    if (/#/.test(query)) return null;
+    if (/\s/.test(query)) {
+      // Only the date trigger accepts a space — for "@apr 5" style queries.
+      if (best.kind !== "date" || !/^[A-Za-z]+ \d{0,2}$/.test(query)) {
+        return null;
+      }
+    }
     return {
       start: { line: cursor.line, ch: best.idx },
       end: cursor,

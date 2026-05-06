@@ -254,11 +254,47 @@ function parseFilenameDate(basename: string, fileFormat: string): Date | null {
   return m.isValid() ? m.toDate() : null;
 }
 
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+// Resolves a month-name query (e.g. "apr", "april", "may 5") to candidate
+// suggestions. Without a day, defaults day=1. With a day, validates against
+// the month's length. Year is rolled forward when the (year, month, day)
+// would land before today — so "@apr 5" on 2026-05-06 yields 2027-04-05.
+function buildMonthSuggestions(q: string, today: Date): DateSuggestion[] {
+  const m = q.match(/^([a-z]+)(?:\s+(\d{1,2}))?$/);
+  if (!m) return [];
+  const monthQ = m[1];
+  const dayStr = m[2];
+  const out: DateSuggestion[] = [];
+  const ref = startOfDay(today);
+  for (const name of MONTH_NAMES) {
+    if (!name.startsWith(monthQ)) continue;
+    const monthIdx = MONTH_NAMES.indexOf(name);
+    const day = dayStr ? parseInt(dayStr, 10) : 1;
+    let chosen: Date | null = null;
+    for (const yr of [today.getFullYear(), today.getFullYear() + 1]) {
+      const daysInMonth = new Date(yr, monthIdx + 1, 0).getDate();
+      if (day < 1 || day > daysInMonth) continue;
+      const candidate = new Date(yr, monthIdx, day);
+      if (startOfDay(candidate).getTime() >= ref.getTime()) {
+        chosen = candidate;
+        break;
+      }
+    }
+    if (!chosen) continue;
+    out.push({ keyword: `${name.slice(0, 3)} ${day}`, date: chosen });
+  }
+  return out;
+}
+
 // Resolves the relative-date keywords supported by the @-trigger autocomplete
 // against the provided `today`. Empty query returns the full default list
 // (today / tomorrow / yesterday plus a few Nd shortcuts); a non-empty query
-// either prefix-matches the named keywords or, when numeric, yields a single
-// "Nd" entry. Anything else returns no suggestions.
+// either prefix-matches the named keywords, parses a month name (with
+// optional day, e.g. "apr 5"), or, when numeric, yields a single "Nd" entry.
 export function buildDateSuggestions(
   query: string,
   today: Date = new Date(),
@@ -275,6 +311,7 @@ export function buildDateSuggestions(
       out.push({ keyword: n.kw, date: addDays(today, n.offset) });
     }
   }
+  out.push(...buildMonthSuggestions(q, today));
   const numeric = q.match(/^(\d+)d?$/);
   if (numeric) {
     const n = parseInt(numeric[1], 10);

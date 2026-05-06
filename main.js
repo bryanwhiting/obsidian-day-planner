@@ -2400,6 +2400,50 @@ function parseFilenameDate(basename, fileFormat) {
   const m = (0, import_obsidian3.moment)(basename, fmt, true);
   return m.isValid() ? m.toDate() : null;
 }
+var MONTH_NAMES = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december"
+];
+function buildMonthSuggestions(q, today) {
+  const m = q.match(/^([a-z]+)(?:\s+(\d{1,2}))?$/);
+  if (!m)
+    return [];
+  const monthQ = m[1];
+  const dayStr = m[2];
+  const out = [];
+  const ref = startOfDay(today);
+  for (const name of MONTH_NAMES) {
+    if (!name.startsWith(monthQ))
+      continue;
+    const monthIdx = MONTH_NAMES.indexOf(name);
+    const day = dayStr ? parseInt(dayStr, 10) : 1;
+    let chosen = null;
+    for (const yr of [today.getFullYear(), today.getFullYear() + 1]) {
+      const daysInMonth = new Date(yr, monthIdx + 1, 0).getDate();
+      if (day < 1 || day > daysInMonth)
+        continue;
+      const candidate = new Date(yr, monthIdx, day);
+      if (startOfDay(candidate).getTime() >= ref.getTime()) {
+        chosen = candidate;
+        break;
+      }
+    }
+    if (!chosen)
+      continue;
+    out.push({ keyword: `${name.slice(0, 3)} ${day}`, date: chosen });
+  }
+  return out;
+}
 function buildDateSuggestions(query, today = new Date()) {
   const q = query.trim().toLowerCase();
   const out = [];
@@ -2413,6 +2457,7 @@ function buildDateSuggestions(query, today = new Date()) {
       out.push({ keyword: n.kw, date: addDays(today, n.offset) });
     }
   }
+  out.push(...buildMonthSuggestions(q, today));
   const numeric = q.match(/^(\d+)d?$/);
   if (numeric) {
     const n = parseInt(numeric[1], 10);
@@ -5370,7 +5415,7 @@ function attachTitleSuggest(input, wrap, rules) {
     }
   };
   const detect = () => {
-    var _a;
+    var _a, _b;
     const cursor = (_a = input.selectionStart) != null ? _a : input.value.length;
     const before = input.value.slice(0, cursor);
     let best = null;
@@ -5379,7 +5424,8 @@ function attachTitleSuggest(input, wrap, rules) {
       if (idx < 0)
         continue;
       const query = before.slice(idx + rule.trigger.length);
-      if (/[\s#]/.test(query))
+      const accept = (_b = rule.acceptQuery) != null ? _b : (q) => !/[\s#]/.test(q);
+      if (!accept(query))
         continue;
       if (!best) {
         best = { rule, start: idx, query };
@@ -5740,6 +5786,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         const fmt = this.opts.dateLinkFormat;
         return {
           trigger: this.opts.dateTrigger,
+          acceptQuery: (q) => !/#/.test(q) && (!/\s/.test(q) || /^[A-Za-z]+ \d{0,2}$/.test(q)),
           getSuggestions: (q) => {
             dateMap.clear();
             const items = buildDateSuggestions(q);
@@ -7096,8 +7143,13 @@ var InlineSuggest = class extends import_obsidian6.EditorSuggest {
       return null;
     }
     const query = before.slice(best.idx + best.trigger.length);
-    if (/[\s#]/.test(query))
+    if (/#/.test(query))
       return null;
+    if (/\s/.test(query)) {
+      if (best.kind !== "date" || !/^[A-Za-z]+ \d{0,2}$/.test(query)) {
+        return null;
+      }
+    }
     return {
       start: { line: cursor.line, ch: best.idx },
       end: cursor,

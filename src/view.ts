@@ -3450,7 +3450,9 @@ function attachProjectSuggest(
 interface TitleSuggestRule {
   trigger: string;
   // Suggestions for the typed query (the chars after the trigger, up to the
-  // cursor — guaranteed not to contain whitespace or "#").
+  // cursor). By default the query is guaranteed not to contain whitespace or
+  // "#"; rules that need to accept e.g. a "month <day>" form override that
+  // via `acceptQuery`.
   getSuggestions: (query: string) => string[];
   // Decorate the popover row for one suggestion. The wrapper element has
   // already been created.
@@ -3459,6 +3461,9 @@ interface TitleSuggestRule {
   // the [triggerStart, cursor] range — typically either rewrites it to the
   // resolved tag text or strips it and updates a separate field.
   commit: (value: string, triggerStart: number, cursor: number) => void;
+  // Optional override of the default whitespace-and-"#"-reject query gate.
+  // Returns true to keep the popover open with this query.
+  acceptQuery?: (query: string) => boolean;
 }
 
 // Watches a free-text input (the modal's title field) for any of the
@@ -3519,7 +3524,8 @@ function attachTitleSuggest(
       const idx = before.lastIndexOf(rule.trigger);
       if (idx < 0) continue;
       const query = before.slice(idx + rule.trigger.length);
-      if (/[\s#]/.test(query)) continue;
+      const accept = rule.acceptQuery ?? ((q: string) => !/[\s#]/.test(q));
+      if (!accept(query)) continue;
       if (!best) {
         best = { rule, start: idx, query };
         continue;
@@ -3950,6 +3956,9 @@ class TaskEditModal extends Modal {
         const fmt = this.opts.dateLinkFormat;
         return {
           trigger: this.opts.dateTrigger,
+          acceptQuery: (q) =>
+            !/#/.test(q) &&
+            (!/\s/.test(q) || /^[A-Za-z]+ \d{0,2}$/.test(q)),
           getSuggestions: (q) => {
             dateMap.clear();
             const items = buildDateSuggestions(q);
