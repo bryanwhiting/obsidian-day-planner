@@ -334,7 +334,8 @@ var DEFAULT_PREFIXES = {
   order: "o",
   project: "p",
   exercise: "x",
-  taskId: "tid"
+  taskId: "tid",
+  actual: "ta"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 var DESCRIPTION_RE = /\{([^{}]*)\}/;
@@ -358,7 +359,10 @@ function buildTagRegexes(prefixes) {
       `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
       "g"
     ),
-    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`)
+    taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`),
+    actual: new RegExp(
+      `#${esc(prefixes.actual)}\\/(?:(\\d+)h)?(?:(\\d+)m)?(?=\\s|$)`
+    )
   };
 }
 function parseExercises(content, prefixes) {
@@ -482,6 +486,31 @@ function setDurationTag(rawLine, newDurationMin, prefixes) {
   const re = buildTagRegexes(prefixes).duration;
   const newTag = formatDuration(newDurationMin, prefixes);
   if (re.test(rawLine))
+    return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+function formatActualTime(totalMin, prefixes) {
+  const safe = Math.max(1, Math.round(totalMin));
+  const h = Math.floor(safe / 60);
+  const m = safe % 60;
+  let body;
+  if (h === 0)
+    body = `${m}m`;
+  else if (m === 0)
+    body = `${h}h`;
+  else
+    body = `${h}h${m}m`;
+  return `#${prefixes.actual}/${body}`;
+}
+function addActualTimeTag(rawLine, addMin, prefixes) {
+  if (addMin <= 0)
+    return rawLine;
+  const re = buildTagRegexes(prefixes).actual;
+  const m = re.exec(rawLine);
+  const existing = m === null ? 0 : (m[1] ? parseInt(m[1], 10) : 0) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
+  const total = existing + addMin;
+  const newTag = formatActualTime(total, prefixes);
+  if (m)
     return rawLine.replace(re, newTag);
   return appendTag(rawLine, newTag);
 }
@@ -1111,7 +1140,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       "order",
       "project",
       "exercise",
-      "taskId"
+      "taskId",
+      "actual"
     ];
     const changes = [];
     for (const key of keys) {
@@ -1219,6 +1249,16 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       (t) => t.setValue(this.plugin.settings.prefixes.taskId).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.taskId = v;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Actual time tag prefix").setDesc(
+      "Prefix for actual-time tags written by the pomodoro timer (e.g. #ta/25m). Whole minutes only; subsequent sessions add to the existing tag."
+    ).addText(
+      (t) => t.setValue(this.plugin.settings.prefixes.actual).onChange(async (v) => {
+        if (/^[a-zA-Z]+$/.test(v)) {
+          this.plugin.settings.prefixes.actual = v;
           await this.plugin.saveSettings();
         }
       })
@@ -3919,7 +3959,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       startedAt: Date.now(),
       phase: "work",
       paused: !this.plugin.settings.pomodoroAutoStart,
-      pausedRemainingMs: this.plugin.settings.pomodoroAutoStart ? null : this.plugin.settings.pomodoroWorkMin * 6e4
+      pausedRemainingMs: this.plugin.settings.pomodoroAutoStart ? null : this.plugin.settings.pomodoroWorkMin * 6e4,
+      actualMs: 0,
+      workPhaseBankedMs: 0
     };
     this.pomodoroHidden = false;
     this.pomodoroSubtaskHistory = [];
@@ -3946,10 +3988,58 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     this.scheduleRender();
   }
+  // Returns ms elapsed in the current phase, clamped to the phase length.
+  // Honors the paused/running anchor used elsewhere in the timer math.
+  currentPhaseElapsedMs() {
+    var _a;
+    const state = this.pomodoroState;
+    if (!state)
+      return 0;
+    const phaseMin = state.phase === "work" ? this.plugin.settings.pomodoroWorkMin : this.plugin.settings.pomodoroBreakMin;
+    const phaseMs = phaseMin * 6e4;
+    if (state.paused) {
+      const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
+      return Math.max(0, Math.min(phaseMs, phaseMs - remain));
+    }
+    return Math.max(0, Math.min(phaseMs, Date.now() - state.startedAt));
+  }
+  // Folds any work-phase progress that has not yet been counted into actualMs.
+  // Safe to call any time; only adds the delta since the last bank.
+  bankWorkProgress() {
+    const state = this.pomodoroState;
+    if (!state || state.phase !== "work")
+      return;
+    const phaseElapsed = this.currentPhaseElapsedMs();
+    const delta = phaseElapsed - state.workPhaseBankedMs;
+    if (delta > 0) {
+      state.actualMs += delta;
+      state.workPhaseBankedMs = phaseElapsed;
+    }
+  }
+  // Writes the accumulated whole minutes onto a task line (parent or sub-task)
+  // and resets the in-memory accumulator. workPhaseBankedMs stays so we don't
+  // double-count time already accounted for in this work phase.
+  async commitActualTime(file, lineNumber) {
+    const state = this.pomodoroState;
+    if (!state)
+      return;
+    this.bankWorkProgress();
+    const minutes = Math.floor(state.actualMs / 6e4);
+    if (minutes <= 0)
+      return;
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length)
+        return content;
+      lines[lineNumber] = addActualTimeTag(lines[lineNumber], minutes, prefixes);
+      return lines.join("\n");
+    });
+    state.actualMs = 0;
+  }
   // Returns true if the pomodoro UI handled the render, false if the caller
   // should fall through to the normal timeline render (task gone, etc.).
   async renderPomodoro(root) {
-    var _a, _b;
     const state = this.pomodoroState;
     if (!state)
       return false;
@@ -3987,11 +4077,13 @@ var TodayView = class extends import_obsidian4.ItemView {
       remainingMs = phaseMs - (Date.now() - state.startedAt);
     }
     if (remainingMs <= 0 && !state.paused) {
+      this.bankWorkProgress();
       if (this.plugin.settings.pomodoroAutoCycle) {
         const nextPhase = state.phase === "work" ? "rest" : "work";
         new import_obsidian4.Notice(nextPhase === "rest" ? "Break time" : "Back to focus");
         state.phase = nextPhase;
         state.startedAt = Date.now();
+        state.workPhaseBankedMs = 0;
         const nextMs = nextPhase === "work" ? workMs : breakMs;
         remainingMs = nextMs;
       } else {
@@ -4096,14 +4188,14 @@ var TodayView = class extends import_obsidian4.ItemView {
     });
     pauseBtn.type = "button";
     pauseBtn.addEventListener("click", () => {
-      var _a2;
+      var _a;
       if (expired) {
         state.phase = state.phase === "work" ? "rest" : "work";
         state.startedAt = Date.now();
         state.paused = false;
         state.pausedRemainingMs = null;
       } else if (state.paused) {
-        const remain = (_a2 = state.pausedRemainingMs) != null ? _a2 : phaseMs;
+        const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
         state.startedAt = Date.now() - (phaseMs - remain);
         state.paused = false;
         state.pausedRemainingMs = null;
@@ -4137,7 +4229,11 @@ var TodayView = class extends import_obsidian4.ItemView {
     addHint("t", "timeline");
     addHint("p", this.isPopout() ? "return" : "pop out");
     addHint("x", "close");
-    if (((_b = (_a = root.ownerDocument) == null ? void 0 : _a.activeElement) == null ? void 0 : _b.tagName) !== "INPUT") {
+    const doc = root.ownerDocument;
+    const active = doc == null ? void 0 : doc.activeElement;
+    const focusElsewhere = !!active && active !== (doc == null ? void 0 : doc.body) && !this.containerEl.contains(active);
+    const isEditable = !!active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+    if (!focusElsewhere && !isEditable && active !== root) {
       root.focus({ preventScroll: true });
     }
     return true;

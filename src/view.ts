@@ -29,6 +29,7 @@ import {
   setTaskTitle,
   setTaskDescription,
   setTaskChecked,
+  addActualTimeTag,
   setTaskIdTag,
   parseTaskId,
   generateTaskId,
@@ -108,6 +109,13 @@ export class TodayView extends ItemView {
     phase: "work" | "rest";
     paused: boolean;
     pausedRemainingMs: number | null;
+    // Total work-phase ms banked from completed/paused work runs in the
+    // current focus block. Live work since the last bank is added on demand
+    // by bankWorkProgress().
+    actualMs: number;
+    // Within the current work phase, how many ms of elapsed work have already
+    // been folded into actualMs. Resets to 0 when the work phase ends.
+    workPhaseBankedMs: number;
   } | null = null;
   private pomodoroTickHandle: number | null = null;
   private pomodoroHidden: boolean = false;
@@ -2266,6 +2274,8 @@ export class TodayView extends ItemView {
       pausedRemainingMs: this.plugin.settings.pomodoroAutoStart
         ? null
         : this.plugin.settings.pomodoroWorkMin * 60_000,
+      actualMs: 0,
+      workPhaseBankedMs: 0,
     };
     this.pomodoroHidden = false;
     this.pomodoroSubtaskHistory = [];
@@ -2292,6 +2302,55 @@ export class TodayView extends ItemView {
       return;
     }
     this.scheduleRender();
+  }
+
+  // Returns ms elapsed in the current phase, clamped to the phase length.
+  // Honors the paused/running anchor used elsewhere in the timer math.
+  private currentPhaseElapsedMs(): number {
+    const state = this.pomodoroState;
+    if (!state) return 0;
+    const phaseMin =
+      state.phase === "work"
+        ? this.plugin.settings.pomodoroWorkMin
+        : this.plugin.settings.pomodoroBreakMin;
+    const phaseMs = phaseMin * 60_000;
+    if (state.paused) {
+      const remain = state.pausedRemainingMs ?? phaseMs;
+      return Math.max(0, Math.min(phaseMs, phaseMs - remain));
+    }
+    return Math.max(0, Math.min(phaseMs, Date.now() - state.startedAt));
+  }
+
+  // Folds any work-phase progress that has not yet been counted into actualMs.
+  // Safe to call any time; only adds the delta since the last bank.
+  private bankWorkProgress(): void {
+    const state = this.pomodoroState;
+    if (!state || state.phase !== "work") return;
+    const phaseElapsed = this.currentPhaseElapsedMs();
+    const delta = phaseElapsed - state.workPhaseBankedMs;
+    if (delta > 0) {
+      state.actualMs += delta;
+      state.workPhaseBankedMs = phaseElapsed;
+    }
+  }
+
+  // Writes the accumulated whole minutes onto a task line (parent or sub-task)
+  // and resets the in-memory accumulator. workPhaseBankedMs stays so we don't
+  // double-count time already accounted for in this work phase.
+  private async commitActualTime(file: TFile, lineNumber: number): Promise<void> {
+    const state = this.pomodoroState;
+    if (!state) return;
+    this.bankWorkProgress();
+    const minutes = Math.floor(state.actualMs / 60_000);
+    if (minutes <= 0) return;
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length) return content;
+      lines[lineNumber] = addActualTimeTag(lines[lineNumber], minutes, prefixes);
+      return lines.join("\n");
+    });
+    state.actualMs = 0;
   }
 
   // Returns true if the pomodoro UI handled the render, false if the caller
@@ -2338,12 +2397,16 @@ export class TodayView extends ItemView {
     }
 
     if (remainingMs <= 0 && !state.paused) {
+      // Phase ran to completion. Bank work-phase progress (no-op for rest)
+      // before mutating phase/paused so we capture the full work duration.
+      this.bankWorkProgress();
       if (this.plugin.settings.pomodoroAutoCycle) {
         const nextPhase: "work" | "rest" =
           state.phase === "work" ? "rest" : "work";
         new Notice(nextPhase === "rest" ? "Break time" : "Back to focus");
         state.phase = nextPhase;
         state.startedAt = Date.now();
+        state.workPhaseBankedMs = 0;
         const nextMs = nextPhase === "work" ? workMs : breakMs;
         remainingMs = nextMs;
       } else {
@@ -2507,7 +2570,20 @@ export class TodayView extends ItemView {
     addHint("p", this.isPopout() ? "return" : "pop out");
     addHint("x", "close");
 
-    if (root.ownerDocument?.activeElement?.tagName !== "INPUT") {
+    // Re-focusing every tick would steal focus from anything the user clicks
+    // on elsewhere in Obsidian. Only grab focus when it's already within our
+    // view (or on body, the default after a button is removed) — never when
+    // the user has clicked into another pane.
+    const doc = root.ownerDocument;
+    const active = doc?.activeElement as HTMLElement | null;
+    const focusElsewhere =
+      !!active && active !== doc?.body && !this.containerEl.contains(active);
+    const isEditable =
+      !!active &&
+      (active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        active.isContentEditable);
+    if (!focusElsewhere && !isEditable && active !== root) {
       root.focus({ preventScroll: true });
     }
 
