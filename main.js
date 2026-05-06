@@ -2145,9 +2145,10 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
       await app.vault.createFolder(folder);
   }
   const rawTemplate = await readTemplateContent(app, fallback.template);
+  const basename = resolved.path.split("/").pop().replace(/\.md$/i, "");
   const initialContent = expandDateTemplate(
     rawTemplate,
-    date,
+    basename,
     app,
     fallback.format,
     fallback.folder,
@@ -2231,15 +2232,32 @@ function resolveDateKeyword(kw, refDate) {
   }
   return null;
 }
-function expandDateTemplate(content, refDate, app, fileFormat, folder, displayFormat) {
+function expandDateTemplate(content, fileBasename, app, fileFormat, folder, displayFormat) {
   if (!content)
     return content;
-  return content.replace(/<@([A-Za-z0-9]+)>/g, (match, kw) => {
-    const date = resolveDateKeyword(kw, refDate);
-    if (!date)
-      return match;
-    return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
-  });
+  return content.replace(
+    /<@([A-Za-z0-9]+)(-rel)?>/g,
+    (match, kw, rel) => {
+      let ref;
+      if (rel) {
+        const parsed = parseFilenameDate(fileBasename, fileFormat);
+        if (!parsed)
+          return match;
+        ref = parsed;
+      } else {
+        ref = new Date();
+      }
+      const date = resolveDateKeyword(kw, ref);
+      if (!date)
+        return match;
+      return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
+    }
+  );
+}
+function parseFilenameDate(basename, fileFormat) {
+  const fmt = (fileFormat || "YYYY-MM-DD").trim();
+  const m = (0, import_obsidian3.moment)(basename, fmt, true);
+  return m.isValid() ? m.toDate() : null;
 }
 function buildDateSuggestions(query, today = new Date()) {
   const q = query.trim().toLowerCase();

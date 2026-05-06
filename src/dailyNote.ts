@@ -53,9 +53,13 @@ export async function ensureDailyNote(
     if (!existing) await app.vault.createFolder(folder);
   }
   const rawTemplate = await readTemplateContent(app, fallback.template);
+  const basename = resolved.path
+    .split("/")
+    .pop()!
+    .replace(/\.md$/i, "");
   const initialContent = expandDateTemplate(
     rawTemplate,
-    date,
+    basename,
     app,
     fallback.format,
     fallback.folder,
@@ -167,24 +171,48 @@ export function resolveDateKeyword(kw: string, refDate: Date): Date | null {
 }
 
 // Substitutes <@today>, <@tomorrow>, <@yesterday>, <@Nd> placeholders inside
-// `content` with daily-note links. All offsets are computed relative to
-// `refDate` — i.e. inside the daily note for 2026-05-08, <@yesterday> resolves
-// to 2026-05-07 — so a template can use "Yesterday: <@yesterday>" and have it
-// always link to the previous day.
+// `content` with daily-note links. The bare form is anchored to wall-clock
+// today; the `-rel` suffix (e.g. <@today-rel>, <@yesterday-rel>) anchors to
+// the date parsed out of `fileBasename` via `fileFormat`. So a template
+// applied to 2026-03-04.md says <@yesterday-rel> = 03-03 even when the
+// real-world date is something else, while <@today> always tracks the actual
+// day the note is created — that's what lets the same template stay
+// meaningful both for backfilled and pre-created daily notes.
 export function expandDateTemplate(
   content: string,
-  refDate: Date,
+  fileBasename: string,
   app: App,
   fileFormat: string,
   folder: string,
   displayFormat: string,
 ): string {
   if (!content) return content;
-  return content.replace(/<@([A-Za-z0-9]+)>/g, (match, kw: string) => {
-    const date = resolveDateKeyword(kw, refDate);
-    if (!date) return match;
-    return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
-  });
+  return content.replace(
+    /<@([A-Za-z0-9]+)(-rel)?>/g,
+    (match, kw: string, rel: string | undefined) => {
+      let ref: Date;
+      if (rel) {
+        const parsed = parseFilenameDate(fileBasename, fileFormat);
+        if (!parsed) return match;
+        ref = parsed;
+      } else {
+        ref = new Date();
+      }
+      const date = resolveDateKeyword(kw, ref);
+      if (!date) return match;
+      return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
+    },
+  );
+}
+
+// Parses `basename` against `fileFormat` (a moment.js pattern, e.g.
+// "YYYY-MM-DD") in strict mode. Returns null when the filename doesn't match
+// the expected daily-note shape — callers should leave the placeholder
+// untouched in that case so users can spot the mismatch.
+function parseFilenameDate(basename: string, fileFormat: string): Date | null {
+  const fmt = (fileFormat || "YYYY-MM-DD").trim();
+  const m = moment(basename, fmt, true);
+  return m.isValid() ? m.toDate() : null;
 }
 
 // Resolves the relative-date keywords supported by the @-trigger autocomplete

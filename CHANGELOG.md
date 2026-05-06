@@ -2,6 +2,32 @@
 
 ## 2026-05-06
 
+### Daily-note template: bare `<@today>` is wall-clock; add `<@…-rel>` parsed from filename
+
+- **Requested:** Pick semantics (A) — bare `<@today>` resolves to real
+  wall-clock today; `<@today-rel>` and friends resolve relative to the
+  filename's date. Parse the filename so `-rel` works in any file with a
+  date-shaped name, not just inside `ensureDailyNote`.
+- **Done:** Reworked `expandDateTemplate` in `src/dailyNote.ts` to take
+  `fileBasename` instead of a pre-resolved `refDate`. The regex now
+  recognizes an optional `-rel` suffix; bare keywords anchor to
+  `new Date()` while `-rel` keywords parse the basename via the daily-note
+  format string in moment strict mode. `ensureDailyNote` derives the
+  basename from the resolved path and passes it through. If the filename
+  doesn't match the expected format the `-rel` placeholder is left
+  intact so the mismatch is visible in the file.
+
+### Add CLAUDE.md + initial CHANGELOG.md
+
+- **Requested:** "updae CLAUDE.md to create a changelog - after you
+  finish, update CHANGELOG.md with 1) what was requested and 2) what you
+  did."
+- **Done:** Created `CLAUDE.md` documenting the changelog convention
+  (newest-first by date, "Requested" + "Done" per entry) and seeded
+  `CHANGELOG.md` by backfilling the recent settings reshuffle, the
+  autocomplete intro tweak, the `@`-trigger date autocomplete, and the
+  in-progress template substitution.
+
 ### Edit modal: bigger action icons, labeled move popover
 
 - **Requested:** "these icons are too small. make them bigger. Also, when
