@@ -1910,6 +1910,23 @@
     text-overflow: ellipsis;
   }
 
+  .dp-edit-subtask-text-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 2px 6px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+  }
+
+  .dp-edit-subtask-text-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+
   .dp-edit-subtask-add {
     display: flex;
     align-items: center;

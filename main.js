@@ -3165,6 +3165,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       onAddSubtask: async (text) => {
         return await this.appendSubtask(file, task, text);
       },
+      onEditSubtask: async (sub, newText) => {
+        await this.applySubtaskText(file, sub.lineNumber, newText);
+      },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
@@ -3293,6 +3296,21 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (lineNumber >= lines.length)
         return content;
       lines[lineNumber] = setTaskChecked(lines[lineNumber], checked);
+      return lines.join("\n");
+    });
+  }
+  async applySubtaskText(file, lineNumber, newText) {
+    const trimmed = newText.trim();
+    if (!trimmed)
+      return;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length)
+        return content;
+      const m = /^(\s*-\s*\[[^\]]\]\s+)(.*)$/.exec(lines[lineNumber]);
+      if (!m)
+        return content;
+      lines[lineNumber] = `${m[1]}${trimmed}`;
       return lines.join("\n");
     });
   }
@@ -3598,15 +3616,54 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       const box = row2.createSpan({ cls: "dp-edit-check" });
       if (checked)
         box.addClass("is-checked");
-      row2.createSpan({
+      const textEl = row2.createSpan({
         cls: "dp-edit-subtask-text",
         text: sub.text
       });
-      row2.addEventListener("click", () => {
+      const toggleChecked2 = () => {
         checked = !checked;
         row2.toggleClass("is-done", checked);
         box.toggleClass("is-checked", checked);
         void this.opts.onToggleSubtask(sub, checked);
+      };
+      box.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        toggleChecked2();
+      });
+      textEl.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const editor = row2.createEl("input", {
+          type: "text",
+          cls: "dp-edit-subtask-text-input"
+        });
+        editor.value = sub.text;
+        textEl.style.display = "none";
+        editor.focus();
+        editor.select();
+        let done = false;
+        const finish = (commit) => {
+          if (done)
+            return;
+          done = true;
+          const next = editor.value.trim();
+          editor.remove();
+          if (commit && next && next !== sub.text) {
+            sub.text = next;
+            textEl.setText(next);
+            void this.opts.onEditSubtask(sub, next);
+          }
+          textEl.style.display = "";
+        };
+        editor.addEventListener("keydown", (kev) => {
+          if (kev.key === "Enter") {
+            kev.preventDefault();
+            finish(true);
+          } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(false);
+          }
+        });
+        editor.addEventListener("blur", () => finish(true));
       });
     };
     this.opts.subtasks.forEach(renderSubtask);

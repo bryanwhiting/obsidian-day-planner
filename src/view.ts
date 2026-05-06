@@ -1581,6 +1581,9 @@ export class TodayView extends ItemView {
       onAddSubtask: async (text) => {
         return await this.appendSubtask(file, task, text);
       },
+      onEditSubtask: async (sub, newText) => {
+        await this.applySubtaskText(file, sub.lineNumber, newText);
+      },
       onShowInNote: () => {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
@@ -1747,6 +1750,23 @@ export class TodayView extends ItemView {
       const lines = content.split("\n");
       if (lineNumber >= lines.length) return content;
       lines[lineNumber] = setTaskChecked(lines[lineNumber], checked);
+      return lines.join("\n");
+    });
+  }
+
+  private async applySubtaskText(
+    file: TFile,
+    lineNumber: number,
+    newText: string,
+  ): Promise<void> {
+    const trimmed = newText.trim();
+    if (!trimmed) return;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length) return content;
+      const m = /^(\s*-\s*\[[^\]]\]\s+)(.*)$/.exec(lines[lineNumber]);
+      if (!m) return content;
+      lines[lineNumber] = `${m[1]}${trimmed}`;
       return lines.join("\n");
     });
   }
@@ -1952,6 +1972,7 @@ interface TaskEditOpts {
   ) => void;
   onToggleSubtask: (sub: ParsedSubtask, checked: boolean) => Promise<void>;
   onAddSubtask: (text: string) => Promise<ParsedSubtask | null>;
+  onEditSubtask: (sub: ParsedSubtask, newText: string) => Promise<void>;
   onShowInNote: () => void;
   onMoveToTomorrow: () => Promise<boolean>;
 }
@@ -2145,15 +2166,53 @@ class TaskEditModal extends Modal {
       if (checked) row.addClass("is-done");
       const box = row.createSpan({ cls: "dp-edit-check" });
       if (checked) box.addClass("is-checked");
-      row.createSpan({
+      const textEl = row.createSpan({
         cls: "dp-edit-subtask-text",
         text: sub.text,
       });
-      row.addEventListener("click", () => {
+      const toggleChecked = (): void => {
         checked = !checked;
         row.toggleClass("is-done", checked);
         box.toggleClass("is-checked", checked);
         void this.opts.onToggleSubtask(sub, checked);
+      };
+      box.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        toggleChecked();
+      });
+      textEl.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const editor = row.createEl("input", {
+          type: "text",
+          cls: "dp-edit-subtask-text-input",
+        });
+        editor.value = sub.text;
+        textEl.style.display = "none";
+        editor.focus();
+        editor.select();
+        let done = false;
+        const finish = (commit: boolean): void => {
+          if (done) return;
+          done = true;
+          const next = editor.value.trim();
+          editor.remove();
+          if (commit && next && next !== sub.text) {
+            sub.text = next;
+            textEl.setText(next);
+            void this.opts.onEditSubtask(sub, next);
+          }
+          textEl.style.display = "";
+        };
+        editor.addEventListener("keydown", (kev) => {
+          if (kev.key === "Enter") {
+            kev.preventDefault();
+            finish(true);
+          } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(false);
+          }
+        });
+        editor.addEventListener("blur", () => finish(true));
       });
     };
 
