@@ -3334,16 +3334,10 @@ function attachProjectSuggest(
     visible.forEach((name, i) => {
       const item = popover.createDiv({ cls: "dp-project-suggest-item" });
       if (i === activeIdx) item.addClass("is-active");
-      const slash = name.indexOf("/");
-      if (slash >= 0) {
-        item.createSpan({ text: name.slice(0, slash) });
-        item.createSpan({
-          cls: "dp-project-suggest-sub",
-          text: name.slice(slash),
-        });
-      } else {
-        item.createSpan({ text: name });
-      }
+      // Show the full "proj/subproj" path in one piece so the sub-project is
+      // unmistakably visible — earlier rendering split it into project + a
+      // muted "/sub" span that some themes rendered nearly invisible.
+      item.setText(name);
       // mousedown (not click) so we beat the input's blur and the value
       // commits before the popover hides.
       item.addEventListener("mousedown", (ev) => {
@@ -3365,6 +3359,9 @@ function attachProjectSuggest(
       ".dp-project-suggest-item",
     );
     items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
+    if (activeIdx >= 0 && items[activeIdx]) {
+      items[activeIdx].scrollIntoView({ block: "nearest" });
+    }
   };
 
   const show = (): void => {
@@ -3486,6 +3483,9 @@ function attachTitleSuggest(
       ".dp-project-suggest-item",
     );
     items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
+    if (activeIdx >= 0 && items[activeIdx]) {
+      items[activeIdx].scrollIntoView({ block: "nearest" });
+    }
   };
 
   const detect = ():
@@ -3878,16 +3878,10 @@ class TaskEditModal extends Modal {
         trigger: this.opts.projectTrigger,
         getSuggestions: (q) => filterSuggestions(projectPool, q),
         renderItem: (el, name) => {
-          const slash = name.indexOf("/");
-          if (slash >= 0) {
-            el.createSpan({ text: name.slice(0, slash) });
-            el.createSpan({
-              cls: "dp-project-suggest-sub",
-              text: name.slice(slash),
-            });
-          } else {
-            el.createSpan({ text: name });
-          }
+          // Render the full "proj/subproj" path plainly so the sub-project
+          // is fully visible; the prior split rendering muted "/sub" so
+          // hard it disappeared on some themes.
+          el.setText(name);
         },
         commit: (name, start, cursor) => {
           // Set projInput first so the input event dispatched by

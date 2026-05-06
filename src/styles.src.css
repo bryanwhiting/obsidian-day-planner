@@ -2135,8 +2135,20 @@
     text-overflow: ellipsis;
   }
 
+  /* Solid accent background + white text so the keyboard-active row is
+   * unmistakable across light and dark themes. The prior surface-hover
+   * was nearly invisible on some themes, making arrow-key navigation
+   * feel broken even though it was wired up. */
   .dp-project-suggest-item.is-active {
-    background: var(--color-surface-hover);
+    background: var(--color-accent);
+    color: #ffffff;
+  }
+
+  /* Inside an active row, the muted "secondary" span (used by the date
+   * suggestion to show the formatted weekday) needs to lighten so it's
+   * still legible against the accent background. */
+  .dp-project-suggest-item.is-active .dp-project-suggest-sub {
+    color: rgba(255, 255, 255, 0.78);
   }
 
   .dp-project-suggest-sub {

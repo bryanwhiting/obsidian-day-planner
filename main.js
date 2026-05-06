@@ -5243,16 +5243,7 @@ function attachProjectSuggest(input, wrap, projects) {
       const item = popover.createDiv({ cls: "dp-project-suggest-item" });
       if (i === activeIdx)
         item.addClass("is-active");
-      const slash = name.indexOf("/");
-      if (slash >= 0) {
-        item.createSpan({ text: name.slice(0, slash) });
-        item.createSpan({
-          cls: "dp-project-suggest-sub",
-          text: name.slice(slash)
-        });
-      } else {
-        item.createSpan({ text: name });
-      }
+      item.setText(name);
       item.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
         input.value = name;
@@ -5272,6 +5263,9 @@ function attachProjectSuggest(input, wrap, projects) {
       ".dp-project-suggest-item"
     );
     items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
+    if (activeIdx >= 0 && items[activeIdx]) {
+      items[activeIdx].scrollIntoView({ block: "nearest" });
+    }
   };
   const show = () => {
     visible = filter(input.value);
@@ -5360,6 +5354,9 @@ function attachTitleSuggest(input, wrap, rules) {
       ".dp-project-suggest-item"
     );
     items.forEach((el, i) => el.toggleClass("is-active", i === activeIdx));
+    if (activeIdx >= 0 && items[activeIdx]) {
+      items[activeIdx].scrollIntoView({ block: "nearest" });
+    }
   };
   const detect = () => {
     var _a;
@@ -5684,16 +5681,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         trigger: this.opts.projectTrigger,
         getSuggestions: (q) => filterSuggestions(projectPool, q),
         renderItem: (el, name) => {
-          const slash = name.indexOf("/");
-          if (slash >= 0) {
-            el.createSpan({ text: name.slice(0, slash) });
-            el.createSpan({
-              cls: "dp-project-suggest-sub",
-              text: name.slice(slash)
-            });
-          } else {
-            el.createSpan({ text: name });
-          }
+          el.setText(name);
         },
         commit: (name, start, cursor) => {
           projInput.value = name;
