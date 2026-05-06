@@ -3185,48 +3185,6 @@ class TaskEditModal extends Modal {
     });
     input.value = this.opts.initialTitle;
 
-    // Mobile quick-insert bar: typing "##" / "#@" / "#$" on a phone keyboard
-    // is awkward, so surface a tap-to-insert row that drops the configured
-    // trigger at the cursor and lets the existing autocomplete take over.
-    const quickInsert = this.contentEl.createDiv({
-      cls: "dp-edit-quick-insert",
-    });
-    const insertTriggerAtCursor = (trigger: string): void => {
-      if (!trigger) return;
-      if (document.activeElement !== input) input.focus();
-      const cursor = input.selectionStart ?? input.value.length;
-      const before = input.value.slice(0, cursor);
-      const after = input.value.slice(cursor);
-      const needsLead = before.length > 0 && !/\s$/.test(before);
-      const insertion = (needsLead ? " " : "") + trigger;
-      input.value = before + insertion + after;
-      const newPos = before.length + insertion.length;
-      input.setSelectionRange(newPos, newPos);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-    const addQuickBtn = (
-      trigger: string,
-      iconName: string,
-      label: string,
-    ): void => {
-      const btn = quickInsert.createEl("button", {
-        cls: "dp-edit-quick-btn",
-        attr: { "aria-label": `Insert ${label.toLowerCase()} trigger` },
-      });
-      btn.type = "button";
-      setIcon(btn, iconName);
-      btn.createSpan({ cls: "dp-edit-quick-label", text: label });
-      // pointerdown + preventDefault keeps focus on the title input so the
-      // mobile keyboard doesn't dismiss between taps.
-      btn.addEventListener("pointerdown", (ev) => {
-        ev.preventDefault();
-        insertTriggerAtCursor(trigger);
-      });
-    };
-    addQuickBtn(this.opts.projectTrigger, "folder", "Project");
-    addQuickBtn(this.opts.timeTrigger, "clock", "Time");
-    addQuickBtn(this.opts.durationTrigger, "timer", "Duration");
-
     const descLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "Description",

@@ -4741,41 +4741,6 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       attr: { placeholder: "Task title\u2026", autocomplete: "off" }
     });
     input.value = this.opts.initialTitle;
-    const quickInsert = this.contentEl.createDiv({
-      cls: "dp-edit-quick-insert"
-    });
-    const insertTriggerAtCursor = (trigger) => {
-      var _a2;
-      if (!trigger)
-        return;
-      if (document.activeElement !== input)
-        input.focus();
-      const cursor = (_a2 = input.selectionStart) != null ? _a2 : input.value.length;
-      const before = input.value.slice(0, cursor);
-      const after = input.value.slice(cursor);
-      const needsLead = before.length > 0 && !/\s$/.test(before);
-      const insertion = (needsLead ? " " : "") + trigger;
-      input.value = before + insertion + after;
-      const newPos = before.length + insertion.length;
-      input.setSelectionRange(newPos, newPos);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-    const addQuickBtn = (trigger, iconName, label) => {
-      const btn = quickInsert.createEl("button", {
-        cls: "dp-edit-quick-btn",
-        attr: { "aria-label": `Insert ${label.toLowerCase()} trigger` }
-      });
-      btn.type = "button";
-      (0, import_obsidian4.setIcon)(btn, iconName);
-      btn.createSpan({ cls: "dp-edit-quick-label", text: label });
-      btn.addEventListener("pointerdown", (ev) => {
-        ev.preventDefault();
-        insertTriggerAtCursor(trigger);
-      });
-    };
-    addQuickBtn(this.opts.projectTrigger, "folder", "Project");
-    addQuickBtn(this.opts.timeTrigger, "clock", "Time");
-    addQuickBtn(this.opts.durationTrigger, "timer", "Duration");
     const descLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label",
       text: "Description"
