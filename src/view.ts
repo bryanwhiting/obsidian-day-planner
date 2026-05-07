@@ -1163,6 +1163,11 @@ export class TodayView extends ItemView {
     if (block.task.checked) el.addClass("is-done");
     if (!block.task.hasExplicitDuration) el.addClass("is-implicit-duration");
     if (block.task.durationMin < 25) el.addClass("is-compact");
+    // Two or more overlapping blocks share the timeline horizontally — each
+    // gets a fraction of the width. Stack the header onto multiple lines so
+    // the (time / project / title) trio survives the squeeze instead of
+    // ellipsing the title to nothing.
+    if (block.widthPct < 99.5) el.addClass("is-narrow");
     const ctx = this.findContextTag(block.task);
     const projectColor = getTaskColor(
       block.task.project,
@@ -1180,17 +1185,18 @@ export class TodayView extends ItemView {
     el.draggable = true;
 
     const row = el.createDiv({ cls: "dp-block-row" });
+    const meta = row.createSpan({ cls: "dp-block-meta" });
     if (ctx?.icon) {
-      const ctxIcon = row.createSpan({ cls: "dp-block-context-icon" });
+      const ctxIcon = meta.createSpan({ cls: "dp-block-context-icon" });
       setIcon(ctxIcon, ctx.icon);
       ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
     }
     if (!block.task.hasExplicitDuration) {
-      const warn = row.createSpan({ cls: "dp-warn" });
+      const warn = meta.createSpan({ cls: "dp-warn" });
       setIcon(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag — using default duration");
     }
-    row.createSpan({
+    meta.createSpan({
       cls: "dp-block-time",
       text: this.formatBlockTime(block.task),
     });

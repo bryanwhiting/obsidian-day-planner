@@ -3622,6 +3622,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       el.addClass("is-implicit-duration");
     if (block.task.durationMin < 25)
       el.addClass("is-compact");
+    if (block.widthPct < 99.5)
+      el.addClass("is-narrow");
     const ctx = this.findContextTag(block.task);
     const projectColor = getTaskColor(
       block.task.project,
@@ -3636,17 +3638,18 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     el.draggable = true;
     const row = el.createDiv({ cls: "dp-block-row" });
+    const meta = row.createSpan({ cls: "dp-block-meta" });
     if (ctx == null ? void 0 : ctx.icon) {
-      const ctxIcon = row.createSpan({ cls: "dp-block-context-icon" });
+      const ctxIcon = meta.createSpan({ cls: "dp-block-context-icon" });
       (0, import_obsidian4.setIcon)(ctxIcon, ctx.icon);
       ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
     }
     if (!block.task.hasExplicitDuration) {
-      const warn = row.createSpan({ cls: "dp-warn" });
+      const warn = meta.createSpan({ cls: "dp-warn" });
       (0, import_obsidian4.setIcon)(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
     }
-    row.createSpan({
+    meta.createSpan({
       cls: "dp-block-time",
       text: this.formatBlockTime(block.task)
     });
