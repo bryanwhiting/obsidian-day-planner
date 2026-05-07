@@ -1168,6 +1168,12 @@ function parseTimelineHeight(raw) {
     return `${v}px`;
   return CSS_LENGTH_RE.test(v) ? v : null;
 }
+var TAB_LABELS = {
+  general: "Hotkeys & Defaults",
+  projects: "Projects",
+  pomodoro: "Pomodoro",
+  habits: "Habits"
+};
 var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -1176,6 +1182,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     // calling this.display() after a prefix edit), so we can compare the user's
     // final state against where they started when the tab closes.
     this.prefixSnapshot = null;
+    this.activeTab = "general";
     this.plugin = plugin;
   }
   display() {
@@ -1184,16 +1191,46 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       this.prefixSnapshot = { ...this.plugin.settings.prefixes };
     }
     containerEl.empty();
-    this.renderDefaultsSection(containerEl);
-    this.renderPomodoroSection(containerEl);
-    this.renderTaskIdSection(containerEl);
-    this.renderAutocompleteSection(containerEl);
-    this.renderProjectsSection(containerEl);
-    this.renderContextTagsSection(containerEl);
-    this.renderNotesSection(containerEl);
-    this.renderHabitsSection(containerEl);
-    this.renderTemplatingSection(containerEl);
-    this.renderDayConfigSection(containerEl);
+    containerEl.addClass("dp-settings");
+    this.renderTabs(containerEl);
+    const pane = containerEl.createDiv({ cls: "dp-settings-pane" });
+    switch (this.activeTab) {
+      case "general":
+        this.renderDefaultsSection(pane);
+        this.renderTaskIdSection(pane);
+        this.renderAutocompleteSection(pane);
+        this.renderNotesSection(pane);
+        this.renderTemplatingSection(pane);
+        this.renderDayConfigSection(pane);
+        break;
+      case "projects":
+        this.renderProjectsSection(pane);
+        this.renderContextTagsSection(pane);
+        break;
+      case "pomodoro":
+        this.renderPomodoroSection(pane);
+        break;
+      case "habits":
+        this.renderHabitsSection(pane);
+        break;
+    }
+  }
+  renderTabs(containerEl) {
+    const bar = containerEl.createDiv({ cls: "dp-settings-tabs" });
+    Object.keys(TAB_LABELS).forEach((tab) => {
+      const btn = bar.createEl("button", {
+        cls: "dp-settings-tab",
+        text: TAB_LABELS[tab]
+      });
+      if (tab === this.activeTab)
+        btn.addClass("is-active");
+      btn.addEventListener("click", () => {
+        if (this.activeTab === tab)
+          return;
+        this.activeTab = tab;
+        this.display();
+      });
+    });
   }
   hide() {
     if (!this.prefixSnapshot)

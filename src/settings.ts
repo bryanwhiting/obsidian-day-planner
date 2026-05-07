@@ -165,6 +165,15 @@ export function parseTimelineHeight(raw: string): string | null {
   return CSS_LENGTH_RE.test(v) ? v : null;
 }
 
+type SettingsTab = "general" | "projects" | "pomodoro" | "habits";
+
+const TAB_LABELS: Record<SettingsTab, string> = {
+  general: "Hotkeys & Defaults",
+  projects: "Projects",
+  pomodoro: "Pomodoro",
+  habits: "Habits",
+};
+
 export class TodaySettingTab extends PluginSettingTab {
   plugin: TodayPlugin;
   // Captured the first time the tab is opened, cleared on hide(). Persists
@@ -172,6 +181,7 @@ export class TodaySettingTab extends PluginSettingTab {
   // calling this.display() after a prefix edit), so we can compare the user's
   // final state against where they started when the tab closes.
   private prefixSnapshot: TagPrefixes | null = null;
+  private activeTab: SettingsTab = "general";
 
   constructor(app: App, plugin: TodayPlugin) {
     super(app, plugin);
@@ -184,17 +194,47 @@ export class TodaySettingTab extends PluginSettingTab {
       this.prefixSnapshot = { ...this.plugin.settings.prefixes };
     }
     containerEl.empty();
+    containerEl.addClass("dp-settings");
 
-    this.renderDefaultsSection(containerEl);
-    this.renderPomodoroSection(containerEl);
-    this.renderTaskIdSection(containerEl);
-    this.renderAutocompleteSection(containerEl);
-    this.renderProjectsSection(containerEl);
-    this.renderContextTagsSection(containerEl);
-    this.renderNotesSection(containerEl);
-    this.renderHabitsSection(containerEl);
-    this.renderTemplatingSection(containerEl);
-    this.renderDayConfigSection(containerEl);
+    this.renderTabs(containerEl);
+
+    const pane = containerEl.createDiv({ cls: "dp-settings-pane" });
+    switch (this.activeTab) {
+      case "general":
+        this.renderDefaultsSection(pane);
+        this.renderTaskIdSection(pane);
+        this.renderAutocompleteSection(pane);
+        this.renderNotesSection(pane);
+        this.renderTemplatingSection(pane);
+        this.renderDayConfigSection(pane);
+        break;
+      case "projects":
+        this.renderProjectsSection(pane);
+        this.renderContextTagsSection(pane);
+        break;
+      case "pomodoro":
+        this.renderPomodoroSection(pane);
+        break;
+      case "habits":
+        this.renderHabitsSection(pane);
+        break;
+    }
+  }
+
+  private renderTabs(containerEl: HTMLElement): void {
+    const bar = containerEl.createDiv({ cls: "dp-settings-tabs" });
+    (Object.keys(TAB_LABELS) as SettingsTab[]).forEach((tab) => {
+      const btn = bar.createEl("button", {
+        cls: "dp-settings-tab",
+        text: TAB_LABELS[tab],
+      });
+      if (tab === this.activeTab) btn.addClass("is-active");
+      btn.addEventListener("click", () => {
+        if (this.activeTab === tab) return;
+        this.activeTab = tab;
+        this.display();
+      });
+    });
   }
 
   hide(): void {

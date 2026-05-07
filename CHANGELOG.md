@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-07
+
+- [feat]: Settings UI organized into 4 tabs — Hotkeys & Defaults, Projects, Pomodoro, Habits — with a tab bar at the top of the settings pane. Switching tabs swaps the body. "Hotkeys & Defaults" gathers Defaults, Task ID, Autocomplete, Notes, Templating, and Day-config sections; "Projects" gathers Projects + Context tags; the other two tabs each hold their single existing section. Files: `src/settings.ts` (new `SettingsTab` type, `activeTab` state, `renderTabs`, dispatch in `display()`), `src/styles.src.css` (`.dp-settings-tabs`, `.dp-settings-tab`, `.is-active`, `.dp-settings-pane`). The user asked: "can you make the Settings more readable? … Can you make tabs for Hotkeys and Defaults / Projects / Pomodoro / Habits".
+
 ## 2026-05-06
 
 - [feat]: Edit-task modal duration row: (1) selected chip now uses solid-accent fill + on-accent text so the selection stays unmistakable instead of fading into focus/hover styles, and (2) added a custom-duration text input under the chip row, pre-filled with the current duration so it's visible even when none of the quick-duration chips match. Accepts free-form values (`30m`, `1h`, `1h30m`, `90m`) and tolerates a leading `#d/` tag if pasted. Typing in the field updates the chip selection live and the selected-duration state; clicking a chip mirrors back into the field. Enter still submits. Files: `src/view.ts` (TaskEditModal duration row: `refreshDurButtons`, `durInput`, sync in chip handler + `#$` autocomplete commit; Enter wiring), `src/styles.src.css` (`.dp-duration-btn.is-selected` solid accent fill, `.dp-duration-custom-row` + `.dp-duration-custom-input`). The user asked: "when i pick a duration in the edit task modal, it doesn't highlight. if a duration is already present, it should show in a text box. if i need a custom duration, i can go into the text box, and it shoudl parse my tags (td) for a recommendation".
