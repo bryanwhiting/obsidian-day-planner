@@ -609,49 +609,8 @@ export class TodaySettingTab extends PluginSettingTab {
       });
   }
 
-  private renderViewSection(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Day config").setHeading();
-
-    new Setting(containerEl)
-      .setName("Pixels per minute")
-      .setDesc("Vertical scale of the timeline.")
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.pxPerMin.toString())
-          .onChange(async (v) => {
-            const n = parseFloat(v);
-            if (!isNaN(n) && n > 0 && n <= 10) {
-              this.plugin.settings.pxPerMin = n;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Visible start hour")
-      .setDesc("First hour shown on the timeline (0-23).")
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.visibleStartHour.toString())
-          .onChange(async (v) => {
-            const n = clampInt(v, 0, 23, this.plugin.settings.visibleStartHour);
-            this.plugin.settings.visibleStartHour = n;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Visible end hour")
-      .setDesc("Last hour shown (1-24, must exceed start).")
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.visibleEndHour.toString())
-          .onChange(async (v) => {
-            const n = clampInt(v, 1, 24, this.plugin.settings.visibleEndHour);
-            this.plugin.settings.visibleEndHour = n;
-            await this.plugin.saveSettings();
-          }),
-      );
+  private renderDaySection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Day").setHeading();
 
     new Setting(containerEl)
       .setName("Working hours start")
@@ -717,6 +676,51 @@ export class TodaySettingTab extends PluginSettingTab {
               24,
               this.plugin.settings.sleepHour,
             );
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+
+  private renderViewSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("View").setHeading();
+
+    new Setting(containerEl)
+      .setName("Pixels per minute")
+      .setDesc("Vertical scale of the timeline.")
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.pxPerMin.toString())
+          .onChange(async (v) => {
+            const n = parseFloat(v);
+            if (!isNaN(n) && n > 0 && n <= 10) {
+              this.plugin.settings.pxPerMin = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Visible start hour")
+      .setDesc("First hour shown on the timeline (0-23).")
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.visibleStartHour.toString())
+          .onChange(async (v) => {
+            const n = clampInt(v, 0, 23, this.plugin.settings.visibleStartHour);
+            this.plugin.settings.visibleStartHour = n;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Visible end hour")
+      .setDesc("Last hour shown (1-24, must exceed start).")
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.visibleEndHour.toString())
+          .onChange(async (v) => {
+            const n = clampInt(v, 1, 24, this.plugin.settings.visibleEndHour);
+            this.plugin.settings.visibleEndHour = n;
             await this.plugin.saveSettings();
           }),
       );
