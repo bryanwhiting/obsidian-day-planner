@@ -302,7 +302,7 @@ export class HabitsStatsView extends ItemView {
         }
         cells.push({ bucket: b, checkedCount: count });
         totalChecked += count;
-        if (count > 0) hits++;
+        if (count >= h.target) hits++;
       }
       rows.push({ habit: h, cells, totalChecked, hits });
     }
@@ -427,6 +427,12 @@ export class HabitsStatsView extends ItemView {
           cls: "dp-heatmap-habit-name",
           text: row.habit.slug,
         });
+        if (row.habit.target > 1) {
+          labelEl.createSpan({
+            cls: "dp-heatmap-habit-target",
+            text: `≥${row.habit.target}`,
+          });
+        }
         const summary = `${row.hits}/${row.cells.length}`;
         labelEl.createSpan({
           cls: "dp-heatmap-habit-summary",
@@ -434,15 +440,28 @@ export class HabitsStatsView extends ItemView {
         });
         if (row.habit.label) labelEl.title = row.habit.label;
         for (const cell of row.cells) {
+          // For target>1 habits, color is met/not-met (matching the
+          // exercise-goal grid) so the heatmap reads as "did I hit my
+          // weekly target." For target=1 habits, use the count-based
+          // intensity scale so multiple checks in a single bucket still
+          // shade darker.
+          const intensity =
+            row.habit.target > 1
+              ? cell.checkedCount >= row.habit.target
+                ? 4
+                : 0
+              : quintile(cell.checkedCount);
           const cellEl = grid.createDiv({
             cls:
               "dp-heatmap-cell q" +
-              quintile(cell.checkedCount) +
+              intensity +
               (cell.bucket.isCurrent ? " is-current" : ""),
           });
           const word =
             cell.checkedCount === 1 ? "completion" : "completions";
-          cellEl.title = `${row.habit.slug} · ${cell.bucket.tooltip}\n${cell.checkedCount} ${word}`;
+          const targetSuffix =
+            row.habit.target > 1 ? ` (target ${row.habit.target})` : "";
+          cellEl.title = `${row.habit.slug} · ${cell.bucket.tooltip}\n${cell.checkedCount} ${word}${targetSuffix}`;
         }
       }
     }

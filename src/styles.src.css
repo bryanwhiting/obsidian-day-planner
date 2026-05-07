@@ -468,6 +468,15 @@
     font-weight: 600;
   }
 
+  .dp-habit-progress {
+    color: var(--color-ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dp-habit.is-done .dp-habit-progress {
+    text-decoration: line-through;
+  }
+
   .dp-habit.has-dup {
     /* Doubled underline cues a duplicate without being too loud. */
     border-bottom-style: double;

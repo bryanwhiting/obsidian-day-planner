@@ -96,16 +96,18 @@ interface DragPayload {
 
 interface HabitDisplay {
   habit: Habit;
-  // True when at least one `- [x]` task line containing the habit tag exists
-  // in the relevant window (today's daily note for `day`, this week's notes
-  // for `week`, this month's for `month`). Bare-tag-in-prose lines and
-  // unchecked `- [ ]` lines are NOT enough — pre-templated planned-ahead
-  // habits stay marked incomplete until the user actually checks them.
+  // Sum of `- [x]` task lines containing the habit tag across the relevant
+  // window (today's daily note for `day`, this week's notes for `week`, this
+  // month's for `month`). Bare-tag-in-prose lines and unchecked `- [ ]` lines
+  // are NOT counted — pre-templated planned-ahead habits stay incomplete
+  // until the user actually checks them.
+  checkedCount: number;
+  // True when checkedCount >= habit.target. For target=1 habits this matches
+  // the prior boolean behavior.
   isComplete: boolean;
   // True when at least one file in the window has 2+ task lines for this
-  // habit. Cross-file repetition (a weekly habit tracked across multiple
-  // days) is intentionally NOT a duplicate — only same-file dups warrant
-  // attention.
+  // habit AND target is 1. For target>1 habits, multiple checks per file
+  // are legitimate progress, not duplicates.
   hasDuplicate: boolean;
   // Highest per-file task-line count across the window. Shown in the UI
   // next to the duplicate badge so the user knows how many copies to remove.
@@ -2514,8 +2516,9 @@ export class TodayView extends ItemView {
       }
       out.push({
         habit: h,
-        isComplete: checkedCount > 0,
-        hasDuplicate: maxPerFile > 1,
+        checkedCount,
+        isComplete: checkedCount >= h.target,
+        hasDuplicate: h.target === 1 && maxPerFile > 1,
         maxPerFile,
       });
     }
@@ -2570,6 +2573,12 @@ export class TodayView extends ItemView {
           (d.hasDuplicate ? " has-dup" : "");
         const chip = wrap.createSpan({ cls });
         chip.createSpan({ cls: "dp-habit-name", text: d.habit.slug });
+        if (d.habit.target > 1) {
+          chip.createSpan({
+            cls: "dp-habit-progress",
+            text: ` ${d.checkedCount}/${d.habit.target}`,
+          });
+        }
         if (d.hasDuplicate) {
           chip.createSpan({
             cls: "dp-habit-dup",
@@ -2578,6 +2587,11 @@ export class TodayView extends ItemView {
         }
         const tooltipParts: string[] = [];
         if (d.habit.label) tooltipParts.push(d.habit.label);
+        if (d.habit.target > 1) {
+          tooltipParts.push(
+            `Target ${d.habit.target}× per ${d.habit.period}`,
+          );
+        }
         if (d.hasDuplicate) {
           tooltipParts.push(
             `${d.maxPerFile} task lines for this habit in one daily note — clean up duplicates by hand`,

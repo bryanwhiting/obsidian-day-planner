@@ -13,6 +13,9 @@ export type HabitPeriod = "day" | "week" | "month";
 export interface Habit {
   period: HabitPeriod;
   slug: string;
+  // How many checked task lines in the habit's window count as "done". Defaults
+  // to 1 when the habit tag has no trailing `/N` segment.
+  target: number;
   // Empty if the habits-file line had no trailing description.
   label: string;
 }
@@ -25,8 +28,10 @@ function escapeRegex(s: string): string {
 
 // Builds the regex that matches a habit tag in arbitrary content. Pass `period`
 // or `slug` to lock those segments; otherwise they're captured as groups 1/2.
-// The trailing negative lookahead prevents `#h/day/foo` from being matched when
-// the user means `#h/day/foo-bar`.
+// The optional `/N` target segment is matched but not captured here — both
+// `#h-day/foo` and `#h-day/foo/3` count as "this habit". The trailing negative
+// lookahead `[\w-/]` keeps `#h-day/foo/bar` (extra path segment, no digits)
+// from matching as `#h-day/foo`.
 export function buildHabitTagRegex(
   prefix: string,
   period?: HabitPeriod,
@@ -35,7 +40,7 @@ export function buildHabitTagRegex(
   const periodPart = period ?? "(day|week|month)";
   const slugPart = slug ? escapeRegex(slug) : `(${SLUG_PATTERN})`;
   return new RegExp(
-    `#${escapeRegex(prefix)}\\/${periodPart}\\/${slugPart}(?![\\w-])`,
+    `#${escapeRegex(prefix)}-${periodPart}\\/${slugPart}(?:\\/\\d+)?(?![\\w\\-/])`,
     "g",
   );
 }
@@ -83,11 +88,12 @@ export function parseExerciseGoals(
 
 // Parses the habits-source file. Each line that contains a habit tag becomes
 // one Habit. Text after the tag on the same line is the human label; lines
-// without a tag are silently skipped. Duplicate (period, slug) pairs collapse
-// to the first occurrence.
+// without a tag are silently skipped. The optional `/N` segment after the slug
+// sets the target (default 1). Duplicate (period, slug) pairs collapse to the
+// first occurrence.
 export function parseHabitsFile(content: string, prefix: string): Habit[] {
   const re = new RegExp(
-    `#${escapeRegex(prefix)}\\/(day|week|month)\\/(${SLUG_PATTERN})(?![\\w-])(.*)$`,
+    `#${escapeRegex(prefix)}-(day|week|month)\\/(${SLUG_PATTERN})(?:\\/(\\d+))?(?![\\w\\-/])(.*)$`,
   );
   const habits: Habit[] = [];
   const seen = new Set<string>();
@@ -96,25 +102,30 @@ export function parseHabitsFile(content: string, prefix: string): Habit[] {
     if (!m) continue;
     const period = m[1] as HabitPeriod;
     const slug = m[2];
-    const label = (m[3] ?? "").trim();
+    const targetRaw = m[3];
+    const label = (m[4] ?? "").trim();
+    const parsed = targetRaw ? parseInt(targetRaw, 10) : 1;
+    const target = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
     const key = `${period}/${slug}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    habits.push({ period, slug, label });
+    habits.push({ period, slug, target, label });
   }
   return habits;
 }
 
-// Appends `- [x] <slug> #<prefix>/<period>/<slug>` to `content`, ensuring the
+// Appends `- [x] <slug> #<prefix>-<period>/<slug>` to `content`, ensuring the
 // file ends with exactly one newline. Used only when no task line for this
 // habit already exists; toggling an existing line uses `toggleHabitOnContent`.
+// The target is intentionally NOT included on the appended tag — completion is
+// counted across task lines, and the source target lives in `_habits.md`.
 export function appendHabitLine(
   content: string,
   prefix: string,
   period: HabitPeriod,
   slug: string,
 ): string {
-  const line = `- [x] ${slug} #${prefix}/${period}/${slug}`;
+  const line = `- [x] ${slug} #${prefix}-${period}/${slug}`;
   if (content.length === 0) return line + "\n";
   if (content.endsWith("\n")) return content + line + "\n";
   return content + "\n" + line + "\n";

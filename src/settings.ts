@@ -77,10 +77,11 @@ export interface TodaySettings {
   // string falls back to the bare filename (no alias).
   dateLinkFormat: string;
   // Path to the habits-source file (e.g. "daily/_habits.md"). Plain hashtag
-  // lines like `#h/day/call-mom Call mom` define habits.
+  // lines like `#h-day/call-mom Call mom` define habits. Append `/N` to set a
+  // weekly/monthly target (e.g. `#h-week/laundry/2`).
   habitsFile: string;
   // Single-letter tag prefix for habits. Default "h" → tags look like
-  // `#h/day/call-mom`. Validated against /^[a-zA-Z]+$/.
+  // `#h-day/call-mom`. Validated against /^[a-zA-Z]+$/.
   habitPrefix: string;
   // First day of the habit week. 0=Sunday..6=Saturday. Default Sunday.
   habitWeekStart: number;
@@ -1189,11 +1190,15 @@ export class TodaySettingTab extends PluginSettingTab {
     const desc = document.createDocumentFragment();
     desc.append(
       "Habits live in a single source file as plain hashtag lines like ",
-      makeCode("#h/day/call-mom Call mom"),
+      makeCode("#h-day/call-mom Call mom"),
       " or ",
-      makeCode("#h/week/review-monarch"),
-      ". The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
-      makeCode("- [x] <slug> #h/<period>/<slug>"),
+      makeCode("#h-week/review-monarch"),
+      ". Append ",
+      makeCode("/N"),
+      " to set a per-period target — e.g. ",
+      makeCode("#h-week/laundry/2"),
+      " counts as done once two checked task lines appear in that week. The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
+      makeCode("- [x] <slug> #h-<period>/<slug>"),
       " to the displayed daily note. The point is to avoid muddying your daily checklist — habits stay invisible in the note unless completed.",
     );
     new Setting(containerEl).setDesc(desc);
@@ -1218,7 +1223,7 @@ export class TodaySettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Habit tag prefix")
       .setDesc(
-        "Letter(s) used between # and the period segment. Default `h` → tags look like `#h/day/call-mom`.",
+        "Letter(s) used between # and the period segment. Default `h` → tags look like `#h-day/call-mom`.",
       )
       .addText((t) =>
         t

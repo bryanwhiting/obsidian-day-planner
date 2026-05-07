@@ -1921,11 +1921,15 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     const desc = document.createDocumentFragment();
     desc.append(
       "Habits live in a single source file as plain hashtag lines like ",
-      makeCode("#h/day/call-mom Call mom"),
+      makeCode("#h-day/call-mom Call mom"),
       " or ",
-      makeCode("#h/week/review-monarch"),
-      ". The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
-      makeCode("- [x] <slug> #h/<period>/<slug>"),
+      makeCode("#h-week/review-monarch"),
+      ". Append ",
+      makeCode("/N"),
+      " to set a per-period target \u2014 e.g. ",
+      makeCode("#h-week/laundry/2"),
+      " counts as done once two checked task lines appear in that week. The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
+      makeCode("- [x] <slug> #h-<period>/<slug>"),
       " to the displayed daily note. The point is to avoid muddying your daily checklist \u2014 habits stay invisible in the note unless completed."
     );
     new import_obsidian2.Setting(containerEl).setDesc(desc);
@@ -1941,7 +1945,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       });
     });
     new import_obsidian2.Setting(containerEl).setName("Habit tag prefix").setDesc(
-      "Letter(s) used between # and the period segment. Default `h` \u2192 tags look like `#h/day/call-mom`."
+      "Letter(s) used between # and the period segment. Default `h` \u2192 tags look like `#h-day/call-mom`."
     ).addText(
       (t) => t.setPlaceholder("h").setValue(this.plugin.settings.habitPrefix).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
@@ -2568,7 +2572,7 @@ function buildHabitTagRegex(prefix, period, slug) {
   const periodPart = period != null ? period : "(day|week|month)";
   const slugPart = slug ? escapeRegex2(slug) : `(${SLUG_PATTERN})`;
   return new RegExp(
-    `#${escapeRegex2(prefix)}\\/${periodPart}\\/${slugPart}(?![\\w-])`,
+    `#${escapeRegex2(prefix)}-${periodPart}\\/${slugPart}(?:\\/\\d+)?(?![\\w\\-/])`,
     "g"
   );
 }
@@ -2600,7 +2604,7 @@ function parseExerciseGoals(content, exercisePrefix) {
 function parseHabitsFile(content, prefix) {
   var _a;
   const re = new RegExp(
-    `#${escapeRegex2(prefix)}\\/(day|week|month)\\/(${SLUG_PATTERN})(?![\\w-])(.*)$`
+    `#${escapeRegex2(prefix)}-(day|week|month)\\/(${SLUG_PATTERN})(?:\\/(\\d+))?(?![\\w\\-/])(.*)$`
   );
   const habits = [];
   const seen = /* @__PURE__ */ new Set();
@@ -2610,17 +2614,20 @@ function parseHabitsFile(content, prefix) {
       continue;
     const period = m[1];
     const slug = m[2];
-    const label = ((_a = m[3]) != null ? _a : "").trim();
+    const targetRaw = m[3];
+    const label = ((_a = m[4]) != null ? _a : "").trim();
+    const parsed = targetRaw ? parseInt(targetRaw, 10) : 1;
+    const target = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
     const key = `${period}/${slug}`;
     if (seen.has(key))
       continue;
     seen.add(key);
-    habits.push({ period, slug, label });
+    habits.push({ period, slug, target, label });
   }
   return habits;
 }
 function appendHabitLine(content, prefix, period, slug) {
-  const line = `- [x] ${slug} #${prefix}/${period}/${slug}`;
+  const line = `- [x] ${slug} #${prefix}-${period}/${slug}`;
   if (content.length === 0)
     return line + "\n";
   if (content.endsWith("\n"))
@@ -4751,8 +4758,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
       out.push({
         habit: h,
-        isComplete: checkedCount > 0,
-        hasDuplicate: maxPerFile > 1,
+        checkedCount,
+        isComplete: checkedCount >= h.target,
+        hasDuplicate: h.target === 1 && maxPerFile > 1,
         maxPerFile
       });
     }
@@ -4794,6 +4802,12 @@ var TodayView = class extends import_obsidian4.ItemView {
         const cls = "dp-habit" + (d.isComplete ? " is-done" : "") + (d.hasDuplicate ? " has-dup" : "");
         const chip = wrap.createSpan({ cls });
         chip.createSpan({ cls: "dp-habit-name", text: d.habit.slug });
+        if (d.habit.target > 1) {
+          chip.createSpan({
+            cls: "dp-habit-progress",
+            text: ` ${d.checkedCount}/${d.habit.target}`
+          });
+        }
         if (d.hasDuplicate) {
           chip.createSpan({
             cls: "dp-habit-dup",
@@ -4803,6 +4817,11 @@ var TodayView = class extends import_obsidian4.ItemView {
         const tooltipParts = [];
         if (d.habit.label)
           tooltipParts.push(d.habit.label);
+        if (d.habit.target > 1) {
+          tooltipParts.push(
+            `Target ${d.habit.target}\xD7 per ${d.habit.period}`
+          );
+        }
         if (d.hasDuplicate) {
           tooltipParts.push(
             `${d.maxPerFile} task lines for this habit in one daily note \u2014 clean up duplicates by hand`
@@ -6873,7 +6892,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
         }
         cells.push({ bucket: b, checkedCount: count });
         totalChecked += count;
-        if (count > 0)
+        if (count >= h.target)
           hits++;
       }
       rows.push({ habit: h, cells, totalChecked, hits });
@@ -6973,6 +6992,12 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
           cls: "dp-heatmap-habit-name",
           text: row.habit.slug
         });
+        if (row.habit.target > 1) {
+          labelEl.createSpan({
+            cls: "dp-heatmap-habit-target",
+            text: `\u2265${row.habit.target}`
+          });
+        }
         const summary = `${row.hits}/${row.cells.length}`;
         labelEl.createSpan({
           cls: "dp-heatmap-habit-summary",
@@ -6981,12 +7006,14 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
         if (row.habit.label)
           labelEl.title = row.habit.label;
         for (const cell of row.cells) {
+          const intensity = row.habit.target > 1 ? cell.checkedCount >= row.habit.target ? 4 : 0 : quintile(cell.checkedCount);
           const cellEl = grid.createDiv({
-            cls: "dp-heatmap-cell q" + quintile(cell.checkedCount) + (cell.bucket.isCurrent ? " is-current" : "")
+            cls: "dp-heatmap-cell q" + intensity + (cell.bucket.isCurrent ? " is-current" : "")
           });
           const word = cell.checkedCount === 1 ? "completion" : "completions";
+          const targetSuffix = row.habit.target > 1 ? ` (target ${row.habit.target})` : "";
           cellEl.title = `${row.habit.slug} \xB7 ${cell.bucket.tooltip}
-${cell.checkedCount} ${word}`;
+${cell.checkedCount} ${word}${targetSuffix}`;
         }
       }
     }
