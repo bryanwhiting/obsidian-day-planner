@@ -1169,7 +1169,7 @@ function parseTimelineHeight(raw) {
   return CSS_LENGTH_RE.test(v) ? v : null;
 }
 var TAB_SPECS = {
-  general: { label: "Hotkeys & Defaults", icon: "sliders-horizontal" },
+  general: { label: "Automations", icon: "sliders-horizontal" },
   tasks: { label: "Tasks", icon: "list-checks" },
   day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },

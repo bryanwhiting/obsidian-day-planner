@@ -182,7 +182,7 @@ interface TabSpec {
 }
 
 const TAB_SPECS: Record<SettingsTab, TabSpec> = {
-  general: { label: "Hotkeys & Defaults", icon: "sliders-horizontal" },
+  general: { label: "Automations", icon: "sliders-horizontal" },
   tasks: { label: "Tasks", icon: "list-checks" },
   day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },
