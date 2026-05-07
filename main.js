@@ -1170,6 +1170,8 @@ function parseTimelineHeight(raw) {
 }
 var TAB_SPECS = {
   general: { label: "Hotkeys & Defaults", icon: "sliders-horizontal" },
+  tasks: { label: "Tasks", icon: "list-checks" },
+  view: { label: "View", icon: "eye" },
   projects: { label: "Projects", icon: "folder-kanban" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
   habits: { label: "Habits", icon: "repeat" }
@@ -1197,12 +1199,16 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     const pane = containerEl.createDiv({ cls: "dp-settings-pane" });
     switch (this.activeTab) {
       case "general":
-        this.renderDefaultsSection(pane);
-        this.renderTaskIdSection(pane);
         this.renderAutocompleteSection(pane);
-        this.renderNotesSection(pane);
         this.renderTemplatingSection(pane);
-        this.renderDayConfigSection(pane);
+        break;
+      case "tasks":
+        this.renderTaskDefaultsSection(pane);
+        this.renderTaskIdSection(pane);
+        this.renderNotesSection(pane);
+        break;
+      case "view":
+        this.renderViewSection(pane);
         break;
       case "projects":
         this.renderProjectsSection(pane);
@@ -1280,7 +1286,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       }).open();
     }
   }
-  renderDefaultsSection(containerEl) {
+  renderTaskDefaultsSection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Defaults").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Default duration (minutes)").setDesc(
       "Used for tasks that have a #t/ start time but no #d/ tag. Drag the bottom edge of the block to commit a real duration."
@@ -1324,15 +1330,6 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           this.plugin.settings.snapMin
         );
         await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("Pixels per minute").setDesc("Vertical scale of the timeline.").addText(
-      (t) => t.setValue(this.plugin.settings.pxPerMin.toString()).onChange(async (v) => {
-        const n = parseFloat(v);
-        if (!isNaN(n) && n > 0 && n <= 10) {
-          this.plugin.settings.pxPerMin = n;
-          await this.plugin.saveSettings();
-        }
       })
     );
     new import_obsidian2.Setting(containerEl).setName("Duration tag prefix").setDesc(buildDurationDesc()).addText(
@@ -1481,8 +1478,17 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       });
     });
   }
-  renderDayConfigSection(containerEl) {
+  renderViewSection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Day config").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Pixels per minute").setDesc("Vertical scale of the timeline.").addText(
+      (t) => t.setValue(this.plugin.settings.pxPerMin.toString()).onChange(async (v) => {
+        const n = parseFloat(v);
+        if (!isNaN(n) && n > 0 && n <= 10) {
+          this.plugin.settings.pxPerMin = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
     new import_obsidian2.Setting(containerEl).setName("Visible start hour").setDesc("First hour shown on the timeline (0-23).").addText(
       (t) => t.setValue(this.plugin.settings.visibleStartHour.toString()).onChange(async (v) => {
         const n = clampInt(v, 0, 23, this.plugin.settings.visibleStartHour);

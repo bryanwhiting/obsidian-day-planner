@@ -167,7 +167,13 @@ export function parseTimelineHeight(raw: string): string | null {
   return CSS_LENGTH_RE.test(v) ? v : null;
 }
 
-type SettingsTab = "general" | "projects" | "pomodoro" | "habits";
+type SettingsTab =
+  | "general"
+  | "tasks"
+  | "view"
+  | "projects"
+  | "pomodoro"
+  | "habits";
 
 interface TabSpec {
   label: string;
@@ -176,6 +182,8 @@ interface TabSpec {
 
 const TAB_SPECS: Record<SettingsTab, TabSpec> = {
   general: { label: "Hotkeys & Defaults", icon: "sliders-horizontal" },
+  tasks: { label: "Tasks", icon: "list-checks" },
+  view: { label: "View", icon: "eye" },
   projects: { label: "Projects", icon: "folder-kanban" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
   habits: { label: "Habits", icon: "repeat" },
@@ -209,12 +217,16 @@ export class TodaySettingTab extends PluginSettingTab {
     const pane = containerEl.createDiv({ cls: "dp-settings-pane" });
     switch (this.activeTab) {
       case "general":
-        this.renderDefaultsSection(pane);
-        this.renderTaskIdSection(pane);
         this.renderAutocompleteSection(pane);
-        this.renderNotesSection(pane);
         this.renderTemplatingSection(pane);
-        this.renderDayConfigSection(pane);
+        break;
+      case "tasks":
+        this.renderTaskDefaultsSection(pane);
+        this.renderTaskIdSection(pane);
+        this.renderNotesSection(pane);
+        break;
+      case "view":
+        this.renderViewSection(pane);
         break;
       case "projects":
         this.renderProjectsSection(pane);
@@ -293,7 +305,7 @@ export class TodaySettingTab extends PluginSettingTab {
     }
   }
 
-  private renderDefaultsSection(containerEl: HTMLElement): void {
+  private renderTaskDefaultsSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Defaults").setHeading();
 
     new Setting(containerEl)
@@ -353,21 +365,6 @@ export class TodaySettingTab extends PluginSettingTab {
               this.plugin.settings.snapMin,
             );
             await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Pixels per minute")
-      .setDesc("Vertical scale of the timeline.")
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.pxPerMin.toString())
-          .onChange(async (v) => {
-            const n = parseFloat(v);
-            if (!isNaN(n) && n > 0 && n <= 10) {
-              this.plugin.settings.pxPerMin = n;
-              await this.plugin.saveSettings();
-            }
           }),
       );
 
@@ -607,8 +604,23 @@ export class TodaySettingTab extends PluginSettingTab {
       });
   }
 
-  private renderDayConfigSection(containerEl: HTMLElement): void {
+  private renderViewSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Day config").setHeading();
+
+    new Setting(containerEl)
+      .setName("Pixels per minute")
+      .setDesc("Vertical scale of the timeline.")
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.pxPerMin.toString())
+          .onChange(async (v) => {
+            const n = parseFloat(v);
+            if (!isNaN(n) && n > 0 && n <= 10) {
+              this.plugin.settings.pxPerMin = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
 
     new Setting(containerEl)
       .setName("Visible start hour")
