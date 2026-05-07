@@ -65,9 +65,12 @@ interface PeriodSection {
   exerciseTotals: Map<string, number>;
 }
 
+type StatsTab = "habits" | "workouts";
+
 export class HabitsStatsView extends ItemView {
   plugin: TodayPlugin;
   private rerenderTimer: number | null = null;
+  private activeTab: StatsTab = "habits";
 
   constructor(leaf: WorkspaceLeaf, plugin: TodayPlugin) {
     super(leaf);
@@ -128,6 +131,8 @@ export class HabitsStatsView extends ItemView {
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });
     heading.createEl("h3", { text: "Habit stats" });
 
+    this.renderTabs(root);
+
     const { habits, goals } = await this.loadHabitsAndGoals();
     if (habits.length === 0 && goals.length === 0) {
       root.createDiv({
@@ -139,6 +144,11 @@ export class HabitsStatsView extends ItemView {
 
     const today = startOfDay(new Date());
     const window = settings.habitsStatsWindow;
+
+    if (this.activeTab === "workouts") {
+      await this.renderWorkoutLog(root, today, window, fallback);
+      return;
+    }
 
     const dayBuckets = this.buildDayBuckets(today, window);
     const weekBuckets = this.buildWeekBuckets(today, window);
@@ -172,6 +182,118 @@ export class HabitsStatsView extends ItemView {
     this.renderSection(root, daySection);
     this.renderSection(root, weekSection);
     this.renderSection(root, monthSection);
+  }
+
+  private renderTabs(parent: HTMLElement): void {
+    const tabsEl = parent.createDiv({ cls: "dp-habit-stats-tabs" });
+    const make = (key: StatsTab, label: string) => {
+      const el = tabsEl.createEl("button", {
+        cls:
+          "dp-habit-stats-tab" +
+          (this.activeTab === key ? " is-active" : ""),
+        text: label,
+      });
+      el.onclick = () => {
+        if (this.activeTab === key) return;
+        this.activeTab = key;
+        void this.render();
+      };
+    };
+    make("habits", "Habits");
+    make("workouts", "Workouts");
+  }
+
+  private async renderWorkoutLog(
+    parent: HTMLElement,
+    today: Date,
+    window: number,
+    fallback: DailyNoteFallback,
+  ): Promise<void> {
+    const settings = this.plugin.settings;
+    const days: Date[] = [];
+    for (let i = window - 1; i >= 0; i--) days.push(addDays(today, -i));
+
+    // Sum reps per exercise per day, restricted to completed (`- [x]`) sets
+    // — pending sets on a logged-but-not-yet-done day shouldn't show up as
+    // reps the user "did".
+    const repsByDate = new Map<number, Map<string, number>>();
+    const totalsByName = new Map<string, number>();
+    for (const d of days) {
+      const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+      const m = new Map<string, number>();
+      if (c) {
+        const summaries = parseExercises(c, settings.prefixes);
+        for (const s of summaries) {
+          let reps = 0;
+          for (const set of s.sets) if (set.done) reps += set.reps;
+          if (reps > 0) {
+            m.set(s.name, reps);
+            totalsByName.set(s.name, (totalsByName.get(s.name) ?? 0) + reps);
+          }
+        }
+      }
+      repsByDate.set(d.getTime(), m);
+    }
+
+    const sectionEl = parent.createDiv({ cls: "dp-heatmap-section" });
+    if (totalsByName.size === 0) {
+      sectionEl.createDiv({
+        cls: "dp-heatmap-no-habits",
+        text: "No completed exercise sets in this window.",
+      });
+      return;
+    }
+
+    // Sort exercises by total reps desc so the most-active ones land on top.
+    const sortedNames = Array.from(totalsByName.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([n]) => n);
+
+    const table = sectionEl.createEl("table", { cls: "dp-workout-log" });
+    const thead = table.createEl("thead");
+    const headRow = thead.createEl("tr");
+    headRow.createEl("th", { cls: "dp-workout-log-name-h", text: "Exercise" });
+    for (const d of days) {
+      const th = headRow.createEl("th", {
+        cls:
+          "dp-workout-log-date" +
+          (d.getTime() === today.getTime() ? " is-current" : ""),
+        text: d.getDate().toString(),
+      });
+      th.title = d.toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+    headRow.createEl("th", { cls: "dp-workout-log-total-h", text: "Total" });
+
+    const tbody = table.createEl("tbody");
+    for (const name of sortedNames) {
+      const tr = tbody.createEl("tr");
+      tr.createEl("td", { cls: "dp-workout-log-name", text: name });
+      for (const d of days) {
+        const reps = repsByDate.get(d.getTime())?.get(name) ?? 0;
+        const td = tr.createEl("td", {
+          cls:
+            "dp-workout-log-cell" +
+            (reps === 0 ? " is-empty" : "") +
+            (d.getTime() === today.getTime() ? " is-current" : ""),
+          text: reps > 0 ? reps.toString() : "",
+        });
+        td.title = `${name} · ${d.toLocaleDateString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })}\n${reps} ${reps === 1 ? "rep" : "reps"}`;
+      }
+      tr.createEl("td", {
+        cls: "dp-workout-log-total",
+        text: (totalsByName.get(name) ?? 0).toLocaleString(),
+      });
+    }
   }
 
   private async loadHabitsAndGoals(): Promise<{
@@ -307,9 +429,12 @@ export class HabitsStatsView extends ItemView {
       rows.push({ habit: h, cells, totalChecked, hits });
     }
 
-    // Reps + per-exercise breakdown across the entire window. Also tracks a
-    // per-date map of done-set reps by exercise name so the goal grid below
-    // can attribute reps to each bucket without re-parsing the content.
+    // Reps + per-exercise breakdown across the entire window. Only counts
+    // sets on completed (`- [x]`) tasks — pending sets on future or unchecked
+    // days would otherwise inflate the totals with intent rather than work
+    // done. Also tracks a per-date map of done-set reps by exercise name so
+    // the goal grid below can attribute reps to each bucket without
+    // re-parsing the content.
     let totalReps = 0;
     const exerciseTotals = new Map<string, number>();
     const doneRepsByDate = new Map<number, Map<string, number>>();
@@ -318,14 +443,13 @@ export class HabitsStatsView extends ItemView {
       const doneByName = new Map<string, number>();
       for (const s of summaries) {
         for (const set of s.sets) {
+          if (!set.done) continue;
           totalReps += set.reps;
           exerciseTotals.set(
             s.name,
             (exerciseTotals.get(s.name) ?? 0) + set.reps,
           );
-          if (set.done) {
-            doneByName.set(s.name, (doneByName.get(s.name) ?? 0) + set.reps);
-          }
+          doneByName.set(s.name, (doneByName.get(s.name) ?? 0) + set.reps);
         }
       }
       if (doneByName.size > 0) doneRepsByDate.set(t, doneByName);

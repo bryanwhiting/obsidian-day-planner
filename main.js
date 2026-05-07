@@ -6724,6 +6724,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
+    this.activeTab = "habits";
     this.plugin = plugin;
   }
   getViewType() {
@@ -6773,6 +6774,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     };
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });
     heading.createEl("h3", { text: "Habit stats" });
+    this.renderTabs(root);
     const { habits, goals } = await this.loadHabitsAndGoals();
     if (habits.length === 0 && goals.length === 0) {
       root.createDiv({
@@ -6783,6 +6785,10 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     }
     const today = startOfDay(new Date());
     const window2 = settings.habitsStatsWindow;
+    if (this.activeTab === "workouts") {
+      await this.renderWorkoutLog(root, today, window2, fallback);
+      return;
+    }
     const dayBuckets = this.buildDayBuckets(today, window2);
     const weekBuckets = this.buildWeekBuckets(today, window2);
     const monthBuckets = this.buildMonthBuckets(today, window2);
@@ -6813,6 +6819,99 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
     this.renderSection(root, daySection);
     this.renderSection(root, weekSection);
     this.renderSection(root, monthSection);
+  }
+  renderTabs(parent) {
+    const tabsEl = parent.createDiv({ cls: "dp-habit-stats-tabs" });
+    const make = (key, label) => {
+      const el = tabsEl.createEl("button", {
+        cls: "dp-habit-stats-tab" + (this.activeTab === key ? " is-active" : ""),
+        text: label
+      });
+      el.onclick = () => {
+        if (this.activeTab === key)
+          return;
+        this.activeTab = key;
+        void this.render();
+      };
+    };
+    make("habits", "Habits");
+    make("workouts", "Workouts");
+  }
+  async renderWorkoutLog(parent, today, window2, fallback) {
+    var _a, _b, _c, _d;
+    const settings = this.plugin.settings;
+    const days = [];
+    for (let i = window2 - 1; i >= 0; i--)
+      days.push(addDays(today, -i));
+    const repsByDate = /* @__PURE__ */ new Map();
+    const totalsByName = /* @__PURE__ */ new Map();
+    for (const d of days) {
+      const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+      const m = /* @__PURE__ */ new Map();
+      if (c) {
+        const summaries = parseExercises(c, settings.prefixes);
+        for (const s of summaries) {
+          let reps = 0;
+          for (const set of s.sets)
+            if (set.done)
+              reps += set.reps;
+          if (reps > 0) {
+            m.set(s.name, reps);
+            totalsByName.set(s.name, ((_a = totalsByName.get(s.name)) != null ? _a : 0) + reps);
+          }
+        }
+      }
+      repsByDate.set(d.getTime(), m);
+    }
+    const sectionEl = parent.createDiv({ cls: "dp-heatmap-section" });
+    if (totalsByName.size === 0) {
+      sectionEl.createDiv({
+        cls: "dp-heatmap-no-habits",
+        text: "No completed exercise sets in this window."
+      });
+      return;
+    }
+    const sortedNames = Array.from(totalsByName.entries()).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    const table = sectionEl.createEl("table", { cls: "dp-workout-log" });
+    const thead = table.createEl("thead");
+    const headRow = thead.createEl("tr");
+    headRow.createEl("th", { cls: "dp-workout-log-name-h", text: "Exercise" });
+    for (const d of days) {
+      const th = headRow.createEl("th", {
+        cls: "dp-workout-log-date" + (d.getTime() === today.getTime() ? " is-current" : ""),
+        text: d.getDate().toString()
+      });
+      th.title = d.toLocaleDateString(void 0, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
+    }
+    headRow.createEl("th", { cls: "dp-workout-log-total-h", text: "Total" });
+    const tbody = table.createEl("tbody");
+    for (const name of sortedNames) {
+      const tr = tbody.createEl("tr");
+      tr.createEl("td", { cls: "dp-workout-log-name", text: name });
+      for (const d of days) {
+        const reps = (_c = (_b = repsByDate.get(d.getTime())) == null ? void 0 : _b.get(name)) != null ? _c : 0;
+        const td = tr.createEl("td", {
+          cls: "dp-workout-log-cell" + (reps === 0 ? " is-empty" : "") + (d.getTime() === today.getTime() ? " is-current" : ""),
+          text: reps > 0 ? reps.toString() : ""
+        });
+        td.title = `${name} \xB7 ${d.toLocaleDateString(void 0, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        })}
+${reps} ${reps === 1 ? "rep" : "reps"}`;
+      }
+      tr.createEl("td", {
+        cls: "dp-workout-log-total",
+        text: ((_d = totalsByName.get(name)) != null ? _d : 0).toLocaleString()
+      });
+    }
   }
   async loadHabitsAndGoals() {
     const path = this.plugin.settings.habitsFile;
@@ -6940,14 +7039,14 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       const doneByName = /* @__PURE__ */ new Map();
       for (const s of summaries) {
         for (const set of s.sets) {
+          if (!set.done)
+            continue;
           totalReps += set.reps;
           exerciseTotals.set(
             s.name,
             ((_a = exerciseTotals.get(s.name)) != null ? _a : 0) + set.reps
           );
-          if (set.done) {
-            doneByName.set(s.name, ((_b = doneByName.get(s.name)) != null ? _b : 0) + set.reps);
-          }
+          doneByName.set(s.name, ((_b = doneByName.get(s.name)) != null ? _b : 0) + set.reps);
         }
       }
       if (doneByName.size > 0)
