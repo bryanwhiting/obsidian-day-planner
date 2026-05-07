@@ -1285,23 +1285,78 @@
     min-width: 0;
   }
 
-  /* Two-or-more-column blocks: stack header so the trio survives the
-   * narrow column width instead of getting clipped/ellipsed. */
-  .dp-block.is-narrow .dp-block-row {
+  /* Two-or-more-column blocks share the lane horizontally. Hide the dot
+   * separators in every narrow mode — the line breaks do the separating. */
+  .dp-block.is-narrow .dp-block-sep {
+    display: none;
+  }
+
+  /* >30m narrow: stack the trio on three lines so the title survives the
+   * squeeze instead of getting clipped/ellipsed. */
+  .dp-block.is-narrow:not(.is-narrow-mini):not(.is-narrow-2line)
+    .dp-block-row {
     flex-direction: column;
     align-items: flex-start;
     gap: 1px;
     line-height: 1.2;
   }
 
-  .dp-block.is-narrow .dp-block-sep {
+  .dp-block.is-narrow:not(.is-narrow-mini):not(.is-narrow-2line) .dp-block-text,
+  .dp-block.is-narrow:not(.is-narrow-mini):not(.is-narrow-2line)
+    .dp-block-project-wrap {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* ≤15m narrow: single condensed line — "4p Run errands". Project hidden;
+   * the title is still clickable to toggle. */
+  .dp-block.is-narrow-mini .dp-block-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.15;
+    flex-wrap: nowrap;
+  }
+
+  .dp-block.is-narrow-mini .dp-block-project-wrap {
     display: none;
   }
 
-  .dp-block.is-narrow .dp-block-text,
-  .dp-block.is-narrow .dp-block-project-wrap {
-    white-space: normal;
-    overflow-wrap: anywhere;
+  .dp-block.is-narrow-mini .dp-block-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 16-30m narrow: line 1 = "4p title", line 2 = project. Reorder so title
+   * sits next to the time, with the project wrapping below. */
+  .dp-block.is-narrow-2line .dp-block-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 4px;
+    line-height: 1.2;
+  }
+
+  .dp-block.is-narrow-2line .dp-block-meta {
+    order: 1;
+  }
+
+  .dp-block.is-narrow-2line .dp-block-text {
+    order: 2;
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dp-block.is-narrow-2line .dp-block-project-wrap {
+    order: 3;
+    flex: 0 0 100%;
+    min-width: 0;
   }
 
   .dp-block-time {

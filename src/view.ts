@@ -1166,8 +1166,15 @@ export class TodayView extends ItemView {
     // Two or more overlapping blocks share the timeline horizontally — each
     // gets a fraction of the width. Stack the header onto multiple lines so
     // the (time / project / title) trio survives the squeeze instead of
-    // ellipsing the title to nothing.
-    if (block.widthPct < 99.5) el.addClass("is-narrow");
+    // ellipsing the title to nothing. Short blocks have so few visible lines
+    // that we condense further: ≤15m → single line "4p title"; ≤30m → time +
+    // title on line 1, project on line 2; >30m keeps the full 3-line stack.
+    const narrow = block.widthPct < 99.5;
+    if (narrow) {
+      el.addClass("is-narrow");
+      if (block.task.durationMin <= 15) el.addClass("is-narrow-mini");
+      else if (block.task.durationMin <= 30) el.addClass("is-narrow-2line");
+    }
     const ctx = this.findContextTag(block.task);
     const projectColor = getTaskColor(
       block.task.project,
@@ -1196,9 +1203,15 @@ export class TodayView extends ItemView {
       setIcon(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag — using default duration");
     }
+    const compactTime =
+      narrow &&
+      block.task.durationMin <= 30 &&
+      block.task.startMin !== null;
     meta.createSpan({
       cls: "dp-block-time",
-      text: this.formatBlockTime(block.task),
+      text: compactTime
+        ? this.fmtClock(block.task.startMin!)
+        : this.formatBlockTime(block.task),
     });
     row.createSpan({ cls: "dp-block-sep", text: "·" });
     if (block.task.project) {

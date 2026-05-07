@@ -3622,8 +3622,14 @@ var TodayView = class extends import_obsidian4.ItemView {
       el.addClass("is-implicit-duration");
     if (block.task.durationMin < 25)
       el.addClass("is-compact");
-    if (block.widthPct < 99.5)
+    const narrow = block.widthPct < 99.5;
+    if (narrow) {
       el.addClass("is-narrow");
+      if (block.task.durationMin <= 15)
+        el.addClass("is-narrow-mini");
+      else if (block.task.durationMin <= 30)
+        el.addClass("is-narrow-2line");
+    }
     const ctx = this.findContextTag(block.task);
     const projectColor = getTaskColor(
       block.task.project,
@@ -3649,9 +3655,10 @@ var TodayView = class extends import_obsidian4.ItemView {
       (0, import_obsidian4.setIcon)(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
     }
+    const compactTime = narrow && block.task.durationMin <= 30 && block.task.startMin !== null;
     meta.createSpan({
       cls: "dp-block-time",
-      text: this.formatBlockTime(block.task)
+      text: compactTime ? this.fmtClock(block.task.startMin) : this.formatBlockTime(block.task)
     });
     row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
     if (block.task.project) {
