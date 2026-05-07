@@ -3797,6 +3797,17 @@ class TaskEditModal extends Modal {
 
     const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
     const buttons: HTMLButtonElement[] = [];
+    // Forward-declared so the buttons' click handlers (created next) can
+    // mirror the chosen value into the custom input that's appended after.
+    let durInput!: HTMLInputElement;
+    const refreshDurButtons = (): void => {
+      buttons.forEach((b, i) => {
+        b.toggleClass(
+          "is-selected",
+          this.opts.durations[i]?.min === this.selectedDurationMin,
+        );
+      });
+    };
     this.opts.durations.forEach((d) => {
       const btn = row.createEl("button", {
         cls: "dp-duration-btn",
@@ -3807,11 +3818,65 @@ class TaskEditModal extends Modal {
       btn.addEventListener("click", () => {
         this.selectedDurationMin = d.min;
         this.durationChanged = true;
-        buttons.forEach((b) => b.removeClass("is-selected"));
-        btn.addClass("is-selected");
+        refreshDurButtons();
+        if (document.activeElement !== durInput) {
+          durInput.value = formatCompactDuration(d.min);
+        }
         updateSummary();
       });
       buttons.push(btn);
+    });
+
+    // Custom-duration text input. Pre-filled with the current value so the
+    // user can see what's set even when it doesn't match a quick-duration
+    // chip, and accepts free-form values like "30m", "1h30m", "90m". Also
+    // tolerates the user pasting/typing a full duration tag (e.g.
+    // "#d/1h30m") so the field doubles as a paste target.
+    const customRow = this.contentEl.createDiv({
+      cls: "dp-duration-custom-row is-mobile-hidden",
+    });
+    durInput = customRow.createEl("input", {
+      type: "text",
+      cls: "dp-duration-custom-input",
+      attr: {
+        placeholder: "Custom (e.g. 30m, 1h30m)",
+        autocomplete: "off",
+        "aria-label": "Custom duration",
+      },
+    });
+    durInput.value = formatCompactDuration(this.selectedDurationMin);
+    const durTagPrefix = this.opts.prefixes.duration;
+    const stripDurTag = (s: string): string => {
+      const t = s.trim();
+      const re = new RegExp(`^#?${durTagPrefix}\\s*[/:]\\s*`, "i");
+      return t.replace(re, "");
+    };
+    durInput.addEventListener("input", () => {
+      const min = parseCompactDuration(stripDurTag(durInput.value));
+      if (min === null) {
+        durInput.removeClass("is-invalid");
+        return;
+      }
+      this.selectedDurationMin = min;
+      this.durationChanged = true;
+      refreshDurButtons();
+      durInput.removeClass("is-invalid");
+      updateSummary();
+    });
+    durInput.addEventListener("blur", () => {
+      // Reformat to the canonical compact form on blur, but only if the
+      // current text actually parses — preserving invalid input lets the
+      // user see and fix what they typed instead of having it disappear.
+      const min = parseCompactDuration(stripDurTag(durInput.value));
+      if (min !== null) {
+        durInput.value = formatCompactDuration(min);
+        durInput.removeClass("is-invalid");
+      } else if (durInput.value.trim()) {
+        durInput.addClass("is-invalid");
+      }
+    });
+    durInput.addEventListener("focus", () => {
+      durInput.select();
     });
 
     // Mobile-only quick-insert bar plus a small summary line, positioned
@@ -3947,12 +4012,8 @@ class TaskEditModal extends Modal {
           if (min !== null) {
             this.selectedDurationMin = min;
             this.durationChanged = true;
-            buttons.forEach((b, i) => {
-              b.toggleClass(
-                "is-selected",
-                this.opts.durations[i]?.min === min,
-              );
-            });
+            refreshDurButtons();
+            durInput.value = formatCompactDuration(min);
           }
           replaceTriggerRange(start, cursor, "");
           updateSummary();
@@ -4067,6 +4128,7 @@ class TaskEditModal extends Modal {
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
+    durInput.addEventListener("keydown", enterToSubmit);
 
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({

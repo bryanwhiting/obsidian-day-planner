@@ -5671,6 +5671,16 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     durLabel.setAttribute("aria-hidden", "true");
     const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
     const buttons = [];
+    let durInput;
+    const refreshDurButtons = () => {
+      buttons.forEach((b, i) => {
+        var _a2;
+        b.toggleClass(
+          "is-selected",
+          ((_a2 = this.opts.durations[i]) == null ? void 0 : _a2.min) === this.selectedDurationMin
+        );
+      });
+    };
     this.opts.durations.forEach((d) => {
       const btn = row.createEl("button", {
         cls: "dp-duration-btn",
@@ -5682,11 +5692,56 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       btn.addEventListener("click", () => {
         this.selectedDurationMin = d.min;
         this.durationChanged = true;
-        buttons.forEach((b) => b.removeClass("is-selected"));
-        btn.addClass("is-selected");
+        refreshDurButtons();
+        if (document.activeElement !== durInput) {
+          durInput.value = formatCompactDuration(d.min);
+        }
         updateSummary();
       });
       buttons.push(btn);
+    });
+    const customRow = this.contentEl.createDiv({
+      cls: "dp-duration-custom-row is-mobile-hidden"
+    });
+    durInput = customRow.createEl("input", {
+      type: "text",
+      cls: "dp-duration-custom-input",
+      attr: {
+        placeholder: "Custom (e.g. 30m, 1h30m)",
+        autocomplete: "off",
+        "aria-label": "Custom duration"
+      }
+    });
+    durInput.value = formatCompactDuration(this.selectedDurationMin);
+    const durTagPrefix = this.opts.prefixes.duration;
+    const stripDurTag = (s) => {
+      const t = s.trim();
+      const re = new RegExp(`^#?${durTagPrefix}\\s*[/:]\\s*`, "i");
+      return t.replace(re, "");
+    };
+    durInput.addEventListener("input", () => {
+      const min = parseCompactDuration(stripDurTag(durInput.value));
+      if (min === null) {
+        durInput.removeClass("is-invalid");
+        return;
+      }
+      this.selectedDurationMin = min;
+      this.durationChanged = true;
+      refreshDurButtons();
+      durInput.removeClass("is-invalid");
+      updateSummary();
+    });
+    durInput.addEventListener("blur", () => {
+      const min = parseCompactDuration(stripDurTag(durInput.value));
+      if (min !== null) {
+        durInput.value = formatCompactDuration(min);
+        durInput.removeClass("is-invalid");
+      } else if (durInput.value.trim()) {
+        durInput.addClass("is-invalid");
+      }
+    });
+    durInput.addEventListener("focus", () => {
+      durInput.select();
     });
     const quickInsert = createDiv({ cls: "dp-edit-quick-insert" });
     const summary = createDiv({ cls: "dp-edit-quick-summary" });
@@ -5793,13 +5848,8 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           if (min !== null) {
             this.selectedDurationMin = min;
             this.durationChanged = true;
-            buttons.forEach((b, i) => {
-              var _a2;
-              b.toggleClass(
-                "is-selected",
-                ((_a2 = this.opts.durations[i]) == null ? void 0 : _a2.min) === min
-              );
-            });
+            refreshDurButtons();
+            durInput.value = formatCompactDuration(min);
           }
           replaceTriggerRange(start, cursor, "");
           updateSummary();
@@ -5897,6 +5947,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     };
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
+    durInput.addEventListener("keydown", enterToSubmit);
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({
       cls: "dp-prompt-step-label",
