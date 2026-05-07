@@ -2,6 +2,7 @@
 
 ## 2026-05-07
 
+- [feat]: Settings: added an intro block above the tab bar (display-font title + muted blurb with a README link) and Lucide icons on each tab — `sliders-horizontal` for Hotkeys & Defaults, `folder-kanban` for Projects, `timer` for Pomodoro, `repeat` for Habits. Active tab tints both the chip and the icon with the accent color. Files: `src/settings.ts` (`renderIntro`, `TAB_SPECS` w/ icons, `setIcon` import), `src/styles.src.css` (`.dp-settings-intro*`, `.dp-settings-tab-icon`, `.dp-settings-tab-label`). The user asked: "can you have an intro text above the tabs? can you style the tabs with lucide-react icons?".
 - [feat]: Settings UI organized into 4 tabs — Hotkeys & Defaults, Projects, Pomodoro, Habits — with a tab bar at the top of the settings pane. Switching tabs swaps the body. "Hotkeys & Defaults" gathers Defaults, Task ID, Autocomplete, Notes, Templating, and Day-config sections; "Projects" gathers Projects + Context tags; the other two tabs each hold their single existing section. Files: `src/settings.ts` (new `SettingsTab` type, `activeTab` state, `renderTabs`, dispatch in `display()`), `src/styles.src.css` (`.dp-settings-tabs`, `.dp-settings-tab`, `.is-active`, `.dp-settings-pane`). The user asked: "can you make the Settings more readable? … Can you make tabs for Hotkeys and Defaults / Projects / Pomodoro / Habits".
 
 ## 2026-05-06

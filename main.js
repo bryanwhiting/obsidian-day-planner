@@ -1168,11 +1168,11 @@ function parseTimelineHeight(raw) {
     return `${v}px`;
   return CSS_LENGTH_RE.test(v) ? v : null;
 }
-var TAB_LABELS = {
-  general: "Hotkeys & Defaults",
-  projects: "Projects",
-  pomodoro: "Pomodoro",
-  habits: "Habits"
+var TAB_SPECS = {
+  general: { label: "Hotkeys & Defaults", icon: "sliders-horizontal" },
+  projects: { label: "Projects", icon: "folder-kanban" },
+  pomodoro: { label: "Pomodoro", icon: "timer" },
+  habits: { label: "Habits", icon: "repeat" }
 };
 var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
@@ -1192,6 +1192,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     }
     containerEl.empty();
     containerEl.addClass("dp-settings");
+    this.renderIntro(containerEl);
     this.renderTabs(containerEl);
     const pane = containerEl.createDiv({ cls: "dp-settings-pane" });
     switch (this.activeTab) {
@@ -1215,13 +1216,30 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         break;
     }
   }
+  renderIntro(containerEl) {
+    const intro = containerEl.createDiv({ cls: "dp-settings-intro" });
+    intro.createEl("h2", {
+      cls: "dp-settings-intro-title",
+      text: "Today plugin settings"
+    });
+    const sub = intro.createEl("p", { cls: "dp-settings-intro-sub" });
+    sub.append(
+      "Configure how the Today dashboard parses your daily notes, colors your projects, and runs the pomodoro and habit trackers. Tag prefixes and trigger strings are global \u2014 change them here and the plugin migrates existing tags on close. See the ",
+      makeAnchor(
+        "https://github.com/silvermineai/obsidian-today",
+        "README"
+      ),
+      " for the full tag reference."
+    );
+  }
   renderTabs(containerEl) {
     const bar = containerEl.createDiv({ cls: "dp-settings-tabs" });
-    Object.keys(TAB_LABELS).forEach((tab) => {
-      const btn = bar.createEl("button", {
-        cls: "dp-settings-tab",
-        text: TAB_LABELS[tab]
-      });
+    Object.keys(TAB_SPECS).forEach((tab) => {
+      const spec = TAB_SPECS[tab];
+      const btn = bar.createEl("button", { cls: "dp-settings-tab" });
+      const iconEl = btn.createSpan({ cls: "dp-settings-tab-icon" });
+      (0, import_obsidian2.setIcon)(iconEl, spec.icon);
+      btn.createSpan({ cls: "dp-settings-tab-label", text: spec.label });
       if (tab === this.activeTab)
         btn.addClass("is-active");
       btn.addEventListener("click", () => {
