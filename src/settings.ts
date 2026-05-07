@@ -170,6 +170,7 @@ export function parseTimelineHeight(raw: string): string | null {
 type SettingsTab =
   | "general"
   | "tasks"
+  | "day"
   | "view"
   | "projects"
   | "pomodoro"
@@ -183,6 +184,7 @@ interface TabSpec {
 const TAB_SPECS: Record<SettingsTab, TabSpec> = {
   general: { label: "Hotkeys & Defaults", icon: "sliders-horizontal" },
   tasks: { label: "Tasks", icon: "list-checks" },
+  day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },
   projects: { label: "Projects", icon: "folder-kanban" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
@@ -224,6 +226,9 @@ export class TodaySettingTab extends PluginSettingTab {
         this.renderTaskDefaultsSection(pane);
         this.renderTaskIdSection(pane);
         this.renderNotesSection(pane);
+        break;
+      case "day":
+        this.renderDaySection(pane);
         break;
       case "view":
         this.renderViewSection(pane);
@@ -1276,7 +1281,7 @@ export class TodaySettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Hide completed habits")
       .setDesc(
-        "When on, completed habits disappear from the dashboard line. When off (default), they stay visible with strikethrough.",
+        "When on, every completed habit disappears from the dashboard. When off (default), a weekly/monthly habit appears with strikethrough only on the day it was actually checked — other days in the same window stay clean.",
       )
       .addToggle((t) =>
         t

@@ -1171,6 +1171,7 @@ function parseTimelineHeight(raw) {
 var TAB_SPECS = {
   general: { label: "Hotkeys & Defaults", icon: "sliders-horizontal" },
   tasks: { label: "Tasks", icon: "list-checks" },
+  day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },
   projects: { label: "Projects", icon: "folder-kanban" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
@@ -1206,6 +1207,9 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         this.renderTaskDefaultsSection(pane);
         this.renderTaskIdSection(pane);
         this.renderNotesSection(pane);
+        break;
+      case "day":
+        this.renderDaySection(pane);
         break;
       case "view":
         this.renderViewSection(pane);
@@ -1972,7 +1976,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       })
     );
     new import_obsidian2.Setting(containerEl).setName("Hide completed habits").setDesc(
-      "When on, completed habits disappear from the dashboard line. When off (default), they stay visible with strikethrough."
+      "When on, every completed habit disappears from the dashboard. When off (default), a weekly/monthly habit appears with strikethrough only on the day it was actually checked \u2014 other days in the same window stay clean."
     ).addToggle(
       (t) => t.setValue(this.plugin.settings.habitsHideCompleted).onChange(async (v) => {
         this.plugin.settings.habitsHideCompleted = v;
@@ -4762,10 +4766,18 @@ var TodayView = class extends import_obsidian4.ItemView {
         if (lines.length > maxPerFile)
           maxPerFile = lines.length;
       }
+      const displayLines = findHabitTaskLines(
+        displayContent,
+        settings.habitPrefix,
+        h.period,
+        h.slug
+      );
+      const checkedOnDisplayedDate = displayLines.some((l) => l.checked);
       out.push({
         habit: h,
         checkedCount,
         isComplete: checkedCount >= h.target,
+        checkedOnDisplayedDate,
         hasDuplicate: h.target === 1 && maxPerFile > 1,
         maxPerFile
       });
@@ -4790,7 +4802,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       const items = groups[period];
       if (items.length === 0)
         continue;
-      const visible = settings.habitsHideCompleted ? items.filter((i) => !i.isComplete) : items;
+      const visible = items.filter((i) => {
+        if (settings.habitsHideCompleted)
+          return !i.isComplete;
+        return !i.isComplete || i.checkedOnDisplayedDate;
+      });
       if (!firstSegment) {
         wrap.createSpan({ cls: "dp-habit-sep", text: " \u2022 " });
       }

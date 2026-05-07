@@ -105,6 +105,11 @@ interface HabitDisplay {
   // True when checkedCount >= habit.target. For target=1 habits this matches
   // the prior boolean behavior.
   isComplete: boolean;
+  // True when the displayed daily note itself contains at least one checked
+  // task line for this habit. Lets weekly/monthly habits be shown only on
+  // the day(s) they were actually completed — a Mon-checked weekly habit
+  // strikes through on Mon's view but disappears entirely from Tue's view.
+  checkedOnDisplayedDate: boolean;
   // True when at least one file in the window has 2+ task lines for this
   // habit AND target is 1. For target>1 habits, multiple checks per file
   // are legitimate progress, not duplicates.
@@ -2514,10 +2519,22 @@ export class TodayView extends ItemView {
         for (const l of lines) if (l.checked) checkedCount++;
         if (lines.length > maxPerFile) maxPerFile = lines.length;
       }
+      // For day-period habits, the window IS the displayed note, so this is
+      // equivalent to checkedCount > 0. For week/month habits, this isolates
+      // "checked specifically on this day" vs "checked somewhere in the
+      // window."
+      const displayLines = findHabitTaskLines(
+        displayContent,
+        settings.habitPrefix,
+        h.period,
+        h.slug,
+      );
+      const checkedOnDisplayedDate = displayLines.some((l) => l.checked);
       out.push({
         habit: h,
         checkedCount,
         isComplete: checkedCount >= h.target,
+        checkedOnDisplayedDate,
         hasDuplicate: h.target === 1 && maxPerFile > 1,
         maxPerFile,
       });
@@ -2546,9 +2563,15 @@ export class TodayView extends ItemView {
     for (const period of periods) {
       const items = groups[period];
       if (items.length === 0) continue;
-      const visible = settings.habitsHideCompleted
-        ? items.filter((i) => !i.isComplete)
-        : items;
+      // Hide a habit on this day's view when it's already complete in the
+      // window AND wasn't checked on the displayed daily note itself — keeps
+      // a Mon-completed weekly habit from cluttering Tue/Wed/Thu views.
+      // `habitsHideCompleted=true` upgrades this to "hide everything that's
+      // complete," including the day it was actually checked.
+      const visible = items.filter((i) => {
+        if (settings.habitsHideCompleted) return !i.isComplete;
+        return !i.isComplete || i.checkedOnDisplayedDate;
+      });
 
       if (!firstSegment) {
         wrap.createSpan({ cls: "dp-habit-sep", text: " • " });
