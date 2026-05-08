@@ -27,6 +27,7 @@ import {
   removeOrderTag,
   setDurationTag,
   setProjectTag,
+  setTaskContextTags,
   removeProjectTag,
   setTaskTitle,
   setTaskDescription,
@@ -1047,6 +1048,8 @@ export class TodayView extends ItemView {
       initialDurationMin: defaultDurationMin,
       initialProject: null,
       initialChecked: false,
+      initialTags: [],
+      availableTags: this.collectContextTagNames(),
       subtasks: [],
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
@@ -1062,11 +1065,18 @@ export class TodayView extends ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, _checked, extras) => {
+      onSave: (title, description, durationMin, project, _checked, tags, extras) => {
         const proj =
           project === undefined || project === "" ? null : project;
         const dur = durationMin ?? defaultDurationMin;
-        const newLine = buildLine(title, description, dur, proj);
+        let newLine = buildLine(title, description, dur, proj);
+        if (tags && tags.length > 0) {
+          newLine = setTaskContextTags(
+            newLine,
+            tags,
+            this.plugin.settings.prefixes,
+          );
+        }
         void this.appendTaskAfterLast(
           file,
           newLine,
@@ -1891,7 +1901,8 @@ export class TodayView extends ItemView {
       (a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]),
     );
 
-    const table = parent.createDiv({ cls: "dp-stat-table" });
+    const column = parent.createDiv({ cls: "dp-stat-col" });
+    const table = column.createDiv({ cls: "dp-stat-table" });
     table.createSpan({ cls: "dp-st-h", text: "Project" });
     table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
     for (const [name, agg] of sorted) {
@@ -1927,6 +1938,42 @@ export class TodayView extends ItemView {
         cls: "dp-st-value dp-st-unassigned",
         text: formatTotal(unassignedMin),
       });
+    }
+
+    this.renderProjectDotGrid(column, sorted, unassignedMin, colorMap);
+  }
+
+  private renderProjectDotGrid(
+    parent: HTMLElement,
+    sorted: Array<[string, { total: number; subs: Map<string, number> }]>,
+    unassignedMin: number,
+    colorMap: Map<string, string>,
+  ): void {
+    const MIN_PER_DOT = 15;
+    const dots: Array<{ kind: "project" | "unassigned"; color?: string }> = [];
+    for (const [name, agg] of sorted) {
+      if (agg.total <= 0) continue;
+      const n = Math.max(1, Math.round(agg.total / MIN_PER_DOT));
+      const color = colorMap.get(name);
+      for (let i = 0; i < n; i++) dots.push({ kind: "project", color });
+    }
+    if (unassignedMin > 0) {
+      const n = Math.max(1, Math.round(unassignedMin / MIN_PER_DOT));
+      for (let i = 0; i < n; i++) dots.push({ kind: "unassigned" });
+    }
+    if (dots.length === 0) return;
+
+    const grid = parent.createDiv({ cls: "dp-day-grid dp-project-grid" });
+    for (const dot of dots) {
+      const el = grid.createSpan({
+        cls:
+          dot.kind === "unassigned"
+            ? "dp-day-dot dp-day-dot-unassigned"
+            : "dp-day-dot dp-day-dot-project",
+      });
+      if (dot.kind === "project" && dot.color) {
+        el.style.backgroundColor = dot.color;
+      }
     }
   }
 
@@ -2060,6 +2107,8 @@ export class TodayView extends ItemView {
       initialDurationMin: task.durationMin,
       initialProject: initialProjectFull,
       initialChecked: task.checked,
+      initialTags: task.tags,
+      availableTags: this.collectContextTagNames(),
       initialTaskId: parseTaskId(task.body, prefixes),
       taskIdPrefix: prefixes.taskId,
       subtasks: task.subtasks,
@@ -2077,7 +2126,7 @@ export class TodayView extends ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, checked) => {
+      onSave: (title, description, durationMin, project, checked, tags) => {
         void this.applyTaskEdit(
           file,
           task,
@@ -2086,6 +2135,7 @@ export class TodayView extends ItemView {
           durationMin,
           project,
           checked,
+          tags,
         );
       },
       onToggleSubtask: async (sub, checked) => {
@@ -2440,6 +2490,25 @@ export class TodayView extends ItemView {
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }
 
+  // Mirror of collectProjectNames for the `#tc/<slug>` tag space — feeds the
+  // edit-modal tag picker so the user gets autocomplete on labels they've
+  // already used elsewhere.
+  private collectContextTagNames(): string[] {
+    const prefix = `#${this.plugin.settings.prefixes.taskContext}/`.toLowerCase();
+    const names = new Set<string>();
+    const cache = this.app.metadataCache as unknown as {
+      getTags?: () => Record<string, number>;
+    };
+    const tags = cache.getTags?.() ?? {};
+    for (const tag of Object.keys(tags)) {
+      if (tag.toLowerCase().startsWith(prefix)) {
+        const name = tag.slice(prefix.length);
+        if (name && /^[\w-]+$/.test(name)) names.add(name);
+      }
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }
+
   private async applyTaskEdit(
     file: TFile,
     task: ParsedTask,
@@ -2450,6 +2519,9 @@ export class TodayView extends ItemView {
     // undefined = leave the project tag alone, "" = remove it, otherwise set
     newProject: string | null | undefined,
     newChecked: boolean | null,
+    // null = leave the existing #tc/ tags alone, otherwise replace them with
+    // the supplied list (pass [] to clear all).
+    newTags: string[] | null,
   ): Promise<void> {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
@@ -2469,6 +2541,9 @@ export class TodayView extends ItemView {
       }
       if (newChecked !== null) {
         updated = setTaskChecked(updated, newChecked);
+      }
+      if (newTags !== null) {
+        updated = setTaskContextTags(updated, newTags, prefixes);
       }
       lines[task.lineNumber] = updated;
       return lines.join("\n");
@@ -3235,6 +3310,13 @@ interface TaskEditOpts {
   initialDurationMin: number;
   initialProject: string | null;
   initialChecked: boolean;
+  // Existing `#tc/<slug>` labels parsed off the task line. Editable via the
+  // tag picker that sits next to the project input.
+  initialTags: string[];
+  // Suggestions for the tag picker — every `#tc/<slug>` value the user has
+  // used elsewhere in the vault. Free-form entries (a label not yet on this
+  // list) are still accepted.
+  availableTags: string[];
   // When the task already carries a `#tid/<id>` tag, surface it as a clickable
   // header pill (search for other instances) instead of leaking it into the
   // title input where the user would have to delete it to avoid duplication.
@@ -3268,6 +3350,8 @@ interface TaskEditOpts {
   // string clears the {…} block).
   // project is undefined when unchanged; "" means remove the tag; otherwise set.
   // checked is null when unchanged.
+  // tags is null when unchanged; otherwise it's the new full list (pass []
+  // to clear all `#tc/` tags).
   // extras is supplied only in "new" mode and carries any pending sub-tasks
   // plus the post-save action the user picked (Add / Show in note / Pomodoro).
   onSave: (
@@ -3276,6 +3360,7 @@ interface TaskEditOpts {
     durationMin: number | null,
     project: string | null | undefined,
     checked: boolean | null,
+    tags: string[] | null,
     extras?: NewTaskExtras,
   ) => void;
   // Edit-only callbacks. Required in "edit" mode, omitted in "new" mode.
@@ -3859,6 +3944,190 @@ class TaskEditModal extends Modal {
       projInput.focus();
     });
 
+    // Tag picker — sits to the right of the project input. Each pick adds a
+    // `#<taskContext>/<slug>` to the task line on save; chips are removable
+    // and a free-form value typed + Enter creates a new tag.
+    const tagsWrap = projRow.createDiv({ cls: "dp-tags-input-wrap" });
+    const tagPrefix = this.opts.prefixes.taskContext;
+    const currentTags: string[] = [...this.opts.initialTags];
+    const tagsHost = tagsWrap.createDiv({ cls: "dp-tags-input" });
+    const tagInput = tagsWrap.createEl("input", {
+      type: "text",
+      cls: "dp-tag-input",
+      attr: {
+        placeholder: `Add tag (#${tagPrefix}/…)`,
+        autocomplete: "off",
+        "aria-label": "Add task context tag",
+      },
+    });
+    const tagPopover = tagsWrap.createDiv({
+      cls: "dp-project-suggest dp-tag-suggest",
+    });
+    tagPopover.style.display = "none";
+    let tagVisible: string[] = [];
+    let tagActiveIdx = -1;
+
+    const renderTagChips = (): void => {
+      tagsHost.empty();
+      currentTags.forEach((tag, idx) => {
+        const chip = tagsHost.createSpan({ cls: "dp-tag-chip" });
+        chip.createSpan({ cls: "dp-tag-chip-text", text: tag });
+        const x = chip.createEl("button", {
+          cls: "dp-tag-chip-remove",
+          text: "×",
+          attr: { "aria-label": `Remove tag ${tag}` },
+        });
+        x.type = "button";
+        x.addEventListener("click", () => {
+          currentTags.splice(idx, 1);
+          renderTagChips();
+          tagInput.focus();
+        });
+      });
+      tagsHost.appendChild(tagInput);
+    };
+    renderTagChips();
+
+    const sanitizeTag = (s: string): string =>
+      s.replace(/^#?[\w-]*\//, "").trim();
+
+    const addTag = (raw: string): boolean => {
+      const t = sanitizeTag(raw);
+      if (!t || !/^[\w-]+$/.test(t)) return false;
+      if (currentTags.includes(t)) return false;
+      currentTags.push(t);
+      renderTagChips();
+      tagInput.focus();
+      return true;
+    };
+
+    const filterTags = (q: string): string[] => {
+      const needle = sanitizeTag(q).toLowerCase();
+      const pool = this.opts.availableTags.filter(
+        (t) => !currentTags.includes(t),
+      );
+      if (!needle) return pool.slice(0, 10);
+      const starts = pool.filter((p) => p.toLowerCase().startsWith(needle));
+      const contains = pool.filter(
+        (p) =>
+          !p.toLowerCase().startsWith(needle) &&
+          p.toLowerCase().includes(needle),
+      );
+      return [...starts, ...contains].slice(0, 10);
+    };
+
+    const renderTagSuggest = (): void => {
+      tagPopover.empty();
+      tagVisible.forEach((name, i) => {
+        const item = tagPopover.createDiv({
+          cls: "dp-project-suggest-item",
+        });
+        if (i === tagActiveIdx) item.addClass("is-active");
+        item.setText(name);
+        item.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          addTag(name);
+          tagInput.value = "";
+          showTagSuggest();
+        });
+        item.addEventListener("mousemove", () => {
+          if (tagActiveIdx === i) return;
+          tagActiveIdx = i;
+          updateTagActive();
+        });
+      });
+    };
+    const updateTagActive = (): void => {
+      const items = tagPopover.querySelectorAll<HTMLElement>(
+        ".dp-project-suggest-item",
+      );
+      items.forEach((el, i) =>
+        el.toggleClass("is-active", i === tagActiveIdx),
+      );
+      if (tagActiveIdx >= 0 && items[tagActiveIdx]) {
+        items[tagActiveIdx].scrollIntoView({ block: "nearest" });
+      }
+    };
+    const showTagSuggest = (): void => {
+      tagVisible = filterTags(tagInput.value);
+      if (tagVisible.length === 0) {
+        hideTagSuggest();
+        return;
+      }
+      if (tagActiveIdx < 0 || tagActiveIdx >= tagVisible.length) {
+        tagActiveIdx = 0;
+      }
+      renderTagSuggest();
+      tagPopover.style.display = "";
+    };
+    const hideTagSuggest = (): void => {
+      tagPopover.style.display = "none";
+      tagActiveIdx = -1;
+    };
+
+    tagInput.addEventListener("input", showTagSuggest);
+    tagInput.addEventListener("focus", showTagSuggest);
+    tagInput.addEventListener("blur", () => {
+      // Delay so a mousedown on a popover item lands before we hide.
+      window.setTimeout(hideTagSuggest, 100);
+    });
+    tagInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        if (tagPopover.style.display === "none") {
+          showTagSuggest();
+          return;
+        }
+        tagActiveIdx = Math.min(tagActiveIdx + 1, tagVisible.length - 1);
+        updateTagActive();
+      } else if (ev.key === "ArrowUp") {
+        if (tagPopover.style.display === "none") return;
+        ev.preventDefault();
+        tagActiveIdx = Math.max(tagActiveIdx - 1, 0);
+        updateTagActive();
+      } else if (ev.key === "Enter") {
+        // Adopt the highlighted suggestion if it's actually a different tag
+        // than what's typed; otherwise commit the typed value as a free-form
+        // new tag. Stop the event either way so the modal-level Enter
+        // submitter doesn't fire while the user is still managing tags.
+        if (
+          tagPopover.style.display !== "none" &&
+          tagActiveIdx >= 0 &&
+          tagActiveIdx < tagVisible.length &&
+          tagInput.value.trim() !== tagVisible[tagActiveIdx]
+        ) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          addTag(tagVisible[tagActiveIdx]);
+          tagInput.value = "";
+          showTagSuggest();
+        } else if (tagInput.value.trim()) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          if (addTag(tagInput.value)) tagInput.value = "";
+          showTagSuggest();
+        }
+      } else if (ev.key === "Backspace" && tagInput.value === "") {
+        if (currentTags.length > 0) {
+          ev.preventDefault();
+          currentTags.pop();
+          renderTagChips();
+        }
+      } else if (ev.key === "Escape") {
+        if (tagPopover.style.display !== "none") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hideTagSuggest();
+        }
+      }
+    });
+    // Clicking the chip strip focuses the input so the user can start typing
+    // a new tag without precision-clicking the inline input itself.
+    tagsHost.addEventListener("click", (ev) => {
+      if (ev.target === tagInput) return;
+      tagInput.focus();
+    });
+
     const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label is-mobile-hidden",
       text: "Duration",
@@ -4154,6 +4423,25 @@ class TaskEditModal extends Modal {
       return raw;
     };
 
+    const resolveTags = (): string[] | null => {
+      // Pull any tag the user typed but didn't yet press Enter on so saves
+      // are forgiving of "I picked it but didn't commit it" interactions.
+      const pending = sanitizeTag(tagInput.value);
+      const final = [...currentTags];
+      if (pending && /^[\w-]+$/.test(pending) && !final.includes(pending)) {
+        final.push(pending);
+      }
+      if (this.opts.mode === "new") return final;
+      const initial = this.opts.initialTags;
+      if (
+        final.length === initial.length &&
+        final.every((t, i) => t === initial[i])
+      ) {
+        return null;
+      }
+      return final;
+    };
+
     const submit = (postAction: NewTaskPostAction = "none"): void => {
       const title = input.value.trim();
       if (this.opts.mode === "new" && !title) {
@@ -4175,6 +4463,7 @@ class TaskEditModal extends Modal {
           : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null,
+        resolveTags(),
         extras,
       );
       this.close();

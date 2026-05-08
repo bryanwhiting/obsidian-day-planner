@@ -1019,6 +1019,18 @@
     background: var(--color-sleep);
   }
 
+  .dp-day-dot-unassigned {
+    background:
+      repeating-linear-gradient(
+        45deg,
+        var(--color-ink-faint),
+        var(--color-ink-faint) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    box-shadow: inset 0 0 0 1px var(--color-hairline);
+  }
+
   .dp-st-kind-scheduled {
     color: var(--color-accent);
   }
@@ -2567,6 +2579,95 @@
   .dp-project-clear:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
+  }
+
+  /* Task-context tag picker — sits to the right of the project input in the
+   * edit/new modal. The wrap mirrors `.dp-project-input-wrap` so the suggest
+   * popover can position itself absolutely against it. The chip strip and
+   * its inline input share the same border so it reads as one field. */
+  .dp-tags-input-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+  }
+
+  .dp-tags-input {
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-height: 36px;
+    padding: 4px 6px;
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    cursor: text;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .dp-tags-input:focus-within {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+
+  .dp-tag-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px 2px 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+    color: var(--color-accent);
+    white-space: nowrap;
+  }
+
+  .dp-tag-chip-text {
+    line-height: 1;
+  }
+
+  .dp-tag-chip-remove {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin-left: 2px;
+    font-size: 13px;
+    line-height: 1;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+
+  .dp-tag-chip-remove:hover {
+    background: color-mix(in srgb, var(--color-accent) 24%, transparent);
+  }
+
+  .dp-tag-input {
+    flex: 1 1 80px;
+    min-width: 80px;
+    padding: 4px 4px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-ink);
+    background: transparent;
+    border: 0;
+    outline: none;
+  }
+
+  .dp-tag-input::placeholder {
+    color: var(--color-ink-faint);
   }
 
   /* ---------- tag-migration modal ---------- */

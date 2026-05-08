@@ -472,6 +472,35 @@ export function removeProjectTag(
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
+// Replaces every existing `#<taskContext>/<x>` tag on the line with the
+// supplied list (in order, deduped, [\w-] only). Empty list strips them.
+// Tags are appended at the end of the line if there were none before.
+export function setTaskContextTags(
+  rawLine: string,
+  tags: string[],
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).taskContext;
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+  for (const t of tags) {
+    const norm = t.trim();
+    if (!norm || !/^[\w-]+$/.test(norm)) continue;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    cleaned.push(norm);
+  }
+  let stripped = rawLine
+    .replace(re, "")
+    .replace(/[ \t]+$/, "")
+    .replace(/  +/g, " ");
+  if (cleaned.length === 0) return stripped;
+  const formatted = cleaned
+    .map((t) => `#${prefixes.taskContext}/${t}`)
+    .join(" ");
+  return `${stripped} ${formatted}`.replace(/  +/g, " ");
+}
+
 export function parseTaskId(
   body: string,
   prefixes: TagPrefixes,

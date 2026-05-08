@@ -655,6 +655,25 @@ function removeProjectTag(rawLine, prefixes) {
   const re = buildTagRegexes(prefixes).project;
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
+function setTaskContextTags(rawLine, tags, prefixes) {
+  const re = buildTagRegexes(prefixes).taskContext;
+  const seen = /* @__PURE__ */ new Set();
+  const cleaned = [];
+  for (const t of tags) {
+    const norm = t.trim();
+    if (!norm || !/^[\w-]+$/.test(norm))
+      continue;
+    if (seen.has(norm))
+      continue;
+    seen.add(norm);
+    cleaned.push(norm);
+  }
+  let stripped = rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
+  if (cleaned.length === 0)
+    return stripped;
+  const formatted = cleaned.map((t) => `#${prefixes.taskContext}/${t}`).join(" ");
+  return `${stripped} ${formatted}`.replace(/  +/g, " ");
+}
 function parseTaskId(body, prefixes) {
   const m = buildTagRegexes(prefixes).taskId.exec(body);
   return m ? m[1] : null;
@@ -3556,6 +3575,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       initialDurationMin: defaultDurationMin,
       initialProject: null,
       initialChecked: false,
+      initialTags: [],
+      availableTags: this.collectContextTagNames(),
       subtasks: [],
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
@@ -3571,11 +3592,18 @@ var TodayView = class extends import_obsidian4.ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, _checked, extras) => {
+      onSave: (title, description, durationMin, project, _checked, tags, extras) => {
         var _a, _b;
         const proj = project === void 0 || project === "" ? null : project;
         const dur = durationMin != null ? durationMin : defaultDurationMin;
-        const newLine = buildLine(title, description, dur, proj);
+        let newLine = buildLine(title, description, dur, proj);
+        if (tags && tags.length > 0) {
+          newLine = setTaskContextTags(
+            newLine,
+            tags,
+            this.plugin.settings.prefixes
+          );
+        }
         void this.appendTaskAfterLast(
           file,
           newLine,
@@ -4278,7 +4306,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     const sorted = [...projects.entries()].sort(
       (a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0])
     );
-    const table = parent.createDiv({ cls: "dp-stat-table" });
+    const column = parent.createDiv({ cls: "dp-stat-col" });
+    const table = column.createDiv({ cls: "dp-stat-table" });
     table.createSpan({ cls: "dp-st-h", text: "Project" });
     table.createSpan({ cls: "dp-st-h dp-st-h-right", text: "Planned" });
     for (const [name, agg] of sorted) {
@@ -4313,6 +4342,35 @@ var TodayView = class extends import_obsidian4.ItemView {
         cls: "dp-st-value dp-st-unassigned",
         text: formatTotal(unassignedMin)
       });
+    }
+    this.renderProjectDotGrid(column, sorted, unassignedMin, colorMap);
+  }
+  renderProjectDotGrid(parent, sorted, unassignedMin, colorMap) {
+    const MIN_PER_DOT = 15;
+    const dots = [];
+    for (const [name, agg] of sorted) {
+      if (agg.total <= 0)
+        continue;
+      const n = Math.max(1, Math.round(agg.total / MIN_PER_DOT));
+      const color = colorMap.get(name);
+      for (let i = 0; i < n; i++)
+        dots.push({ kind: "project", color });
+    }
+    if (unassignedMin > 0) {
+      const n = Math.max(1, Math.round(unassignedMin / MIN_PER_DOT));
+      for (let i = 0; i < n; i++)
+        dots.push({ kind: "unassigned" });
+    }
+    if (dots.length === 0)
+      return;
+    const grid = parent.createDiv({ cls: "dp-day-grid dp-project-grid" });
+    for (const dot of dots) {
+      const el = grid.createSpan({
+        cls: dot.kind === "unassigned" ? "dp-day-dot dp-day-dot-unassigned" : "dp-day-dot dp-day-dot-project"
+      });
+      if (dot.kind === "project" && dot.color) {
+        el.style.backgroundColor = dot.color;
+      }
     }
   }
   formatBlockTime(task) {
@@ -4429,6 +4487,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       initialDurationMin: task.durationMin,
       initialProject: initialProjectFull,
       initialChecked: task.checked,
+      initialTags: task.tags,
+      availableTags: this.collectContextTagNames(),
       initialTaskId: parseTaskId(task.body, prefixes),
       taskIdPrefix: prefixes.taskId,
       subtasks: task.subtasks,
@@ -4446,7 +4506,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, checked) => {
+      onSave: (title, description, durationMin, project, checked, tags) => {
         void this.applyTaskEdit(
           file,
           task,
@@ -4454,7 +4514,8 @@ var TodayView = class extends import_obsidian4.ItemView {
           description,
           durationMin,
           project,
-          checked
+          checked,
+          tags
         );
       },
       onToggleSubtask: async (sub, checked) => {
@@ -4747,7 +4808,25 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }
-  async applyTaskEdit(file, task, newTitle, newDescription, newDurationMin, newProject, newChecked) {
+  // Mirror of collectProjectNames for the `#tc/<slug>` tag space — feeds the
+  // edit-modal tag picker so the user gets autocomplete on labels they've
+  // already used elsewhere.
+  collectContextTagNames() {
+    var _a, _b;
+    const prefix = `#${this.plugin.settings.prefixes.taskContext}/`.toLowerCase();
+    const names = /* @__PURE__ */ new Set();
+    const cache = this.app.metadataCache;
+    const tags = (_b = (_a = cache.getTags) == null ? void 0 : _a.call(cache)) != null ? _b : {};
+    for (const tag of Object.keys(tags)) {
+      if (tag.toLowerCase().startsWith(prefix)) {
+        const name = tag.slice(prefix.length);
+        if (name && /^[\w-]+$/.test(name))
+          names.add(name);
+      }
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }
+  async applyTaskEdit(file, task, newTitle, newDescription, newDurationMin, newProject, newChecked, newTags) {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
@@ -4765,6 +4844,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
       if (newChecked !== null) {
         updated = setTaskChecked(updated, newChecked);
+      }
+      if (newTags !== null) {
+        updated = setTaskContextTags(updated, newTags, prefixes);
       }
       lines[task.lineNumber] = updated;
       return lines.join("\n");
@@ -5819,6 +5901,173 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       projInput.value = "";
       projInput.focus();
     });
+    const tagsWrap = projRow.createDiv({ cls: "dp-tags-input-wrap" });
+    const tagPrefix = this.opts.prefixes.taskContext;
+    const currentTags = [...this.opts.initialTags];
+    const tagsHost = tagsWrap.createDiv({ cls: "dp-tags-input" });
+    const tagInput = tagsWrap.createEl("input", {
+      type: "text",
+      cls: "dp-tag-input",
+      attr: {
+        placeholder: `Add tag (#${tagPrefix}/\u2026)`,
+        autocomplete: "off",
+        "aria-label": "Add task context tag"
+      }
+    });
+    const tagPopover = tagsWrap.createDiv({
+      cls: "dp-project-suggest dp-tag-suggest"
+    });
+    tagPopover.style.display = "none";
+    let tagVisible = [];
+    let tagActiveIdx = -1;
+    const renderTagChips = () => {
+      tagsHost.empty();
+      currentTags.forEach((tag, idx) => {
+        const chip = tagsHost.createSpan({ cls: "dp-tag-chip" });
+        chip.createSpan({ cls: "dp-tag-chip-text", text: tag });
+        const x = chip.createEl("button", {
+          cls: "dp-tag-chip-remove",
+          text: "\xD7",
+          attr: { "aria-label": `Remove tag ${tag}` }
+        });
+        x.type = "button";
+        x.addEventListener("click", () => {
+          currentTags.splice(idx, 1);
+          renderTagChips();
+          tagInput.focus();
+        });
+      });
+      tagsHost.appendChild(tagInput);
+    };
+    renderTagChips();
+    const sanitizeTag = (s) => s.replace(/^#?[\w-]*\//, "").trim();
+    const addTag = (raw) => {
+      const t = sanitizeTag(raw);
+      if (!t || !/^[\w-]+$/.test(t))
+        return false;
+      if (currentTags.includes(t))
+        return false;
+      currentTags.push(t);
+      renderTagChips();
+      tagInput.focus();
+      return true;
+    };
+    const filterTags = (q) => {
+      const needle = sanitizeTag(q).toLowerCase();
+      const pool = this.opts.availableTags.filter(
+        (t) => !currentTags.includes(t)
+      );
+      if (!needle)
+        return pool.slice(0, 10);
+      const starts = pool.filter((p) => p.toLowerCase().startsWith(needle));
+      const contains = pool.filter(
+        (p) => !p.toLowerCase().startsWith(needle) && p.toLowerCase().includes(needle)
+      );
+      return [...starts, ...contains].slice(0, 10);
+    };
+    const renderTagSuggest = () => {
+      tagPopover.empty();
+      tagVisible.forEach((name, i) => {
+        const item = tagPopover.createDiv({
+          cls: "dp-project-suggest-item"
+        });
+        if (i === tagActiveIdx)
+          item.addClass("is-active");
+        item.setText(name);
+        item.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          addTag(name);
+          tagInput.value = "";
+          showTagSuggest();
+        });
+        item.addEventListener("mousemove", () => {
+          if (tagActiveIdx === i)
+            return;
+          tagActiveIdx = i;
+          updateTagActive();
+        });
+      });
+    };
+    const updateTagActive = () => {
+      const items = tagPopover.querySelectorAll(
+        ".dp-project-suggest-item"
+      );
+      items.forEach(
+        (el, i) => el.toggleClass("is-active", i === tagActiveIdx)
+      );
+      if (tagActiveIdx >= 0 && items[tagActiveIdx]) {
+        items[tagActiveIdx].scrollIntoView({ block: "nearest" });
+      }
+    };
+    const showTagSuggest = () => {
+      tagVisible = filterTags(tagInput.value);
+      if (tagVisible.length === 0) {
+        hideTagSuggest();
+        return;
+      }
+      if (tagActiveIdx < 0 || tagActiveIdx >= tagVisible.length) {
+        tagActiveIdx = 0;
+      }
+      renderTagSuggest();
+      tagPopover.style.display = "";
+    };
+    const hideTagSuggest = () => {
+      tagPopover.style.display = "none";
+      tagActiveIdx = -1;
+    };
+    tagInput.addEventListener("input", showTagSuggest);
+    tagInput.addEventListener("focus", showTagSuggest);
+    tagInput.addEventListener("blur", () => {
+      window.setTimeout(hideTagSuggest, 100);
+    });
+    tagInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        if (tagPopover.style.display === "none") {
+          showTagSuggest();
+          return;
+        }
+        tagActiveIdx = Math.min(tagActiveIdx + 1, tagVisible.length - 1);
+        updateTagActive();
+      } else if (ev.key === "ArrowUp") {
+        if (tagPopover.style.display === "none")
+          return;
+        ev.preventDefault();
+        tagActiveIdx = Math.max(tagActiveIdx - 1, 0);
+        updateTagActive();
+      } else if (ev.key === "Enter") {
+        if (tagPopover.style.display !== "none" && tagActiveIdx >= 0 && tagActiveIdx < tagVisible.length && tagInput.value.trim() !== tagVisible[tagActiveIdx]) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          addTag(tagVisible[tagActiveIdx]);
+          tagInput.value = "";
+          showTagSuggest();
+        } else if (tagInput.value.trim()) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          if (addTag(tagInput.value))
+            tagInput.value = "";
+          showTagSuggest();
+        }
+      } else if (ev.key === "Backspace" && tagInput.value === "") {
+        if (currentTags.length > 0) {
+          ev.preventDefault();
+          currentTags.pop();
+          renderTagChips();
+        }
+      } else if (ev.key === "Escape") {
+        if (tagPopover.style.display !== "none") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hideTagSuggest();
+        }
+      }
+    });
+    tagsHost.addEventListener("click", (ev) => {
+      if (ev.target === tagInput)
+        return;
+      tagInput.focus();
+    });
     const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label is-mobile-hidden",
       text: "Duration"
@@ -6074,6 +6323,20 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         return null;
       return raw;
     };
+    const resolveTags = () => {
+      const pending = sanitizeTag(tagInput.value);
+      const final = [...currentTags];
+      if (pending && /^[\w-]+$/.test(pending) && !final.includes(pending)) {
+        final.push(pending);
+      }
+      if (this.opts.mode === "new")
+        return final;
+      const initial = this.opts.initialTags;
+      if (final.length === initial.length && final.every((t, i) => t === initial[i])) {
+        return null;
+      }
+      return final;
+    };
     const submit = (postAction = "none") => {
       const title = input.value.trim();
       if (this.opts.mode === "new" && !title) {
@@ -6090,6 +6353,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         this.opts.mode === "new" || this.durationChanged ? this.selectedDurationMin : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null,
+        resolveTags(),
         extras
       );
       this.close();
@@ -6204,9 +6468,9 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           let totalMin = null;
           if (raw !== "") {
             const cleaned = raw.toLowerCase().replace(/[\s:]/g, "");
-            const tagPrefix = `#${prefixes.time}/`;
-            const stripped = cleaned.startsWith(tagPrefix) ? cleaned.slice(tagPrefix.length) : cleaned;
-            const parsed = parseTime(`${tagPrefix}${stripped}`, prefixes);
+            const tagPrefix2 = `#${prefixes.time}/`;
+            const stripped = cleaned.startsWith(tagPrefix2) ? cleaned.slice(tagPrefix2.length) : cleaned;
+            const parsed = parseTime(`${tagPrefix2}${stripped}`, prefixes);
             if (parsed === null) {
               new import_obsidian4.Notice("Invalid time, try e.g. 7p or 6:30p");
               return;
