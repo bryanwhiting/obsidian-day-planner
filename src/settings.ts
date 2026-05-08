@@ -5,6 +5,7 @@ import {
   Setting,
   setIcon,
   TFile,
+  TFolder,
 } from "obsidian";
 import type TodayPlugin from "./main";
 import {
@@ -603,14 +604,19 @@ export class TodaySettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Daily notes folder")
       .setDesc("Where should your daily notes be saved?")
-      .addText((t) =>
-        t
-          .setValue(this.plugin.settings.dailyNoteFolderFallback)
-          .onChange(async (v) => {
+      .addText((t) => {
+        t.setValue(this.plugin.settings.dailyNoteFolderFallback).onChange(
+          async (v) => {
             this.plugin.settings.dailyNoteFolderFallback = v.trim();
             await this.plugin.saveSettings();
-          }),
-      );
+          },
+        );
+        new FolderSuggest(this.app, t.inputEl, async (folder) => {
+          t.setValue(folder.path);
+          this.plugin.settings.dailyNoteFolderFallback = folder.path;
+          await this.plugin.saveSettings();
+        });
+      });
 
     new Setting(containerEl)
       .setName("Daily note template")
@@ -915,15 +921,19 @@ export class TodaySettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("People folder")
       .setDesc(peopleDesc)
-      .addText((t) =>
-        t
-          .setPlaceholder("people")
+      .addText((t) => {
+        t.setPlaceholder("people")
           .setValue(this.plugin.settings.peopleFolder)
           .onChange(async (v) => {
             this.plugin.settings.peopleFolder = v.trim();
             await this.plugin.saveSettings();
-          }),
-      );
+          });
+        new FolderSuggest(this.app, t.inputEl, async (folder) => {
+          t.setValue(folder.path);
+          this.plugin.settings.peopleFolder = folder.path;
+          await this.plugin.saveSettings();
+        });
+      });
   }
 
   private renderProjectsSection(containerEl: HTMLElement): void {
@@ -1548,6 +1558,55 @@ class FileSuggest extends AbstractInputSuggest<TFile> {
     this.inputEl.value = file.path;
     this.inputEl.dispatchEvent(new Event("input"));
     void this.onSelectFile(file);
+    this.close();
+  }
+}
+
+class FolderSuggest extends AbstractInputSuggest<TFolder> {
+  private inputEl: HTMLInputElement;
+  private onSelectFolder: (folder: TFolder) => void | Promise<void>;
+
+  constructor(
+    app: App,
+    inputEl: HTMLInputElement,
+    onSelectFolder: (folder: TFolder) => void | Promise<void>,
+  ) {
+    super(app, inputEl);
+    this.inputEl = inputEl;
+    this.onSelectFolder = onSelectFolder;
+  }
+
+  protected getSuggestions(query: string): TFolder[] {
+    const q = query.toLowerCase();
+    const folders: TFolder[] = [];
+    const walk = (folder: TFolder): void => {
+      // Skip the vault root from the picker — it's almost never what the user
+      // wants and shows up as an empty path that's ambiguous to read.
+      if (folder.path !== "/") folders.push(folder);
+      for (const child of folder.children) {
+        if (child instanceof TFolder) walk(child);
+      }
+    };
+    walk(this.app.vault.getRoot());
+    const matches = q
+      ? folders.filter((f) => f.path.toLowerCase().includes(q))
+      : folders;
+    return matches.sort((a, b) => a.path.localeCompare(b.path)).slice(0, 50);
+  }
+
+  renderSuggestion(folder: TFolder, el: HTMLElement): void {
+    el.addClass("dp-file-suggestion");
+    el.createDiv({ cls: "dp-file-suggestion-name", text: folder.name });
+    const parent = folder.parent?.path;
+    if (parent && parent !== "/") {
+      el.createDiv({ cls: "dp-file-suggestion-path", text: parent });
+    }
+  }
+
+  selectSuggestion(folder: TFolder): void {
+    this.inputEl.value = folder.path;
+    this.inputEl.dispatchEvent(new Event("input"));
+    void this.onSelectFolder(folder);
     this.close();
   }
 }

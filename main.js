@@ -1519,12 +1519,19 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Daily notes folder").setDesc("Where should your daily notes be saved?").addText(
-      (t) => t.setValue(this.plugin.settings.dailyNoteFolderFallback).onChange(async (v) => {
-        this.plugin.settings.dailyNoteFolderFallback = v.trim();
+    new import_obsidian2.Setting(containerEl).setName("Daily notes folder").setDesc("Where should your daily notes be saved?").addText((t) => {
+      t.setValue(this.plugin.settings.dailyNoteFolderFallback).onChange(
+        async (v) => {
+          this.plugin.settings.dailyNoteFolderFallback = v.trim();
+          await this.plugin.saveSettings();
+        }
+      );
+      new FolderSuggest(this.app, t.inputEl, async (folder) => {
+        t.setValue(folder.path);
+        this.plugin.settings.dailyNoteFolderFallback = folder.path;
         await this.plugin.saveSettings();
-      })
-    );
+      });
+    });
     new import_obsidian2.Setting(containerEl).setName("Daily note template").setDesc(
       "Vault path to a template file (e.g. Templates/Daily.md). Its contents are copied verbatim into newly created daily notes. Leave blank for empty notes."
     ).addText((t) => {
@@ -1728,12 +1735,17 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("tomorrow"),
       ". Picking a person inserts a link to their note. Leave blank to disable."
     );
-    new import_obsidian2.Setting(containerEl).setName("People folder").setDesc(peopleDesc).addText(
-      (t) => t.setPlaceholder("people").setValue(this.plugin.settings.peopleFolder).onChange(async (v) => {
+    new import_obsidian2.Setting(containerEl).setName("People folder").setDesc(peopleDesc).addText((t) => {
+      t.setPlaceholder("people").setValue(this.plugin.settings.peopleFolder).onChange(async (v) => {
         this.plugin.settings.peopleFolder = v.trim();
         await this.plugin.saveSettings();
-      })
-    );
+      });
+      new FolderSuggest(this.app, t.inputEl, async (folder) => {
+        t.setValue(folder.path);
+        this.plugin.settings.peopleFolder = folder.path;
+        await this.plugin.saveSettings();
+      });
+    });
   }
   renderProjectsSection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Projects").setHeading();
@@ -2233,6 +2245,43 @@ var FileSuggest = class extends import_obsidian2.AbstractInputSuggest {
     this.inputEl.value = file.path;
     this.inputEl.dispatchEvent(new Event("input"));
     void this.onSelectFile(file);
+    this.close();
+  }
+};
+var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
+  constructor(app, inputEl, onSelectFolder) {
+    super(app, inputEl);
+    this.inputEl = inputEl;
+    this.onSelectFolder = onSelectFolder;
+  }
+  getSuggestions(query) {
+    const q = query.toLowerCase();
+    const folders = [];
+    const walk = (folder) => {
+      if (folder.path !== "/")
+        folders.push(folder);
+      for (const child of folder.children) {
+        if (child instanceof import_obsidian2.TFolder)
+          walk(child);
+      }
+    };
+    walk(this.app.vault.getRoot());
+    const matches = q ? folders.filter((f) => f.path.toLowerCase().includes(q)) : folders;
+    return matches.sort((a, b) => a.path.localeCompare(b.path)).slice(0, 50);
+  }
+  renderSuggestion(folder, el) {
+    var _a;
+    el.addClass("dp-file-suggestion");
+    el.createDiv({ cls: "dp-file-suggestion-name", text: folder.name });
+    const parent = (_a = folder.parent) == null ? void 0 : _a.path;
+    if (parent && parent !== "/") {
+      el.createDiv({ cls: "dp-file-suggestion-path", text: parent });
+    }
+  }
+  selectSuggestion(folder) {
+    this.inputEl.value = folder.path;
+    this.inputEl.dispatchEvent(new Event("input"));
+    void this.onSelectFolder(folder);
     this.close();
   }
 };
