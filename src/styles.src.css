@@ -3080,6 +3080,33 @@
     border-style: dashed;
   }
 
+  .dp-edit-subtask-delete {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    margin: 0;
+    color: color-mix(in srgb, var(--color-ink) 40%, transparent);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: none;
+  }
+
+  .dp-edit-subtask-delete:hover {
+    color: var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  }
+
+  .dp-edit-subtask-delete .svg-icon {
+    width: 14px;
+    height: 14px;
+  }
+
   .dp-edit-subtask-handle {
     flex: 0 0 auto;
     display: flex;

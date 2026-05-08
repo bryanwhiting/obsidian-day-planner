@@ -4692,6 +4692,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       onSetSubtaskDuration: async (sub, durationMin) => {
         await this.applySubtaskDuration(file, sub.lineNumber, durationMin);
       },
+      onDeleteSubtask: async (sub) => {
+        await this.applyDeleteSubtask(file, sub.lineNumber);
+      },
       onReorderSubtasks: async (ordered) => {
         await this.applySubtaskReorder(file, ordered);
       },
@@ -5616,6 +5619,15 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (lineNumber >= lines.length)
         return content;
       lines[lineNumber] = durationMin === null ? removeDurationTag(lines[lineNumber], prefixes) : setDurationTag(lines[lineNumber], durationMin, prefixes);
+      return lines.join("\n");
+    });
+  }
+  async applyDeleteSubtask(file, lineNumber) {
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length)
+        return content;
+      lines.splice(lineNumber, 1);
       return lines.join("\n");
     });
   }
@@ -6662,6 +6674,26 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       const textEl = row2.createSpan({
         cls: "dp-edit-subtask-text",
         text: cleanBody(sub.text)
+      });
+      const deleteBtn = row2.createEl("button", {
+        cls: "dp-edit-subtask-delete",
+        attr: { "aria-label": "Delete sub-task", type: "button" }
+      });
+      (0, import_obsidian4.setIcon)(deleteBtn, "x");
+      deleteBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const removedLine = sub.lineNumber;
+        subs.splice(idx, 1);
+        if (removedLine >= 0) {
+          subs.forEach((s) => {
+            if (s.lineNumber > removedLine)
+              s.lineNumber -= 1;
+          });
+        }
+        renderList();
+        if (this.opts.onDeleteSubtask) {
+          void this.opts.onDeleteSubtask(sub);
+        }
       });
       const handle = row2.createSpan({ cls: "dp-edit-subtask-handle" });
       (0, import_obsidian4.setIcon)(handle, "grip-vertical");

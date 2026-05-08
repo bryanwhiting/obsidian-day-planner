@@ -2279,6 +2279,9 @@ export class TodayView extends ItemView {
       onSetSubtaskDuration: async (sub, durationMin) => {
         await this.applySubtaskDuration(file, sub.lineNumber, durationMin);
       },
+      onDeleteSubtask: async (sub) => {
+        await this.applyDeleteSubtask(file, sub.lineNumber);
+      },
       onReorderSubtasks: async (ordered) => {
         await this.applySubtaskReorder(file, ordered);
       },
@@ -3392,6 +3395,18 @@ export class TodayView extends ItemView {
     });
   }
 
+  private async applyDeleteSubtask(
+    file: TFile,
+    lineNumber: number,
+  ): Promise<void> {
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length) return content;
+      lines.splice(lineNumber, 1);
+      return lines.join("\n");
+    });
+  }
+
   // Reorders sub-task lines in the file. The slots are the existing line
   // numbers (sorted ascending); we write each ordered sub's current rawLine
   // into the corresponding slot. This preserves any blank/non-task lines
@@ -3523,6 +3538,7 @@ interface TaskEditOpts {
     sub: ParsedSubtask,
     durationMin: number | null,
   ) => Promise<void>;
+  onDeleteSubtask?: (sub: ParsedSubtask) => Promise<void>;
   onReorderSubtasks?: (ordered: ParsedSubtask[]) => Promise<void>;
   onShowInNote?: () => void;
   // Date-picker entries shown when "Move" is clicked. Each is a `{label,
@@ -4783,6 +4799,30 @@ class TaskEditModal extends Modal {
       const textEl = row.createSpan({
         cls: "dp-edit-subtask-text",
         text: cleanBody(sub.text),
+      });
+
+      const deleteBtn = row.createEl("button", {
+        cls: "dp-edit-subtask-delete",
+        attr: { "aria-label": "Delete sub-task", type: "button" },
+      });
+      setIcon(deleteBtn, "x");
+      deleteBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        // After splicing line N out of the file, every later line shifts up
+        // one. Mirror that in the in-memory subs so subsequent edits in the
+        // same modal session target the right line. Real (>=0) line numbers
+        // only — pending "new" subs use a negative counter and stay distinct.
+        const removedLine = sub.lineNumber;
+        subs.splice(idx, 1);
+        if (removedLine >= 0) {
+          subs.forEach((s) => {
+            if (s.lineNumber > removedLine) s.lineNumber -= 1;
+          });
+        }
+        renderList();
+        if (this.opts.onDeleteSubtask) {
+          void this.opts.onDeleteSubtask(sub);
+        }
       });
 
       const handle = row.createSpan({ cls: "dp-edit-subtask-handle" });
