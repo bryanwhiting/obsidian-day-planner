@@ -76,6 +76,11 @@ export interface TodaySettings {
   // Moment.js format for the visible label of @-trigger date links. Empty
   // string falls back to the bare filename (no alias).
   dateLinkFormat: string;
+  // Vault folder that holds one markdown file per person. When non-empty, the
+  // @-trigger picker mixes basenames from this folder in with the date
+  // suggestions so typing "@bob" surfaces every Bob alongside today/tomorrow.
+  // Empty disables people lookup entirely.
+  peopleFolder: string;
   // Path to the habits-source file (e.g. "daily/_habits.md"). Plain hashtag
   // lines like `#h-day/call-mom Call mom` define habits. Append `/N` to set a
   // weekly/monthly target (e.g. `#h-week/laundry/2`).
@@ -121,6 +126,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   pomodoroAutoReturn: true,
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
+  peopleFolder: "",
   habitsFile: "daily/_habits.md",
   habitPrefix: "h",
   habitWeekStart: 0,
@@ -892,6 +898,29 @@ export class TodaySettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.dateLinkFormat)
           .onChange(async (v) => {
             this.plugin.settings.dateLinkFormat = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    const peopleDesc = document.createDocumentFragment();
+    peopleDesc.append(
+      "Vault folder containing one markdown file per person. When set, the date trigger also matches basenames in this folder — e.g. ",
+      makeCode("@bob"),
+      " surfaces every Bob alongside ",
+      makeCode("today"),
+      " / ",
+      makeCode("tomorrow"),
+      ". Picking a person inserts a link to their note. Leave blank to disable.",
+    );
+    new Setting(containerEl)
+      .setName("People folder")
+      .setDesc(peopleDesc)
+      .addText((t) =>
+        t
+          .setPlaceholder("people")
+          .setValue(this.plugin.settings.peopleFolder)
+          .onChange(async (v) => {
+            this.plugin.settings.peopleFolder = v.trim();
             await this.plugin.saveSettings();
           }),
       );

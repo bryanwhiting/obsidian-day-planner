@@ -29,6 +29,7 @@ import {
   applyDailyNoteTemplateIfEmpty,
   ensureDailyNote,
 } from "./dailyNote";
+import { buildPeopleSuggestions, buildPersonLinkInsert } from "./people";
 import { HabitsScanner } from "./habits";
 import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
 import { moment } from "obsidian";
@@ -328,7 +329,7 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
     if (kind === "date") {
       const settings = this.plugin.settings;
       const fmt = settings.dateLinkFormat;
-      return buildDateSuggestions(query).map((s) => ({
+      const dateItems: SuggestItem[] = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
         subDisplay: fmt.trim() ? ` ${moment(s.date).format(fmt.trim())}` : undefined,
@@ -341,6 +342,17 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
             fmt,
           ) + " ",
       }));
+      const personItems: SuggestItem[] = buildPeopleSuggestions(
+        this.app,
+        settings.peopleFolder,
+        query,
+      ).map((p) => ({
+        kind,
+        display: p.basename,
+        subDisplay: p.folder ? ` ${p.folder}` : undefined,
+        insert: buildPersonLinkInsert(this.app, p.path) + " ",
+      }));
+      return [...dateItems, ...personItems];
     }
     const pool = this.plugin.settings.quickDurationsMin.map((m) =>
       formatCompactDuration(m),

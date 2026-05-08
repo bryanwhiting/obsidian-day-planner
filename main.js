@@ -1171,6 +1171,7 @@ var DEFAULT_SETTINGS = {
   pomodoroAutoReturn: true,
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
+  peopleFolder: "",
   habitsFile: "daily/_habits.md",
   habitPrefix: "h",
   habitWeekStart: 0,
@@ -1710,6 +1711,22 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName("Date link format").setDesc(dateFormatDesc).addText(
       (t) => t.setPlaceholder("ddd, MMM D, YYYY").setValue(this.plugin.settings.dateLinkFormat).onChange(async (v) => {
         this.plugin.settings.dateLinkFormat = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    const peopleDesc = document.createDocumentFragment();
+    peopleDesc.append(
+      "Vault folder containing one markdown file per person. When set, the date trigger also matches basenames in this folder \u2014 e.g. ",
+      makeCode("@bob"),
+      " surfaces every Bob alongside ",
+      makeCode("today"),
+      " / ",
+      makeCode("tomorrow"),
+      ". Picking a person inserts a link to their note. Leave blank to disable."
+    );
+    new import_obsidian2.Setting(containerEl).setName("People folder").setDesc(peopleDesc).addText(
+      (t) => t.setPlaceholder("people").setValue(this.plugin.settings.peopleFolder).onChange(async (v) => {
+        this.plugin.settings.peopleFolder = v.trim();
         await this.plugin.saveSettings();
       })
     );
@@ -2626,6 +2643,44 @@ function buildDateLinkInsert(app, date, fileFormat, folder, displayFormat) {
     return `[[${linkPath}|${display}]]`;
   }
   return `[[${linkPath}]]`;
+}
+
+// src/people.ts
+function buildPeopleSuggestions(app, folder, query, limit = 12) {
+  const cleanFolder = (folder || "").replace(/^\/+|\/+$/g, "");
+  if (!cleanFolder)
+    return [];
+  const folderLc = cleanFolder.toLowerCase();
+  const files = app.vault.getMarkdownFiles().filter((f) => {
+    var _a;
+    const dir = (((_a = f.parent) == null ? void 0 : _a.path) || "").toLowerCase();
+    return dir === folderLc || dir.startsWith(folderLc + "/");
+  });
+  const q = query.trim().toLowerCase();
+  const ranked = q ? [
+    ...files.filter((f) => f.basename.toLowerCase().startsWith(q)),
+    ...files.filter(
+      (f) => !f.basename.toLowerCase().startsWith(q) && f.basename.toLowerCase().includes(q)
+    )
+  ] : files.slice().sort((a, b) => a.basename.localeCompare(b.basename));
+  return ranked.slice(0, limit).map((f) => {
+    var _a;
+    return {
+      basename: f.basename,
+      path: f.path,
+      folder: ((_a = f.parent) == null ? void 0 : _a.path) || ""
+    };
+  });
+}
+function buildPersonLinkInsert(app, path) {
+  var _a, _b;
+  const basename = (path.split("/").pop() || path).replace(/\.md$/i, "");
+  const useMd = ((_b = (_a = app.vault).getConfig) == null ? void 0 : _b.call(_a, "useMarkdownLinks")) === true;
+  if (useMd) {
+    const url = encodeURI(path);
+    return `[${basename}](${url})`;
+  }
+  return `[[${basename}]]`;
 }
 
 // src/habits.ts
@@ -3588,6 +3643,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
       dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      peopleFolder: this.plugin.settings.peopleFolder,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -4600,6 +4656,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
       dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      peopleFolder: this.plugin.settings.peopleFolder,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -6354,22 +6411,47 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       },
       // Date rule keeps the resolved Date alongside the keyword in a parallel
       // map so commit() can rebuild the link without re-parsing the keyword.
+      // People suggestions ride the same trigger: their keys are full vault
+      // paths (always end with .md) so they never collide with date keywords.
       (() => {
         const dateMap = /* @__PURE__ */ new Map();
+        const personMap = /* @__PURE__ */ new Map();
         const fmt = this.opts.dateLinkFormat;
         return {
           trigger: this.opts.dateTrigger,
           acceptQuery: (q) => !/#/.test(q) && (!/\s/.test(q) || /^[A-Za-z]+ \d{0,2}$/.test(q)),
           getSuggestions: (q) => {
             dateMap.clear();
+            personMap.clear();
             const items = buildDateSuggestions(q);
             for (const it of items)
               dateMap.set(it.keyword, it.date);
-            return items.map((it) => it.keyword);
+            const people = buildPeopleSuggestions(
+              this.app,
+              this.opts.peopleFolder,
+              q
+            );
+            for (const p of people)
+              personMap.set(p.path, p);
+            return [
+              ...items.map((it) => it.keyword),
+              ...people.map((p) => p.path)
+            ];
           },
-          renderItem: (el, keyword) => {
-            el.createSpan({ text: keyword });
-            const d = dateMap.get(keyword);
+          renderItem: (el, key) => {
+            const person = personMap.get(key);
+            if (person) {
+              el.createSpan({ text: person.basename });
+              if (person.folder) {
+                el.createSpan({
+                  cls: "dp-project-suggest-sub",
+                  text: ` ${person.folder}`
+                });
+              }
+              return;
+            }
+            el.createSpan({ text: key });
+            const d = dateMap.get(key);
             if (d && fmt.trim()) {
               el.createSpan({
                 cls: "dp-project-suggest-sub",
@@ -6377,8 +6459,14 @@ var TaskEditModal = class extends import_obsidian4.Modal {
               });
             }
           },
-          commit: (keyword, start, cursor) => {
-            const d = dateMap.get(keyword);
+          commit: (key, start, cursor) => {
+            const person = personMap.get(key);
+            if (person) {
+              const link2 = buildPersonLinkInsert(this.app, person.path);
+              replaceTriggerRange(start, cursor, link2 + " ");
+              return;
+            }
+            const d = dateMap.get(key);
             if (!d) {
               replaceTriggerRange(start, cursor, "");
               return;
@@ -7915,7 +8003,7 @@ var InlineSuggest = class extends import_obsidian6.EditorSuggest {
     if (kind === "date") {
       const settings = this.plugin.settings;
       const fmt = settings.dateLinkFormat;
-      return buildDateSuggestions(query).map((s) => ({
+      const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
         subDisplay: fmt.trim() ? ` ${(0, import_obsidian7.moment)(s.date).format(fmt.trim())}` : void 0,
@@ -7927,6 +8015,17 @@ var InlineSuggest = class extends import_obsidian6.EditorSuggest {
           fmt
         ) + " "
       }));
+      const personItems = buildPeopleSuggestions(
+        this.app,
+        settings.peopleFolder,
+        query
+      ).map((p) => ({
+        kind,
+        display: p.basename,
+        subDisplay: p.folder ? ` ${p.folder}` : void 0,
+        insert: buildPersonLinkInsert(this.app, p.path) + " "
+      }));
+      return [...dateItems, ...personItems];
     }
     const pool = this.plugin.settings.quickDurationsMin.map(
       (m) => formatCompactDuration(m)

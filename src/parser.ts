@@ -433,6 +433,11 @@ export function removeTimeTag(rawLine: string, prefixes: TagPrefixes): string {
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 
+export function removeDurationTag(rawLine: string, prefixes: TagPrefixes): string {
+  const re = buildTagRegexes(prefixes).duration;
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
+}
+
 export function setOrderTag(
   rawLine: string,
   order: number,

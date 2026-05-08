@@ -20,12 +20,14 @@ import {
   parseExercises,
   parseIntention,
   parseTime,
+  parseDuration,
   formatExerciseLine,
   setTimeTag,
   removeTimeTag,
   setOrderTag,
   removeOrderTag,
   setDurationTag,
+  removeDurationTag,
   setProjectTag,
   setTaskContextTags,
   removeProjectTag,
@@ -72,6 +74,11 @@ import {
   buildDateLinkInsert,
 } from "./dailyNote";
 import type { DailyNoteFallback } from "./dailyNote";
+import {
+  buildPeopleSuggestions,
+  buildPersonLinkInsert,
+  PersonSuggestion,
+} from "./people";
 import {
   Habit,
   HabitPeriod,
@@ -1061,6 +1068,7 @@ export class TodayView extends ItemView {
       dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
       dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      peopleFolder: this.plugin.settings.peopleFolder,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -2239,6 +2247,7 @@ export class TodayView extends ItemView {
       dailyNoteFormat: this.plugin.settings.dailyNoteFormatFallback,
       dailyNoteFolder: this.plugin.settings.dailyNoteFolderFallback,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      peopleFolder: this.plugin.settings.peopleFolder,
       visibleStartHour: this.plugin.settings.visibleStartHour,
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
@@ -3453,6 +3462,8 @@ interface TaskEditOpts {
   dailyNoteFormat: string;
   dailyNoteFolder: string;
   dateLinkFormat: string;
+  // Folder of one-file-per-person notes. Mixed into the @-trigger picker.
+  peopleFolder: string;
   // Hours that anchor the title-input time picker (visibleStartHour through
   // visibleEndHour from settings).
   visibleStartHour: number;
@@ -4470,8 +4481,11 @@ class TaskEditModal extends Modal {
       },
       // Date rule keeps the resolved Date alongside the keyword in a parallel
       // map so commit() can rebuild the link without re-parsing the keyword.
+      // People suggestions ride the same trigger: their keys are full vault
+      // paths (always end with .md) so they never collide with date keywords.
       ((): TitleSuggestRule => {
         const dateMap = new Map<string, Date>();
+        const personMap = new Map<string, PersonSuggestion>();
         const fmt = this.opts.dateLinkFormat;
         return {
           trigger: this.opts.dateTrigger,
@@ -4480,13 +4494,34 @@ class TaskEditModal extends Modal {
             (!/\s/.test(q) || /^[A-Za-z]+ \d{0,2}$/.test(q)),
           getSuggestions: (q) => {
             dateMap.clear();
+            personMap.clear();
             const items = buildDateSuggestions(q);
             for (const it of items) dateMap.set(it.keyword, it.date);
-            return items.map((it) => it.keyword);
+            const people = buildPeopleSuggestions(
+              this.app,
+              this.opts.peopleFolder,
+              q,
+            );
+            for (const p of people) personMap.set(p.path, p);
+            return [
+              ...items.map((it) => it.keyword),
+              ...people.map((p) => p.path),
+            ];
           },
-          renderItem: (el, keyword) => {
-            el.createSpan({ text: keyword });
-            const d = dateMap.get(keyword);
+          renderItem: (el, key) => {
+            const person = personMap.get(key);
+            if (person) {
+              el.createSpan({ text: person.basename });
+              if (person.folder) {
+                el.createSpan({
+                  cls: "dp-project-suggest-sub",
+                  text: ` ${person.folder}`,
+                });
+              }
+              return;
+            }
+            el.createSpan({ text: key });
+            const d = dateMap.get(key);
             if (d && fmt.trim()) {
               el.createSpan({
                 cls: "dp-project-suggest-sub",
@@ -4494,8 +4529,14 @@ class TaskEditModal extends Modal {
               });
             }
           },
-          commit: (keyword, start, cursor) => {
-            const d = dateMap.get(keyword);
+          commit: (key, start, cursor) => {
+            const person = personMap.get(key);
+            if (person) {
+              const link = buildPersonLinkInsert(this.app, person.path);
+              replaceTriggerRange(start, cursor, link + " ");
+              return;
+            }
+            const d = dateMap.get(key);
             if (!d) {
               replaceTriggerRange(start, cursor, "");
               return;
