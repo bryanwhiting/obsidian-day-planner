@@ -1682,9 +1682,28 @@
     );
     border-bottom-left-radius: var(--radius-tab);
     border-bottom-right-radius: var(--radius-tab);
+    /* Without this, mobile browsers treat the vertical drag as a scroll on
+       the timeline pane and cancel pointer capture mid-resize, so the user
+       only gets one snap step before the gesture is hijacked. */
+    touch-action: none;
+  }
+
+  .dp-resize-handle-top {
+    top: 0;
+    bottom: auto;
+    background: linear-gradient(
+      to top,
+      transparent,
+      color-mix(in srgb, var(--dp-on-color) 30%, transparent)
+    );
+    border-radius: var(--radius-tab) var(--radius-tab) 0 0;
   }
 
   .dp-resize-handle:hover {
+    background: color-mix(in srgb, var(--dp-on-color) 40%, transparent);
+  }
+
+  .dp-resize-handle-top:hover {
     background: color-mix(in srgb, var(--dp-on-color) 40%, transparent);
   }
 

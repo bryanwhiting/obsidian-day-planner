@@ -1347,6 +1347,15 @@ export class TodayView extends ItemView {
     handle.addEventListener("pointerdown", (ev) =>
       this.beginResize(ev, el, file, block),
     );
+
+    if (block.task.startMin !== null) {
+      const topHandle = el.createDiv({
+        cls: "dp-resize-handle dp-resize-handle-top",
+      });
+      topHandle.addEventListener("pointerdown", (ev) =>
+        this.beginResizeTop(ev, el, file, block),
+      );
+    }
   }
 
   private beginResize(
@@ -1436,6 +1445,114 @@ export class TodayView extends ItemView {
         bodyText: "",
       },
       (line) => setDurationTag(line, newDurationMin, prefixes),
+    );
+  }
+
+  private beginResizeTop(
+    ev: PointerEvent,
+    blockEl: HTMLElement,
+    file: TFile,
+    block: LayoutBlock,
+  ): void {
+    if (block.task.startMin === null) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const handle = ev.currentTarget as HTMLElement;
+    const settings = this.plugin.settings;
+    const startY = ev.clientY;
+    const startTopPx = blockEl.offsetTop;
+    const startHeightPx = blockEl.offsetHeight;
+    const startStartMin = block.task.startMin;
+    const startDurationMin = block.task.durationMin;
+    const minDuration = settings.snapMin;
+    const pxPerMin = settings.pxPerMin;
+    let pendingStart = startStartMin;
+    let pendingDuration = startDurationMin;
+
+    blockEl.draggable = false;
+    blockEl.addClass("is-resizing");
+    handle.setPointerCapture(ev.pointerId);
+
+    const onMove = (e: PointerEvent) => {
+      const dy = e.clientY - startY;
+      const rawNewStart = startStartMin + dy / pxPerMin;
+      let snappedStart = snapToInterval(rawNewStart, settings.snapMin);
+      // Anchor the end time: as the start moves, duration absorbs the delta.
+      // Clamp so duration stays at or above the snap minimum, and the start
+      // never goes negative (before midnight).
+      const maxStart = startStartMin + startDurationMin - minDuration;
+      if (snappedStart > maxStart) snappedStart = maxStart;
+      if (snappedStart < 0) snappedStart = 0;
+      pendingStart = snappedStart;
+      pendingDuration = startDurationMin - (snappedStart - startStartMin);
+      const deltaPx = (snappedStart - startStartMin) * pxPerMin;
+      blockEl.style.top = `${startTopPx + deltaPx}px`;
+      blockEl.style.height = `${startHeightPx - deltaPx}px`;
+      const timeEl = blockEl.querySelector<HTMLElement>(".dp-block-time");
+      if (timeEl) {
+        timeEl.textContent =
+          `${this.fmtClock(pendingStart)}–${this.fmtClock(pendingStart + pendingDuration)} (${formatTotal(pendingDuration)})`;
+      }
+    };
+
+    const onUp = (e: PointerEvent) => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      blockEl.removeClass("is-resizing");
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {}
+      const suppressClick = (ev: MouseEvent) => ev.stopPropagation();
+      blockEl.addEventListener("click", suppressClick, { capture: true });
+      window.setTimeout(
+        () => blockEl.removeEventListener("click", suppressClick, true),
+        0,
+      );
+      if (
+        pendingStart === startStartMin &&
+        pendingDuration === startDurationMin
+      ) {
+        blockEl.draggable = true;
+        return;
+      }
+      void this.applyStartAndDurationChange(
+        file,
+        block.task,
+        pendingStart,
+        pendingDuration,
+      ).finally(() => {
+        blockEl.draggable = true;
+      });
+    };
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
+  }
+
+  private async applyStartAndDurationChange(
+    file: TFile,
+    task: ParsedTask,
+    newStartMin: number,
+    newDurationMin: number,
+  ): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.editLine(
+      {
+        filePath: file.path,
+        lineNumber: task.lineNumber,
+        rawLine: task.rawLine,
+        source: "timeline",
+        grabOffsetY: 0,
+        durationMin: task.durationMin,
+        bodyText: "",
+      },
+      (line) => {
+        let next = setTimeTag(line, newStartMin, prefixes);
+        next = setDurationTag(next, newDurationMin, prefixes);
+        return next;
+      },
     );
   }
 
