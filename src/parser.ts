@@ -13,6 +13,11 @@ export interface ParsedTask {
   description: string | null;
   indent: string;
   subtasks: ParsedSubtask[];
+  // Task-context labels parsed from `#tc/<slug>` tags. Free-form labels the
+  // user attaches to tasks for filtering / categorisation (e.g. `billable`,
+  // `client-acme`). Multiple per line are allowed; rendered as chips next to
+  // the project label.
+  tags: string[];
 }
 
 export interface ParsedSubtask {
@@ -30,6 +35,7 @@ export interface TagPrefixes {
   exercise: string;
   taskId: string;
   actual: string;
+  taskContext: string;
 }
 
 export const DEFAULT_PREFIXES: TagPrefixes = {
@@ -40,6 +46,7 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
   exercise: "x",
   taskId: "tid",
   actual: "ta",
+  taskContext: "tc",
 };
 
 export interface ExerciseSet {
@@ -81,6 +88,12 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
     taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`),
     actual: new RegExp(
       `#${esc(prefixes.actual)}\\/(?:(\\d+)h)?(?:(\\d+)m)?(?=\\s|$)`,
+    ),
+    // Repeatable label tag — `g` flag so callers can collect every match on
+    // a line via matchAll.
+    taskContext: new RegExp(
+      `#${esc(prefixes.taskContext)}\\/([\\w-]+)`,
+      "g",
     ),
   };
 }
@@ -224,6 +237,25 @@ export function parseSubproject(
   return m && m[2] ? m[2] : null;
 }
 
+// Returns every `#<taskContext>/<slug>` label on the line, in source order
+// with duplicates removed.
+export function parseTaskContexts(
+  body: string,
+  prefixes: TagPrefixes,
+): string[] {
+  const re = buildTagRegexes(prefixes).taskContext;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of body.matchAll(re)) {
+    const tag = m[1];
+    if (!seen.has(tag)) {
+      seen.add(tag);
+      out.push(tag);
+    }
+  }
+  return out;
+}
+
 export function parseDescription(body: string): string | null {
   const m = DESCRIPTION_RE.exec(body);
   if (!m) return null;
@@ -330,6 +362,7 @@ export function parseTaskLine(
   const subproject = parseSubproject(body, prefixes);
   const description = parseDescription(body);
   const checked = m[2] !== " ";
+  const tags = parseTaskContexts(body, prefixes);
   return {
     filePath,
     lineNumber,
@@ -345,6 +378,7 @@ export function parseTaskLine(
     description,
     indent,
     subtasks: [],
+    tags,
   };
 }
 
@@ -507,7 +541,7 @@ export function setTaskTitle(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   let tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -576,7 +610,7 @@ export function setTaskDescription(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {

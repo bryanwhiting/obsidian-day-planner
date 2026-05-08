@@ -293,6 +293,7 @@ export class TodaySettingTab extends PluginSettingTab {
       "exercise",
       "taskId",
       "actual",
+      "taskContext",
     ];
     const changes: PrefixChange[] = [];
     for (const key of keys) {
@@ -420,6 +421,22 @@ export class TodaySettingTab extends PluginSettingTab {
           .onChange(async (v) => {
             if (/^[a-zA-Z]+$/.test(v)) {
               this.plugin.settings.prefixes.exercise = v;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Task context tag prefix")
+      .setDesc(
+        "Prefix for free-form task labels (e.g. #tc/billable, #tc/client-acme). Multiple tags per task are allowed and rendered as chips next to the project label.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.prefixes.taskContext)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.prefixes.taskContext = v;
               await this.plugin.saveSettings();
             }
           }),

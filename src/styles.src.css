@@ -1505,6 +1505,32 @@
     white-space: nowrap;
   }
 
+  /* Task-context chips on a calendar block — sit between the project label
+   * and the title, separated by the existing `·` dot. Each `#tc/<slug>`
+   * renders as a faint pill so multiple tags read as a group rather than
+   * merging into the title text. */
+  .dp-block-tags {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .dp-block-tag {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 500;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--dp-on-color) 14%, transparent);
+    color: color-mix(in srgb, var(--dp-on-color) 92%, transparent);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
   .dp-block-context-icon {
     display: inline-flex;
     align-items: center;
@@ -1901,6 +1927,36 @@
     font-size: 10.5px;
     font-weight: 500;
     color: var(--color-ink-muted);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  /* Task-context chips on an unscheduled card — same idea as block tags but
+   * tinted with the card's project color (or the muted ink color when there
+   * is none) so they tie into the rest of the card. */
+  .dp-card-tags {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    margin-left: 2px;
+  }
+
+  .dp-card-tag {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 500;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: color-mix(
+      in srgb,
+      var(--dp-color, var(--color-ink-muted)) 14%,
+      transparent
+    );
+    color: var(--dp-color, var(--color-ink-muted));
     letter-spacing: 0.01em;
     white-space: nowrap;
   }

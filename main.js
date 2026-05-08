@@ -335,7 +335,8 @@ var DEFAULT_PREFIXES = {
   project: "p",
   exercise: "x",
   taskId: "tid",
-  actual: "ta"
+  actual: "ta",
+  taskContext: "tc"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 var DESCRIPTION_RE = /\{([^{}]*)\}/;
@@ -362,6 +363,12 @@ function buildTagRegexes(prefixes) {
     taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`),
     actual: new RegExp(
       `#${esc(prefixes.actual)}\\/(?:(\\d+)h)?(?:(\\d+)m)?(?=\\s|$)`
+    ),
+    // Repeatable label tag — `g` flag so callers can collect every match on
+    // a line via matchAll.
+    taskContext: new RegExp(
+      `#${esc(prefixes.taskContext)}\\/([\\w-]+)`,
+      "g"
     )
   };
 }
@@ -479,6 +486,19 @@ function parseSubproject(body, prefixes) {
   const m = buildTagRegexes(prefixes).project.exec(body);
   return m && m[2] ? m[2] : null;
 }
+function parseTaskContexts(body, prefixes) {
+  const re = buildTagRegexes(prefixes).taskContext;
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const m of body.matchAll(re)) {
+    const tag = m[1];
+    if (!seen.has(tag)) {
+      seen.add(tag);
+      out.push(tag);
+    }
+  }
+  return out;
+}
 function parseDescription(body) {
   const m = DESCRIPTION_RE.exec(body);
   if (!m)
@@ -555,6 +575,7 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
   const subproject = parseSubproject(body, prefixes);
   const description = parseDescription(body);
   const checked = m[2] !== " ";
+  const tags = parseTaskContexts(body, prefixes);
   return {
     filePath,
     lineNumber,
@@ -569,7 +590,8 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
     subproject,
     description,
     indent,
-    subtasks: []
+    subtasks: [],
+    tags
   };
 }
 function parseFileTasks(filePath, fileContent, prefixes, defaultDurationMin) {
@@ -686,7 +708,7 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   const body = m[3];
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   let tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -735,7 +757,7 @@ function setTaskDescription(rawLine, newDescription, prefixes) {
     return rawLine;
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
@@ -1273,7 +1295,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       "project",
       "exercise",
       "taskId",
-      "actual"
+      "actual",
+      "taskContext"
     ];
     const changes = [];
     for (const key of keys) {
@@ -1364,6 +1387,16 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       (t) => t.setValue(this.plugin.settings.prefixes.exercise).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.exercise = v;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Task context tag prefix").setDesc(
+      "Prefix for free-form task labels (e.g. #tc/billable, #tc/client-acme). Multiple tags per task are allowed and rendered as chips next to the project label."
+    ).addText(
+      (t) => t.setValue(this.plugin.settings.prefixes.taskContext).onChange(async (v) => {
+        if (/^[a-zA-Z]+$/.test(v)) {
+          this.plugin.settings.prefixes.taskContext = v;
           await this.plugin.saveSettings();
         }
       })
@@ -3677,6 +3710,13 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
       row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
     }
+    if (block.task.tags.length > 0) {
+      const tagsWrap = row.createSpan({ cls: "dp-block-tags" });
+      for (const tag of block.task.tags) {
+        tagsWrap.createSpan({ cls: "dp-block-tag", text: tag });
+      }
+      row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
+    }
     const titleText = row.createSpan({
       cls: "dp-block-text",
       text: this.cleanBody(block.task.body)
@@ -3933,6 +3973,12 @@ var TodayView = class extends import_obsidian4.ItemView {
             cls: "dp-card-subproject",
             text: `/${task.subproject}`
           });
+        }
+      }
+      if (task.tags.length > 0) {
+        const tagsWrap = card.createSpan({ cls: "dp-card-tags" });
+        for (const tag of task.tags) {
+          tagsWrap.createSpan({ cls: "dp-card-tag", text: tag });
         }
       }
       const textCol = card.createDiv({ cls: "dp-card-text-col" });
@@ -4304,7 +4350,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   cleanBody(body) {
     var _a, _b;
     const p = this.plugin.settings.prefixes;
-    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "").replace(/\{[^{}]*\}/g, "");
+    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "").replace(new RegExp(`#${p.taskContext}\\/[\\w-]+`, "g"), "").replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
       if (!tag)

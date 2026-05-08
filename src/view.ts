@@ -1230,6 +1230,13 @@ export class TodayView extends ItemView {
       }
       row.createSpan({ cls: "dp-block-sep", text: "·" });
     }
+    if (block.task.tags.length > 0) {
+      const tagsWrap = row.createSpan({ cls: "dp-block-tags" });
+      for (const tag of block.task.tags) {
+        tagsWrap.createSpan({ cls: "dp-block-tag", text: tag });
+      }
+      row.createSpan({ cls: "dp-block-sep", text: "·" });
+    }
     const titleText = row.createSpan({
       cls: "dp-block-text",
       text: this.cleanBody(block.task.body),
@@ -1525,6 +1532,12 @@ export class TodayView extends ItemView {
             cls: "dp-card-subproject",
             text: `/${task.subproject}`,
           });
+        }
+      }
+      if (task.tags.length > 0) {
+        const tagsWrap = card.createSpan({ cls: "dp-card-tags" });
+        for (const tag of task.tags) {
+          tagsWrap.createSpan({ cls: "dp-card-tag", text: tag });
         }
       }
       const textCol = card.createDiv({ cls: "dp-card-text-col" });
@@ -1963,6 +1976,7 @@ export class TodayView extends ItemView {
       .replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "")
+      .replace(new RegExp(`#${p.taskContext}\\/[\\w-]+`, "g"), "")
       .replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = ctx.tag?.trim();
