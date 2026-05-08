@@ -1411,7 +1411,7 @@
   }
 
   .dp-block.is-narrow-mini .dp-block-text {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -1434,7 +1434,7 @@
 
   .dp-block.is-narrow-2line .dp-block-text {
     order: 2;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
