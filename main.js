@@ -6243,6 +6243,8 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     const row = this.contentEl.createDiv({ cls: "dp-duration-row" });
     const buttons = [];
     let durInput;
+    let updateSubTotal = () => {
+    };
     const refreshDurButtons = () => {
       buttons.forEach((b, i) => {
         var _a2;
@@ -6268,6 +6270,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           durInput.value = formatCompactDuration(d.min);
         }
         updateSummary();
+        updateSubTotal();
       });
       buttons.push(btn);
     });
@@ -6301,6 +6304,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       refreshDurButtons();
       durInput.removeClass("is-invalid");
       updateSummary();
+      updateSubTotal();
     });
     durInput.addEventListener("blur", () => {
       const min = parseCompactDuration(stripDurTag(durInput.value));
@@ -6424,6 +6428,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           }
           replaceTriggerRange(start, cursor, "");
           updateSummary();
+          updateSubTotal();
         }
       },
       // Date rule keeps the resolved Date alongside the keyword in a parallel
@@ -6571,6 +6576,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       text: "Sub-tasks"
     });
     subLabel.setAttribute("aria-hidden", "true");
+    const subTotal = subLabel.createSpan({ cls: "dp-edit-subtask-total" });
     const sortBtn = subHeader.createEl("button", {
       cls: "dp-edit-subtask-sort",
       text: "Sort by time"
@@ -6595,6 +6601,23 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     const renderList = () => {
       list.empty();
       subs.forEach((sub, idx) => renderSubtask(sub, idx));
+      updateSubTotal();
+    };
+    updateSubTotal = () => {
+      const total = subs.reduce(
+        (acc, s) => {
+          var _a2;
+          return acc + ((_a2 = parseDuration(s.text, prefixes)) != null ? _a2 : 0);
+        },
+        0
+      );
+      if (total <= 0) {
+        subTotal.setText("");
+        subTotal.removeClass("is-over");
+        return;
+      }
+      subTotal.setText(` (${formatCompactDuration(total)})`);
+      subTotal.toggleClass("is-over", total > this.selectedDurationMin);
     };
     const startTextEditAt = (idx) => {
       const row2 = list.querySelector(
@@ -6755,6 +6778,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           if (m)
             sub.text = m[1];
           renderDurChip();
+          updateSubTotal();
           if (this.opts.onSetSubtaskDuration) {
             void this.opts.onSetSubtaskDuration(sub, totalMin);
           }
@@ -6794,6 +6818,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
             if (m)
               sub.text = m[1];
             textEl.setText(cleanBody(sub.text));
+            updateSubTotal();
             if (this.opts.onEditSubtask) {
               void this.opts.onEditSubtask(sub, next);
             }
@@ -6930,6 +6955,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       if (sub) {
         subs.push(sub);
         renderSubtask(sub, subs.length - 1);
+        updateSubTotal();
         addInput.value = "";
       }
       addInput.focus();

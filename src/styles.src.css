@@ -2962,6 +2962,18 @@
     gap: 8px;
   }
 
+  .dp-edit-subtask-total {
+    margin-left: 4px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  }
+
+  .dp-edit-subtask-total.is-over {
+    color: var(--color-danger, #c0392b);
+    font-weight: 600;
+  }
+
   .dp-edit-subtask-sort {
     flex: 0 0 auto;
     padding: 3px 8px;

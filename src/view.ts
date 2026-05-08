@@ -4284,6 +4284,10 @@ class TaskEditModal extends Modal {
     // Forward-declared so the buttons' click handlers (created next) can
     // mirror the chosen value into the custom input that's appended after.
     let durInput!: HTMLInputElement;
+    // Reassigned once the sub-task header is built; the duration-row handlers
+    // call it eagerly to keep the "Sub-tasks (Xh Ym)" total in sync, but they
+    // need *something* callable before the header exists.
+    let updateSubTotal: () => void = () => {};
     const refreshDurButtons = (): void => {
       buttons.forEach((b, i) => {
         b.toggleClass(
@@ -4307,6 +4311,7 @@ class TaskEditModal extends Modal {
           durInput.value = formatCompactDuration(d.min);
         }
         updateSummary();
+        updateSubTotal();
       });
       buttons.push(btn);
     });
@@ -4346,6 +4351,7 @@ class TaskEditModal extends Modal {
       refreshDurButtons();
       durInput.removeClass("is-invalid");
       updateSummary();
+      updateSubTotal();
     });
     durInput.addEventListener("blur", () => {
       // Reformat to the canonical compact form on blur, but only if the
@@ -4501,6 +4507,7 @@ class TaskEditModal extends Modal {
           }
           replaceTriggerRange(start, cursor, "");
           updateSummary();
+          updateSubTotal();
         },
       },
       // Date rule keeps the resolved Date alongside the keyword in a parallel
@@ -4670,6 +4677,10 @@ class TaskEditModal extends Modal {
       text: "Sub-tasks",
     });
     subLabel.setAttribute("aria-hidden", "true");
+    // " (3h15m)" lives inside the same label so it reads as one heading; goes
+    // red when the sum of sub-task durations exceeds the parent's, since the
+    // parent is the slot the sub-tasks have to fit into.
+    const subTotal = subLabel.createSpan({ cls: "dp-edit-subtask-total" });
     const sortBtn = subHeader.createEl("button", {
       cls: "dp-edit-subtask-sort",
       text: "Sort by time",
@@ -4707,6 +4718,21 @@ class TaskEditModal extends Modal {
     const renderList = (): void => {
       list.empty();
       subs.forEach((sub, idx) => renderSubtask(sub, idx));
+      updateSubTotal();
+    };
+
+    updateSubTotal = (): void => {
+      const total = subs.reduce(
+        (acc, s) => acc + (parseDuration(s.text, prefixes) ?? 0),
+        0,
+      );
+      if (total <= 0) {
+        subTotal.setText("");
+        subTotal.removeClass("is-over");
+        return;
+      }
+      subTotal.setText(` (${formatCompactDuration(total)})`);
+      subTotal.toggleClass("is-over", total > this.selectedDurationMin);
     };
 
     // Triggers the inline text editor on the row at `idx`. Used by
@@ -4881,6 +4907,7 @@ class TaskEditModal extends Modal {
           const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
           if (m) sub.text = m[1];
           renderDurChip();
+          updateSubTotal();
           if (this.opts.onSetSubtaskDuration) {
             void this.opts.onSetSubtaskDuration(sub, totalMin);
           }
@@ -4919,6 +4946,7 @@ class TaskEditModal extends Modal {
             const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
             if (m) sub.text = m[1];
             textEl.setText(cleanBody(sub.text));
+            updateSubTotal();
             if (this.opts.onEditSubtask) {
               void this.opts.onEditSubtask(sub, next);
             }
@@ -5057,6 +5085,7 @@ class TaskEditModal extends Modal {
       if (sub) {
         subs.push(sub);
         renderSubtask(sub, subs.length - 1);
+        updateSubTotal();
         addInput.value = "";
       }
       addInput.focus();
