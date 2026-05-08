@@ -2488,7 +2488,10 @@
 
   .dp-project-row {
     display: flex;
-    align-items: stretch;
+    /* `flex-start` rather than `stretch` so the project input/clear button
+     * keep their natural height even when the tag picker (column-flex with a
+     * chip strip below the input) makes the right-hand wrap taller. */
+    align-items: flex-start;
     gap: 6px;
   }
 
@@ -2601,35 +2604,55 @@
   }
 
   /* Task-context tag picker — sits to the right of the project input in the
-   * edit/new modal. The wrap mirrors `.dp-project-input-wrap` so the suggest
-   * popover can position itself absolutely against it. The chip strip and
-   * its inline input share the same border so it reads as one field. */
+   * edit/new modal. The input is the visible "field" (looks like the project
+   * input) and selected tags render as a small chip strip directly below it.
+   * Column layout so the project input stays vertically aligned with the
+   * tag input and the chips float underneath only this column. */
   .dp-tags-input-wrap {
     position: relative;
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
 
-  .dp-tags-input {
-    flex: 1 1 auto;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-    min-height: 36px;
-    padding: 4px 6px;
+  .dp-tag-input {
+    flex: 0 0 auto;
+    width: 100%;
+    padding: 8px 10px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-ink);
     background: var(--color-paper);
     border: 1px solid var(--color-hairline);
     border-radius: var(--radius-card);
-    cursor: text;
+    outline: none;
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
 
-  .dp-tags-input:focus-within {
+  .dp-tag-input:focus {
     border-color: var(--color-accent);
     box-shadow: 0 0 0 2px
       color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+
+  .dp-tag-input::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  .dp-tags-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 0 2px;
+  }
+
+  /* Hide the chip row entirely when no tags are picked so the empty
+   * placeholder doesn't reserve vertical space below the input. */
+  .dp-tags-chips.is-empty {
+    display: none;
   }
 
   .dp-tag-chip {
@@ -2637,9 +2660,9 @@
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    padding: 2px 4px 2px 8px;
+    padding: 1px 3px 1px 6px;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 9.5px;
     font-weight: 500;
     line-height: 1.2;
     border-radius: 999px;
@@ -2654,11 +2677,11 @@
 
   .dp-tag-chip-remove {
     flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
+    width: 13px;
+    height: 13px;
     padding: 0;
-    margin-left: 2px;
-    font-size: 13px;
+    margin-left: 1px;
+    font-size: 11px;
     line-height: 1;
     color: inherit;
     background: transparent;
@@ -2670,23 +2693,6 @@
 
   .dp-tag-chip-remove:hover {
     background: color-mix(in srgb, var(--color-accent) 24%, transparent);
-  }
-
-  .dp-tag-input {
-    flex: 1 1 80px;
-    min-width: 80px;
-    padding: 4px 4px;
-    font-family: var(--font-sans);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--color-ink);
-    background: transparent;
-    border: 0;
-    outline: none;
-  }
-
-  .dp-tag-input::placeholder {
-    color: var(--color-ink-faint);
   }
 
   /* ---------- tag-migration modal ---------- */

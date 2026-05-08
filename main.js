@@ -6002,7 +6002,6 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     const tagsWrap = projRow.createDiv({ cls: "dp-tags-input-wrap" });
     const tagPrefix = this.opts.prefixes.taskContext;
     const currentTags = [...this.opts.initialTags];
-    const tagsHost = tagsWrap.createDiv({ cls: "dp-tags-input" });
     const tagInput = tagsWrap.createEl("input", {
       type: "text",
       cls: "dp-tag-input",
@@ -6012,6 +6011,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         "aria-label": "Add task context tag"
       }
     });
+    const tagsHost = tagsWrap.createDiv({ cls: "dp-tags-chips" });
     const tagPopover = tagsWrap.createDiv({
       cls: "dp-project-suggest dp-tag-suggest"
     });
@@ -6020,6 +6020,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     let tagActiveIdx = -1;
     const renderTagChips = () => {
       tagsHost.empty();
+      tagsHost.toggleClass("is-empty", currentTags.length === 0);
       currentTags.forEach((tag, idx) => {
         const chip = tagsHost.createSpan({ cls: "dp-tag-chip" });
         chip.createSpan({ cls: "dp-tag-chip-text", text: tag });
@@ -6035,7 +6036,6 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           tagInput.focus();
         });
       });
-      tagsHost.appendChild(tagInput);
     };
     renderTagChips();
     const sanitizeTag = (s) => s.replace(/^#?[\w-]*\//, "").trim();
@@ -6160,11 +6160,6 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           hideTagSuggest();
         }
       }
-    });
-    tagsHost.addEventListener("click", (ev) => {
-      if (ev.target === tagInput)
-        return;
-      tagInput.focus();
     });
     const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label is-mobile-hidden",

@@ -4061,13 +4061,12 @@ class TaskEditModal extends Modal {
       projInput.focus();
     });
 
-    // Tag picker — sits to the right of the project input. Each pick adds a
-    // `#<taskContext>/<slug>` to the task line on save; chips are removable
-    // and a free-form value typed + Enter creates a new tag.
+    // Tag picker — sits to the right of the project input. The input is the
+    // visible "field"; selected tags render as a small chip strip below it.
+    // Each pick adds a `#<taskContext>/<slug>` to the task line on save.
     const tagsWrap = projRow.createDiv({ cls: "dp-tags-input-wrap" });
     const tagPrefix = this.opts.prefixes.taskContext;
     const currentTags: string[] = [...this.opts.initialTags];
-    const tagsHost = tagsWrap.createDiv({ cls: "dp-tags-input" });
     const tagInput = tagsWrap.createEl("input", {
       type: "text",
       cls: "dp-tag-input",
@@ -4077,6 +4076,7 @@ class TaskEditModal extends Modal {
         "aria-label": "Add task context tag",
       },
     });
+    const tagsHost = tagsWrap.createDiv({ cls: "dp-tags-chips" });
     const tagPopover = tagsWrap.createDiv({
       cls: "dp-project-suggest dp-tag-suggest",
     });
@@ -4086,6 +4086,7 @@ class TaskEditModal extends Modal {
 
     const renderTagChips = (): void => {
       tagsHost.empty();
+      tagsHost.toggleClass("is-empty", currentTags.length === 0);
       currentTags.forEach((tag, idx) => {
         const chip = tagsHost.createSpan({ cls: "dp-tag-chip" });
         chip.createSpan({ cls: "dp-tag-chip-text", text: tag });
@@ -4101,7 +4102,6 @@ class TaskEditModal extends Modal {
           tagInput.focus();
         });
       });
-      tagsHost.appendChild(tagInput);
     };
     renderTagChips();
 
@@ -4238,13 +4238,6 @@ class TaskEditModal extends Modal {
         }
       }
     });
-    // Clicking the chip strip focuses the input so the user can start typing
-    // a new tag without precision-clicking the inline input itself.
-    tagsHost.addEventListener("click", (ev) => {
-      if (ev.target === tagInput) return;
-      tagInput.focus();
-    });
-
     const durLabel = this.contentEl.createDiv({
       cls: "dp-prompt-step-label is-mobile-hidden",
       text: "Duration",
