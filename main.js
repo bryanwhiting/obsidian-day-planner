@@ -6724,9 +6724,9 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         cls: "dp-edit-subtask-text",
         text: cleanBody(sub.text)
       });
-      const deleteBtn = row2.createEl("button", {
+      const deleteBtn = row2.createSpan({
         cls: "dp-edit-subtask-delete",
-        attr: { "aria-label": "Delete sub-task", type: "button" }
+        attr: { "aria-label": "Delete sub-task", role: "button", tabindex: "0" }
       });
       (0, import_obsidian4.setIcon)(deleteBtn, "x");
       deleteBtn.addEventListener("click", (ev) => {

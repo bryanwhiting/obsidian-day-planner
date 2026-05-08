@@ -4801,9 +4801,9 @@ class TaskEditModal extends Modal {
         text: cleanBody(sub.text),
       });
 
-      const deleteBtn = row.createEl("button", {
+      const deleteBtn = row.createSpan({
         cls: "dp-edit-subtask-delete",
-        attr: { "aria-label": "Delete sub-task", type: "button" },
+        attr: { "aria-label": "Delete sub-task", role: "button", tabindex: "0" },
       });
       setIcon(deleteBtn, "x");
       deleteBtn.addEventListener("click", (ev) => {
