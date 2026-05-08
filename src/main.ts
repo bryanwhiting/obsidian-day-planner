@@ -27,6 +27,7 @@ import {
   buildDateSuggestions,
   buildDateLinkInsert,
   applyDailyNoteTemplateIfEmpty,
+  ensureDailyNote,
 } from "./dailyNote";
 import { HabitsScanner } from "./habits";
 import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
@@ -80,6 +81,24 @@ export default class TodayPlugin extends Plugin {
       id: "open-habits-stats",
       name: "Open habit stats",
       callback: () => void this.activateHabitsStatsView(),
+    });
+
+    this.addCommand({
+      id: "open-daily-note-today",
+      name: "Open today's daily note",
+      callback: () => void this.openDailyNoteForOffset(0),
+    });
+
+    this.addCommand({
+      id: "open-daily-note-yesterday",
+      name: "Open yesterday's daily note",
+      callback: () => void this.openDailyNoteForOffset(-1),
+    });
+
+    this.addCommand({
+      id: "open-daily-note-tomorrow",
+      name: "Open tomorrow's daily note",
+      callback: () => void this.openDailyNoteForOffset(1),
     });
 
     this.addSettingTab(new TodaySettingTab(this.app, this));
@@ -152,6 +171,19 @@ export default class TodayPlugin extends Plugin {
     if (opts.openCalendar && leaf.view instanceof TodayView) {
       leaf.view.openCalendar();
     }
+  }
+
+  async openDailyNoteForOffset(dayOffset: number): Promise<void> {
+    const target = moment().startOf("day").add(dayOffset, "day").toDate();
+    const fallback = {
+      folder: this.settings.dailyNoteFolderFallback,
+      format: this.settings.dailyNoteFormatFallback,
+      template: this.settings.dailyNoteTemplate,
+      dateLinkFormat: this.settings.dateLinkFormat,
+    };
+    const file = await ensureDailyNote(this.app, target, fallback, false);
+    const leaf = this.app.workspace.getLeaf(false);
+    await leaf.openFile(file);
   }
 
   async activateHabitsStatsView(): Promise<void> {
