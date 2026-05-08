@@ -3043,6 +3043,31 @@
     border-style: dashed;
   }
 
+  .dp-edit-subtask-duration {
+    flex: 0 0 auto;
+    min-width: 36px;
+    padding: 2px 6px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink);
+    background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-ink) 22%, transparent);
+    border-radius: 999px;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .dp-edit-subtask-duration:hover {
+    background: color-mix(in srgb, var(--color-ink) 12%, transparent);
+  }
+
+  .dp-edit-subtask-duration.is-empty {
+    color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    background: transparent;
+    border-style: dashed;
+  }
+
   .dp-edit-subtask-handle {
     flex: 0 0 auto;
     display: flex;

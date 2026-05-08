@@ -632,6 +632,10 @@ function removeTimeTag(rawLine, prefixes) {
   const re = buildTagRegexes(prefixes).time;
   return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
+function removeDurationTag(rawLine, prefixes) {
+  const re = buildTagRegexes(prefixes).duration;
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
+}
 function setOrderTag(rawLine, order, prefixes) {
   const re = buildTagRegexes(prefixes).order;
   const newTag = `#${prefixes.order}/${order}`;
@@ -4685,6 +4689,9 @@ var TodayView = class extends import_obsidian4.ItemView {
       onSetSubtaskTime: async (sub, totalMin) => {
         await this.applySubtaskTime(file, sub.lineNumber, totalMin);
       },
+      onSetSubtaskDuration: async (sub, durationMin) => {
+        await this.applySubtaskDuration(file, sub.lineNumber, durationMin);
+      },
       onReorderSubtasks: async (ordered) => {
         await this.applySubtaskReorder(file, ordered);
       },
@@ -5599,6 +5606,16 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (lineNumber >= lines.length)
         return content;
       lines[lineNumber] = totalMin === null ? removeTimeTag(lines[lineNumber], prefixes) : setTimeTag(lines[lineNumber], totalMin, prefixes);
+      return lines.join("\n");
+    });
+  }
+  async applySubtaskDuration(file, lineNumber, durationMin) {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length)
+        return content;
+      lines[lineNumber] = durationMin === null ? removeDurationTag(lines[lineNumber], prefixes) : setDurationTag(lines[lineNumber], durationMin, prefixes);
       return lines.join("\n");
     });
   }
@@ -6579,6 +6596,13 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       list.empty();
       subs.forEach((sub, idx) => renderSubtask(sub, idx));
     };
+    const startTextEditAt = (idx) => {
+      const row2 = list.querySelector(
+        `.dp-edit-subtask[data-idx="${idx}"]`
+      );
+      const textEl = row2 == null ? void 0 : row2.querySelector(".dp-edit-subtask-text");
+      textEl == null ? void 0 : textEl.click();
+    };
     const renderSubtask = (sub, idx) => {
       let checked = sub.checked;
       const row2 = list.createDiv({ cls: "dp-edit-subtask" });
@@ -6600,6 +6624,18 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         }
       };
       renderTimeChip();
+      const durChip = row2.createSpan({ cls: "dp-edit-subtask-duration" });
+      const renderDurChip = () => {
+        const min = parseDuration(sub.text, prefixes);
+        if (min === null) {
+          durChip.setText("+ dur");
+          durChip.addClass("is-empty");
+        } else {
+          durChip.setText(formatCompactDuration(min));
+          durChip.removeClass("is-empty");
+        }
+      };
+      renderDurChip();
       const textEl = row2.createSpan({
         cls: "dp-edit-subtask-text",
         text: cleanBody(sub.text)
@@ -6680,6 +6716,60 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         });
         editor.addEventListener("blur", () => finish(true));
       });
+      durChip.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const current = parseDuration(sub.text, prefixes);
+        const editor = row2.createEl("input", {
+          type: "text",
+          cls: "dp-edit-subtask-time-input",
+          attr: { placeholder: "e.g. 30m, 1h30m" }
+        });
+        editor.value = current === null ? "" : formatCompactDuration(current);
+        durChip.style.display = "none";
+        editor.focus();
+        editor.select();
+        let done = false;
+        const finish = (commit) => {
+          if (done)
+            return;
+          done = true;
+          const raw = editor.value.trim();
+          editor.remove();
+          durChip.style.display = "";
+          if (!commit)
+            return;
+          let totalMin = null;
+          if (raw !== "") {
+            const stripped = raw.replace(new RegExp(`^#?${prefixes.duration}\\s*[/:]\\s*`, "i"), "").trim();
+            const parsed = parseCompactDuration(stripped);
+            if (parsed === null) {
+              new import_obsidian4.Notice("Invalid duration, try e.g. 30m or 1h30m");
+              return;
+            }
+            totalMin = parsed;
+          }
+          if (totalMin === current)
+            return;
+          sub.rawLine = totalMin === null ? removeDurationTag(sub.rawLine, prefixes) : setDurationTag(sub.rawLine, totalMin, prefixes);
+          const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
+          if (m)
+            sub.text = m[1];
+          renderDurChip();
+          if (this.opts.onSetSubtaskDuration) {
+            void this.opts.onSetSubtaskDuration(sub, totalMin);
+          }
+        };
+        editor.addEventListener("keydown", (kev) => {
+          if (kev.key === "Enter") {
+            kev.preventDefault();
+            finish(true);
+          } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(false);
+          }
+        });
+        editor.addEventListener("blur", () => finish(true));
+      });
       textEl.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const editor = row2.createEl("input", {
@@ -6717,6 +6807,20 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           } else if (kev.key === "Escape") {
             kev.preventDefault();
             finish(false);
+          } else if (kev.key === "ArrowUp") {
+            kev.preventDefault();
+            if (idx > 0) {
+              finish(true);
+              startTextEditAt(idx - 1);
+            }
+          } else if (kev.key === "ArrowDown") {
+            kev.preventDefault();
+            finish(true);
+            if (idx < subs.length - 1) {
+              startTextEditAt(idx + 1);
+            } else {
+              addInput.focus();
+            }
           }
         });
         editor.addEventListener("blur", () => finish(true));
@@ -6837,6 +6941,11 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       if (ev.key === "Enter") {
         ev.preventDefault();
         void submitNewSubtask();
+      } else if (ev.key === "ArrowUp") {
+        if (addInput.value === "" && subs.length > 0) {
+          ev.preventDefault();
+          startTextEditAt(subs.length - 1);
+        }
       }
     });
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });

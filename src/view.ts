@@ -2276,6 +2276,9 @@ export class TodayView extends ItemView {
       onSetSubtaskTime: async (sub, totalMin) => {
         await this.applySubtaskTime(file, sub.lineNumber, totalMin);
       },
+      onSetSubtaskDuration: async (sub, durationMin) => {
+        await this.applySubtaskDuration(file, sub.lineNumber, durationMin);
+      },
       onReorderSubtasks: async (ordered) => {
         await this.applySubtaskReorder(file, ordered);
       },
@@ -3372,6 +3375,23 @@ export class TodayView extends ItemView {
     });
   }
 
+  private async applySubtaskDuration(
+    file: TFile,
+    lineNumber: number,
+    durationMin: number | null,
+  ): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (lineNumber >= lines.length) return content;
+      lines[lineNumber] =
+        durationMin === null
+          ? removeDurationTag(lines[lineNumber], prefixes)
+          : setDurationTag(lines[lineNumber], durationMin, prefixes);
+      return lines.join("\n");
+    });
+  }
+
   // Reorders sub-task lines in the file. The slots are the existing line
   // numbers (sorted ascending); we write each ordered sub's current rawLine
   // into the corresponding slot. This preserves any blank/non-task lines
@@ -3498,6 +3518,10 @@ interface TaskEditOpts {
   onSetSubtaskTime?: (
     sub: ParsedSubtask,
     totalMin: number | null,
+  ) => Promise<void>;
+  onSetSubtaskDuration?: (
+    sub: ParsedSubtask,
+    durationMin: number | null,
   ) => Promise<void>;
   onReorderSubtasks?: (ordered: ParsedSubtask[]) => Promise<void>;
   onShowInNote?: () => void;
@@ -4685,6 +4709,16 @@ class TaskEditModal extends Modal {
       subs.forEach((sub, idx) => renderSubtask(sub, idx));
     };
 
+    // Triggers the inline text editor on the row at `idx`. Used by
+    // ArrowUp/ArrowDown navigation between sub-tasks.
+    const startTextEditAt = (idx: number): void => {
+      const row = list.querySelector<HTMLElement>(
+        `.dp-edit-subtask[data-idx="${idx}"]`,
+      );
+      const textEl = row?.querySelector<HTMLElement>(".dp-edit-subtask-text");
+      textEl?.click();
+    };
+
     const renderSubtask = (sub: ParsedSubtask, idx: number): void => {
       let checked = sub.checked;
       const row = list.createDiv({ cls: "dp-edit-subtask" });
@@ -4706,6 +4740,19 @@ class TaskEditModal extends Modal {
         }
       };
       renderTimeChip();
+
+      const durChip = row.createSpan({ cls: "dp-edit-subtask-duration" });
+      const renderDurChip = (): void => {
+        const min = parseDuration(sub.text, prefixes);
+        if (min === null) {
+          durChip.setText("+ dur");
+          durChip.addClass("is-empty");
+        } else {
+          durChip.setText(formatCompactDuration(min));
+          durChip.removeClass("is-empty");
+        }
+      };
+      renderDurChip();
 
       const textEl = row.createSpan({
         cls: "dp-edit-subtask-text",
@@ -4794,6 +4841,62 @@ class TaskEditModal extends Modal {
         editor.addEventListener("blur", () => finish(true));
       });
 
+      durChip.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const current = parseDuration(sub.text, prefixes);
+        const editor = row.createEl("input", {
+          type: "text",
+          cls: "dp-edit-subtask-time-input",
+          attr: { placeholder: "e.g. 30m, 1h30m" },
+        });
+        editor.value = current === null ? "" : formatCompactDuration(current);
+        durChip.style.display = "none";
+        editor.focus();
+        editor.select();
+        let done = false;
+        const finish = (commit: boolean): void => {
+          if (done) return;
+          done = true;
+          const raw = editor.value.trim();
+          editor.remove();
+          durChip.style.display = "";
+          if (!commit) return;
+          let totalMin: number | null = null;
+          if (raw !== "") {
+            const stripped = raw
+              .replace(new RegExp(`^#?${prefixes.duration}\\s*[/:]\\s*`, "i"), "")
+              .trim();
+            const parsed = parseCompactDuration(stripped);
+            if (parsed === null) {
+              new Notice("Invalid duration, try e.g. 30m or 1h30m");
+              return;
+            }
+            totalMin = parsed;
+          }
+          if (totalMin === current) return;
+          sub.rawLine =
+            totalMin === null
+              ? removeDurationTag(sub.rawLine, prefixes)
+              : setDurationTag(sub.rawLine, totalMin, prefixes);
+          const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
+          if (m) sub.text = m[1];
+          renderDurChip();
+          if (this.opts.onSetSubtaskDuration) {
+            void this.opts.onSetSubtaskDuration(sub, totalMin);
+          }
+        };
+        editor.addEventListener("keydown", (kev) => {
+          if (kev.key === "Enter") {
+            kev.preventDefault();
+            finish(true);
+          } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(false);
+          }
+        });
+        editor.addEventListener("blur", () => finish(true));
+      });
+
       textEl.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const editor = row.createEl("input", {
@@ -4829,6 +4932,20 @@ class TaskEditModal extends Modal {
           } else if (kev.key === "Escape") {
             kev.preventDefault();
             finish(false);
+          } else if (kev.key === "ArrowUp") {
+            kev.preventDefault();
+            if (idx > 0) {
+              finish(true);
+              startTextEditAt(idx - 1);
+            }
+          } else if (kev.key === "ArrowDown") {
+            kev.preventDefault();
+            finish(true);
+            if (idx < subs.length - 1) {
+              startTextEditAt(idx + 1);
+            } else {
+              addInput.focus();
+            }
           }
         });
         editor.addEventListener("blur", () => finish(true));
@@ -4951,6 +5068,14 @@ class TaskEditModal extends Modal {
       if (ev.key === "Enter") {
         ev.preventDefault();
         void submitNewSubtask();
+      } else if (ev.key === "ArrowUp") {
+        // Slack-style: pop into edit-mode on the most recent sub-task, but
+        // only when the new-sub field is empty so we don't eat in-progress
+        // text the user typed.
+        if (addInput.value === "" && subs.length > 0) {
+          ev.preventDefault();
+          startTextEditAt(subs.length - 1);
+        }
       }
     });
 
