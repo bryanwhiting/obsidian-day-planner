@@ -1180,7 +1180,8 @@ var DEFAULT_SETTINGS = {
   habitPrefix: "h",
   habitWeekStart: 0,
   habitsHideCompleted: false,
-  habitsStatsWindow: 10
+  habitsStatsWindow: 10,
+  copySubtasksOnAutocomplete: false
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1423,6 +1424,14 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           this.plugin.settings.prefixes.taskContext = v;
           await this.plugin.saveSettings();
         }
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Copy sub-tasks on title autocomplete").setDesc(
+      "When you pick a prior task from the title autocomplete in the new/edit task modal, also copy its sub-tasks (all unchecked). Off keeps just the project, duration, description, and tags."
+    ).addToggle(
+      (t) => t.setValue(this.plugin.settings.copySubtasksOnAutocomplete).onChange(async (v) => {
+        this.plugin.settings.copySubtasksOnAutocomplete = v;
+        await this.plugin.saveSettings();
       })
     );
   }
@@ -3687,6 +3696,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       availableTags: this.collectContextTagNames(),
       subtasks: [],
       projects: this.collectProjectNames(),
+      getPriorTasks: () => this.collectPriorTaskSuggestions(),
+      copySubtasksOnAutocomplete: this.plugin.settings.copySubtasksOnAutocomplete,
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
@@ -5039,6 +5050,59 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }
+  // Walks every markdown file in the vault, parses its tasks, and returns
+  // one entry per unique (case-insensitive) title — the most recently
+  // modified file wins ties. Feeds the title-input autocomplete on the
+  // new/edit task modal so the user can re-pick a prior task by name and
+  // have its project / duration / description / tags / sub-tasks pre-filled.
+  // Reads via `cachedRead` so it's cheap on warm caches.
+  async collectPriorTaskSuggestions() {
+    var _a;
+    const settings = this.plugin.settings;
+    const prefixes = settings.prefixes;
+    const files = this.app.vault.getMarkdownFiles();
+    files.sort((a, b) => b.stat.mtime - a.stat.mtime);
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const file of files) {
+      let content;
+      try {
+        content = await this.app.vault.cachedRead(file);
+      } catch (e) {
+        continue;
+      }
+      const tasks = parseFileTasks(
+        file.path,
+        content,
+        prefixes,
+        settings.defaultDurationMin
+      );
+      for (const t of tasks) {
+        const title = this.cleanBody(t.body);
+        if (!title)
+          continue;
+        const key = title.toLowerCase();
+        if (seen.has(key))
+          continue;
+        seen.add(key);
+        const project = t.project ? t.subproject ? `${t.project}/${t.subproject}` : t.project : null;
+        const subtaskRawLines = t.subtasks.map((sub) => {
+          const m = /^\s*-\s*\[[^\]]\]\s*(.*)$/.exec(sub.rawLine);
+          const text = m ? m[1] : sub.text;
+          return `	- [ ] ${text}`;
+        });
+        out.push({
+          title,
+          project,
+          description: (_a = t.description) != null ? _a : "",
+          durationMin: t.hasExplicitDuration ? t.durationMin : null,
+          tags: [...t.tags],
+          subtaskRawLines
+        });
+      }
+    }
+    return out;
   }
   async applyTaskEdit(file, task, newTitle, newDescription, newDurationMin, newProject, newChecked, newTags) {
     const prefixes = this.plugin.settings.prefixes;
@@ -7055,6 +7119,182 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         }
       }
     });
+    if (this.opts.mode === "new" && this.opts.getPriorTasks) {
+      const taskPopover = titleWrap.createDiv({
+        cls: "dp-project-suggest dp-task-suggest"
+      });
+      taskPopover.style.display = "none";
+      let priorTasks = [];
+      let visiblePrior = [];
+      let priorActiveIdx = -1;
+      const triggerStrings = [
+        this.opts.projectTrigger,
+        this.opts.timeTrigger,
+        this.opts.durationTrigger,
+        this.opts.dateTrigger
+      ].filter((s) => !!s);
+      const triggerPopoverEl = () => titleWrap.querySelector(
+        ".dp-project-suggest:not(.dp-task-suggest)"
+      );
+      const isTriggerActive = (text) => {
+        const tp = triggerPopoverEl();
+        if (tp && tp.style.display !== "none")
+          return true;
+        return triggerStrings.some((t) => text.includes(t));
+      };
+      const filterPrior = (q) => {
+        const needle = q.trim().toLowerCase();
+        if (!needle)
+          return [];
+        const starts = [];
+        const contains = [];
+        for (const p of priorTasks) {
+          const lc = p.title.toLowerCase();
+          if (lc === needle)
+            continue;
+          if (lc.startsWith(needle))
+            starts.push(p);
+          else if (lc.includes(needle))
+            contains.push(p);
+        }
+        return [...starts, ...contains].slice(0, 8);
+      };
+      const renderPriorList = () => {
+        taskPopover.empty();
+        visiblePrior.forEach((sugg, i) => {
+          const item = taskPopover.createDiv({
+            cls: "dp-project-suggest-item"
+          });
+          if (i === priorActiveIdx)
+            item.addClass("is-active");
+          item.createSpan({ text: sugg.title });
+          if (sugg.project) {
+            item.createSpan({
+              cls: "dp-project-suggest-sub",
+              text: ` ${sugg.project}`
+            });
+          }
+          item.addEventListener("mousedown", (ev) => {
+            ev.preventDefault();
+            applyPriorPick(sugg);
+          });
+          item.addEventListener("mousemove", () => {
+            if (priorActiveIdx === i)
+              return;
+            priorActiveIdx = i;
+            updatePriorActive();
+          });
+        });
+      };
+      const updatePriorActive = () => {
+        const items = taskPopover.querySelectorAll(
+          ".dp-project-suggest-item"
+        );
+        items.forEach(
+          (el, i) => el.toggleClass("is-active", i === priorActiveIdx)
+        );
+        if (priorActiveIdx >= 0 && items[priorActiveIdx]) {
+          items[priorActiveIdx].scrollIntoView({ block: "nearest" });
+        }
+      };
+      const showPriorSuggest = () => {
+        if (isTriggerActive(input.value)) {
+          hidePriorSuggest();
+          return;
+        }
+        visiblePrior = filterPrior(input.value);
+        if (visiblePrior.length === 0) {
+          hidePriorSuggest();
+          return;
+        }
+        if (priorActiveIdx < 0 || priorActiveIdx >= visiblePrior.length) {
+          priorActiveIdx = 0;
+        }
+        renderPriorList();
+        taskPopover.style.display = "";
+      };
+      const hidePriorSuggest = () => {
+        taskPopover.style.display = "none";
+        priorActiveIdx = -1;
+      };
+      const applyPriorPick = (sugg) => {
+        var _a2;
+        input.value = sugg.title;
+        input.setSelectionRange(sugg.title.length, sugg.title.length);
+        descInput.value = sugg.description;
+        projInput.value = (_a2 = sugg.project) != null ? _a2 : "";
+        if (sugg.durationMin !== null) {
+          this.selectedDurationMin = sugg.durationMin;
+          this.durationChanged = true;
+          refreshDurButtons();
+          durInput.value = formatCompactDuration(sugg.durationMin);
+          durInput.removeClass("is-invalid");
+        }
+        currentTags.length = 0;
+        currentTags.push(...sugg.tags);
+        renderTagChips();
+        if (this.opts.copySubtasksOnAutocomplete) {
+          subs.length = 0;
+          for (const rawLine of sugg.subtaskRawLines) {
+            const m = /^\s*-\s*\[[^\]]\]\s*(.*)$/.exec(rawLine);
+            const text = m ? m[1] : rawLine;
+            subs.push({
+              lineNumber: pendingSubLineCounter--,
+              rawLine,
+              text,
+              checked: false
+            });
+          }
+          renderList();
+        }
+        updateSummary();
+        updateSubTotal();
+        hidePriorSuggest();
+        input.focus();
+      };
+      void this.opts.getPriorTasks().then((list2) => {
+        priorTasks = list2;
+        if (document.activeElement === input)
+          showPriorSuggest();
+      });
+      input.addEventListener("input", showPriorSuggest);
+      input.addEventListener("focus", showPriorSuggest);
+      input.addEventListener("blur", () => {
+        window.setTimeout(hidePriorSuggest, 100);
+      });
+      input.addEventListener(
+        "keydown",
+        (ev) => {
+          if (taskPopover.style.display === "none")
+            return;
+          if (ev.key === "ArrowDown") {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            priorActiveIdx = Math.min(
+              priorActiveIdx + 1,
+              visiblePrior.length - 1
+            );
+            updatePriorActive();
+          } else if (ev.key === "ArrowUp") {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            priorActiveIdx = Math.max(priorActiveIdx - 1, 0);
+            updatePriorActive();
+          } else if (ev.key === "Enter" || ev.key === "Tab") {
+            if (priorActiveIdx >= 0 && priorActiveIdx < visiblePrior.length) {
+              ev.preventDefault();
+              ev.stopImmediatePropagation();
+              applyPriorPick(visiblePrior[priorActiveIdx]);
+            }
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            hidePriorSuggest();
+          }
+        },
+        true
+      );
+    }
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
     const runDelete = async () => {
       if (!this.opts.onDelete)

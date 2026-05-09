@@ -96,6 +96,11 @@ export interface TodaySettings {
   habitsHideCompleted: boolean;
   // Number of buckets shown in each heatmap row in the stats pane.
   habitsStatsWindow: number;
+  // When the user picks a prior task from the title-autocomplete in the task
+  // edit/new modal, copy the source task's sub-tasks too. Project, duration,
+  // description, and tags are always copied; sub-tasks are gated by this flag
+  // because most "recurring task" use-cases want a fresh, empty checklist.
+  copySubtasksOnAutocomplete: boolean;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -133,6 +138,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   habitWeekStart: 0,
   habitsHideCompleted: false,
   habitsStatsWindow: 10,
+  copySubtasksOnAutocomplete: false,
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -446,6 +452,20 @@ export class TodaySettingTab extends PluginSettingTab {
               this.plugin.settings.prefixes.taskContext = v;
               await this.plugin.saveSettings();
             }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Copy sub-tasks on title autocomplete")
+      .setDesc(
+        "When you pick a prior task from the title autocomplete in the new/edit task modal, also copy its sub-tasks (all unchecked). Off keeps just the project, duration, description, and tags.",
+      )
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.copySubtasksOnAutocomplete)
+          .onChange(async (v) => {
+            this.plugin.settings.copySubtasksOnAutocomplete = v;
+            await this.plugin.saveSettings();
           }),
       );
 

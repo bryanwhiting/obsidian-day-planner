@@ -1059,6 +1059,9 @@ export class TodayView extends ItemView {
       availableTags: this.collectContextTagNames(),
       subtasks: [],
       projects: this.collectProjectNames(),
+      getPriorTasks: () => this.collectPriorTaskSuggestions(),
+      copySubtasksOnAutocomplete:
+        this.plugin.settings.copySubtasksOnAutocomplete,
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
       prefixes: this.plugin.settings.prefixes,
       projectTrigger: this.plugin.settings.autocomplete.projectTrigger,
@@ -2641,6 +2644,66 @@ export class TodayView extends ItemView {
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }
 
+  // Walks every markdown file in the vault, parses its tasks, and returns
+  // one entry per unique (case-insensitive) title — the most recently
+  // modified file wins ties. Feeds the title-input autocomplete on the
+  // new/edit task modal so the user can re-pick a prior task by name and
+  // have its project / duration / description / tags / sub-tasks pre-filled.
+  // Reads via `cachedRead` so it's cheap on warm caches.
+  async collectPriorTaskSuggestions(): Promise<TaskSuggestion[]> {
+    const settings = this.plugin.settings;
+    const prefixes = settings.prefixes;
+    const files = this.app.vault.getMarkdownFiles();
+    // Sort newest-first so the first sighting of any title becomes the
+    // chosen one — later (older) sightings drop out via the seen-set.
+    files.sort((a, b) => b.stat.mtime - a.stat.mtime);
+    const seen = new Set<string>();
+    const out: TaskSuggestion[] = [];
+    for (const file of files) {
+      let content: string;
+      try {
+        content = await this.app.vault.cachedRead(file);
+      } catch {
+        continue;
+      }
+      const tasks = parseFileTasks(
+        file.path,
+        content,
+        prefixes,
+        settings.defaultDurationMin,
+      );
+      for (const t of tasks) {
+        const title = this.cleanBody(t.body);
+        if (!title) continue;
+        const key = title.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const project = t.project
+          ? t.subproject
+            ? `${t.project}/${t.subproject}`
+            : t.project
+          : null;
+        // Reset every sub-task to unchecked and normalize indent to a single
+        // tab, so the copies work as a fresh checklist regardless of the
+        // source file's original whitespace conventions.
+        const subtaskRawLines = t.subtasks.map((sub) => {
+          const m = /^\s*-\s*\[[^\]]\]\s*(.*)$/.exec(sub.rawLine);
+          const text = m ? m[1] : sub.text;
+          return `\t- [ ] ${text}`;
+        });
+        out.push({
+          title,
+          project,
+          description: t.description ?? "",
+          durationMin: t.hasExplicitDuration ? t.durationMin : null,
+          tags: [...t.tags],
+          subtaskRawLines,
+        });
+      }
+    }
+    return out;
+  }
+
   private async applyTaskEdit(
     file: TFile,
     task: ParsedTask,
@@ -3450,6 +3513,31 @@ export class TodayView extends ItemView {
 
 type NewTaskPostAction = "none" | "show" | "pomodoro";
 
+// One row in the title-autocomplete popover that surfaces prior tasks across
+// the vault. Populated by `collectPriorTaskSuggestions` and threaded into
+// the new/edit task modal via `TaskEditOpts.priorTasks`. Picking one
+// pre-fills every property on the modal (and optionally the source's
+// sub-tasks, gated by `copySubtasksOnAutocomplete`).
+interface TaskSuggestion {
+  // Cleaned title (tags / time / duration stripped) — what the user sees in
+  // the popover and what gets dropped into the title input on pick.
+  title: string;
+  // Composed `proj/sub` path or null. Mirrors the format the project input
+  // expects, so we can drop it in verbatim.
+  project: string | null;
+  // Free-form description from the `{…}` block — empty string when absent.
+  description: string;
+  // Explicit duration in minutes from the source `#d/` tag, or null when the
+  // source line carried no explicit duration.
+  durationMin: number | null;
+  // `#tc/<slug>` labels parsed off the source line.
+  tags: string[];
+  // Source sub-tasks, normalized to `\t- [ ] <text>` form so they can be
+  // appended verbatim under the new task. Always unchecked — recurring-task
+  // copies want a fresh checklist.
+  subtaskRawLines: string[];
+}
+
 interface NewTaskExtras {
   // Pending sub-task lines accumulated in-memory (the parent task does not yet
   // exist on disk). The caller is responsible for writing these underneath the
@@ -3485,6 +3573,15 @@ interface TaskEditOpts {
   taskIdPrefix?: string;
   subtasks: ParsedSubtask[];
   projects: string[];
+  // Loader for prior tasks across the vault, deduped by title (most recent
+  // wins). Feeds the title-input autocomplete in "new" mode. The modal
+  // resolves it asynchronously on open so a slow scan doesn't block the
+  // first paint. Omit to disable the popover entirely.
+  getPriorTasks?: () => Promise<TaskSuggestion[]>;
+  // Whether picking a suggestion should also copy the source task's
+  // sub-tasks. Without this, the user gets a fresh, empty sub-task list and
+  // just the parent-level properties (project / duration / description / tags).
+  copySubtasksOnAutocomplete?: boolean;
   durations: { label: string; min: number }[];
   prefixes: TagPrefixes;
   // Trigger strings for the in-title autocompletes (e.g. "##", "#@", "#$", "@").
@@ -5147,6 +5244,212 @@ class TaskEditModal extends Modal {
         }
       }
     });
+
+    // Title autocomplete on prior tasks: as the user types a brand-new task
+    // title, fuzzy-match against every task in the vault and offer to pre-fill
+    // the modal with the matching task's project / duration / description /
+    // tags (and optionally its sub-tasks). Only wired in "new" mode — in edit
+    // mode the title's already filled and copying over an existing task's
+    // properties would be jarring.
+    if (this.opts.mode === "new" && this.opts.getPriorTasks) {
+      const taskPopover = titleWrap.createDiv({
+        cls: "dp-project-suggest dp-task-suggest",
+      });
+      taskPopover.style.display = "none";
+      let priorTasks: TaskSuggestion[] = [];
+      let visiblePrior: TaskSuggestion[] = [];
+      let priorActiveIdx = -1;
+
+      // Trigger characters that hand off to the existing #-trigger popover.
+      // When any of these appear in the title we stand down so attachTitleSuggest
+      // owns the keyboard.
+      const triggerStrings = [
+        this.opts.projectTrigger,
+        this.opts.timeTrigger,
+        this.opts.durationTrigger,
+        this.opts.dateTrigger,
+      ].filter((s) => !!s);
+
+      const triggerPopoverEl = (): HTMLElement | null =>
+        titleWrap.querySelector<HTMLElement>(
+          ".dp-project-suggest:not(.dp-task-suggest)",
+        );
+
+      const isTriggerActive = (text: string): boolean => {
+        const tp = triggerPopoverEl();
+        if (tp && tp.style.display !== "none") return true;
+        return triggerStrings.some((t) => text.includes(t));
+      };
+
+      const filterPrior = (q: string): TaskSuggestion[] => {
+        const needle = q.trim().toLowerCase();
+        if (!needle) return [];
+        const starts: TaskSuggestion[] = [];
+        const contains: TaskSuggestion[] = [];
+        for (const p of priorTasks) {
+          const lc = p.title.toLowerCase();
+          if (lc === needle) continue;
+          if (lc.startsWith(needle)) starts.push(p);
+          else if (lc.includes(needle)) contains.push(p);
+        }
+        return [...starts, ...contains].slice(0, 8);
+      };
+
+      const renderPriorList = (): void => {
+        taskPopover.empty();
+        visiblePrior.forEach((sugg, i) => {
+          const item = taskPopover.createDiv({
+            cls: "dp-project-suggest-item",
+          });
+          if (i === priorActiveIdx) item.addClass("is-active");
+          item.createSpan({ text: sugg.title });
+          if (sugg.project) {
+            item.createSpan({
+              cls: "dp-project-suggest-sub",
+              text: ` ${sugg.project}`,
+            });
+          }
+          item.addEventListener("mousedown", (ev) => {
+            ev.preventDefault();
+            applyPriorPick(sugg);
+          });
+          item.addEventListener("mousemove", () => {
+            if (priorActiveIdx === i) return;
+            priorActiveIdx = i;
+            updatePriorActive();
+          });
+        });
+      };
+
+      const updatePriorActive = (): void => {
+        const items = taskPopover.querySelectorAll<HTMLElement>(
+          ".dp-project-suggest-item",
+        );
+        items.forEach((el, i) =>
+          el.toggleClass("is-active", i === priorActiveIdx),
+        );
+        if (priorActiveIdx >= 0 && items[priorActiveIdx]) {
+          items[priorActiveIdx].scrollIntoView({ block: "nearest" });
+        }
+      };
+
+      const showPriorSuggest = (): void => {
+        if (isTriggerActive(input.value)) {
+          hidePriorSuggest();
+          return;
+        }
+        visiblePrior = filterPrior(input.value);
+        if (visiblePrior.length === 0) {
+          hidePriorSuggest();
+          return;
+        }
+        if (priorActiveIdx < 0 || priorActiveIdx >= visiblePrior.length) {
+          priorActiveIdx = 0;
+        }
+        renderPriorList();
+        taskPopover.style.display = "";
+      };
+
+      const hidePriorSuggest = (): void => {
+        taskPopover.style.display = "none";
+        priorActiveIdx = -1;
+      };
+
+      const applyPriorPick = (sugg: TaskSuggestion): void => {
+        input.value = sugg.title;
+        input.setSelectionRange(sugg.title.length, sugg.title.length);
+
+        descInput.value = sugg.description;
+        projInput.value = sugg.project ?? "";
+
+        if (sugg.durationMin !== null) {
+          this.selectedDurationMin = sugg.durationMin;
+          this.durationChanged = true;
+          refreshDurButtons();
+          durInput.value = formatCompactDuration(sugg.durationMin);
+          durInput.removeClass("is-invalid");
+        }
+
+        currentTags.length = 0;
+        currentTags.push(...sugg.tags);
+        renderTagChips();
+
+        if (this.opts.copySubtasksOnAutocomplete) {
+          // Drop any pending in-memory subs and adopt the source's checklist.
+          // New-mode lineNumbers are negative-only so we don't collide with
+          // real file lines (there aren't any here, but keep the convention).
+          subs.length = 0;
+          for (const rawLine of sugg.subtaskRawLines) {
+            const m = /^\s*-\s*\[[^\]]\]\s*(.*)$/.exec(rawLine);
+            const text = m ? m[1] : rawLine;
+            subs.push({
+              lineNumber: pendingSubLineCounter--,
+              rawLine,
+              text,
+              checked: false,
+            });
+          }
+          renderList();
+        }
+
+        updateSummary();
+        updateSubTotal();
+        hidePriorSuggest();
+        input.focus();
+      };
+
+      // Kick off the scan; until it resolves the popover stays empty (and
+      // hidden, since `priorTasks` is empty so filterPrior returns []).
+      void this.opts.getPriorTasks().then((list) => {
+        priorTasks = list;
+        // If the user already typed something while we were loading, refresh
+        // so the popover surfaces matches without further keystrokes.
+        if (document.activeElement === input) showPriorSuggest();
+      });
+
+      input.addEventListener("input", showPriorSuggest);
+      input.addEventListener("focus", showPriorSuggest);
+      input.addEventListener("blur", () => {
+        // Delay so a mousedown on a popover item commits before we hide.
+        window.setTimeout(hidePriorSuggest, 100);
+      });
+      // Capture phase: beat both attachTitleSuggest's keydown and the
+      // modal-level enterToSubmit so picking a suggestion doesn't double-fire.
+      input.addEventListener(
+        "keydown",
+        (ev) => {
+          if (taskPopover.style.display === "none") return;
+          if (ev.key === "ArrowDown") {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            priorActiveIdx = Math.min(
+              priorActiveIdx + 1,
+              visiblePrior.length - 1,
+            );
+            updatePriorActive();
+          } else if (ev.key === "ArrowUp") {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            priorActiveIdx = Math.max(priorActiveIdx - 1, 0);
+            updatePriorActive();
+          } else if (ev.key === "Enter" || ev.key === "Tab") {
+            if (
+              priorActiveIdx >= 0 &&
+              priorActiveIdx < visiblePrior.length
+            ) {
+              ev.preventDefault();
+              ev.stopImmediatePropagation();
+              applyPriorPick(visiblePrior[priorActiveIdx]);
+            }
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            hidePriorSuggest();
+          }
+        },
+        true,
+      );
+    }
 
     const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
 
