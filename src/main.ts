@@ -16,6 +16,7 @@ import {
   TodaySettingTab,
   DEFAULT_SETTINGS,
   DEFAULT_AUTOCOMPLETE,
+  DEFAULT_WEEKDAY_TEMPLATES,
 } from "./settings";
 import {
   DEFAULT_PREFIXES,
@@ -118,6 +119,7 @@ export default class TodayPlugin extends Plugin {
           folder: this.settings.dailyNoteFolderFallback,
           format: this.settings.dailyNoteFormatFallback,
           template: this.settings.dailyNoteTemplate,
+          templatesByDay: this.settings.dailyNoteTemplatesByDay,
           dateLinkFormat: this.settings.dateLinkFormat,
         });
       }),
@@ -135,6 +137,10 @@ export default class TodayPlugin extends Plugin {
       autocomplete: {
         ...DEFAULT_AUTOCOMPLETE,
         ...(data?.autocomplete ?? {}),
+      },
+      dailyNoteTemplatesByDay: {
+        ...DEFAULT_WEEKDAY_TEMPLATES,
+        ...(data?.dailyNoteTemplatesByDay ?? {}),
       },
       projectColors: Array.isArray(data?.projectColors)
         ? data!.projectColors!.filter(
@@ -180,6 +186,7 @@ export default class TodayPlugin extends Plugin {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
       template: this.settings.dailyNoteTemplate,
+      templatesByDay: this.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.settings.dateLinkFormat,
     };
     const file = await ensureDailyNote(this.app, target, fallback, false);

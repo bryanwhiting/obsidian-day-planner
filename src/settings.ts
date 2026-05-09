@@ -39,6 +39,41 @@ export const DEFAULT_AUTOCOMPLETE: AutocompleteSettings = {
   dateTrigger: "@",
 };
 
+// Optional vault paths to template files keyed by day-of-week. When non-empty,
+// the matching weekday template is appended to the base daily note template
+// (`dailyNoteTemplate`) at note-creation time. Empty values fall back to the
+// base template alone. Keys are lowercase day names so they line up with the
+// JS Date.getDay() table (0=Sunday..6=Saturday) via WEEKDAY_NAMES below.
+export interface DailyNoteWeekdayTemplates {
+  sunday: string;
+  monday: string;
+  tuesday: string;
+  wednesday: string;
+  thursday: string;
+  friday: string;
+  saturday: string;
+}
+
+export const DEFAULT_WEEKDAY_TEMPLATES: DailyNoteWeekdayTemplates = {
+  sunday: "",
+  monday: "",
+  tuesday: "",
+  wednesday: "",
+  thursday: "",
+  friday: "",
+  saturday: "",
+};
+
+export const WEEKDAY_NAMES: (keyof DailyNoteWeekdayTemplates)[] = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
 export interface TodaySettings {
   visibleStartHour: number;
   visibleEndHour: number;
@@ -53,6 +88,9 @@ export interface TodaySettings {
   dailyNoteFormatFallback: string;
   dailyNoteFolderFallback: string;
   dailyNoteTemplate: string;
+  // Per-weekday templates appended to the base `dailyNoteTemplate` when a
+  // daily note is created on that day of the week. Empty values are skipped.
+  dailyNoteTemplatesByDay: DailyNoteWeekdayTemplates;
   defaultDurationMin: number;
   quickDurationsMin: number[];
   projectColors: ProjectColor[];
@@ -117,6 +155,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   dailyNoteFormatFallback: "YYYY-MM-DD",
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
+  dailyNoteTemplatesByDay: { ...DEFAULT_WEEKDAY_TEMPLATES },
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
@@ -182,6 +221,7 @@ export function parseTimelineHeight(raw: string): string | null {
 
 type SettingsTab =
   | "general"
+  | "templating"
   | "tasks"
   | "day"
   | "view"
@@ -196,6 +236,7 @@ interface TabSpec {
 
 const TAB_SPECS: Record<SettingsTab, TabSpec> = {
   general: { label: "Automations", icon: "sliders-horizontal" },
+  templating: { label: "Templating", icon: "file-text" },
   tasks: { label: "Tasks", icon: "list-checks" },
   day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },
@@ -233,6 +274,8 @@ export class TodaySettingTab extends PluginSettingTab {
     switch (this.activeTab) {
       case "general":
         this.renderAutocompleteSection(pane);
+        break;
+      case "templating":
         this.renderTemplatingSection(pane);
         break;
       case "tasks":
@@ -656,6 +699,47 @@ export class TodaySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+
+    new Setting(containerEl).setName("Per-weekday templates").setHeading();
+
+    const weekdayDesc = containerEl.createEl("p", {
+      cls: "setting-item-description",
+    });
+    weekdayDesc.append(
+      "Optional vault paths to weekday-specific template files. The matching file's contents are appended to the base ",
+      makeCode("Daily note template"),
+      " when a daily note is created on that day — handy for routines that vary by day (e.g. ",
+      makeCode("monday.md"),
+      " for the weekly review). Leave a row blank to skip; the base template still applies.",
+    );
+
+    const dayLabels: Record<keyof DailyNoteWeekdayTemplates, string> = {
+      sunday: "Sunday",
+      monday: "Monday",
+      tuesday: "Tuesday",
+      wednesday: "Wednesday",
+      thursday: "Thursday",
+      friday: "Friday",
+      saturday: "Saturday",
+    };
+    for (const day of WEEKDAY_NAMES) {
+      new Setting(containerEl)
+        .setName(dayLabels[day])
+        .setDesc(`Appended to the base template on ${dayLabels[day]}.`)
+        .addText((t) => {
+          t.setPlaceholder(`Templates/${day}.md`)
+            .setValue(this.plugin.settings.dailyNoteTemplatesByDay[day])
+            .onChange(async (v) => {
+              this.plugin.settings.dailyNoteTemplatesByDay[day] = v.trim();
+              await this.plugin.saveSettings();
+            });
+          new FileSuggest(this.app, t.inputEl, async (file) => {
+            t.setValue(file.path);
+            this.plugin.settings.dailyNoteTemplatesByDay[day] = file.path;
+            await this.plugin.saveSettings();
+          });
+        });
+    }
   }
 
   private renderDaySection(containerEl: HTMLElement): void {

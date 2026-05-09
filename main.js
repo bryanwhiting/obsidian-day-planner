@@ -1149,6 +1149,24 @@ var DEFAULT_AUTOCOMPLETE = {
   durationTrigger: "#$",
   dateTrigger: "@"
 };
+var DEFAULT_WEEKDAY_TEMPLATES = {
+  sunday: "",
+  monday: "",
+  tuesday: "",
+  wednesday: "",
+  thursday: "",
+  friday: "",
+  saturday: ""
+};
+var WEEKDAY_NAMES = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday"
+];
 var DEFAULT_SETTINGS = {
   visibleStartHour: 6,
   visibleEndHour: 23,
@@ -1163,6 +1181,7 @@ var DEFAULT_SETTINGS = {
   dailyNoteFormatFallback: "YYYY-MM-DD",
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
+  dailyNoteTemplatesByDay: { ...DEFAULT_WEEKDAY_TEMPLATES },
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
@@ -1220,6 +1239,7 @@ function parseTimelineHeight(raw) {
 }
 var TAB_SPECS = {
   general: { label: "Automations", icon: "sliders-horizontal" },
+  templating: { label: "Templating", icon: "file-text" },
   tasks: { label: "Tasks", icon: "list-checks" },
   day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },
@@ -1251,6 +1271,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     switch (this.activeTab) {
       case "general":
         this.renderAutocompleteSection(pane);
+        break;
+      case "templating":
         this.renderTemplatingSection(pane);
         break;
       case "tasks":
@@ -1557,6 +1579,39 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian2.Setting(containerEl).setName("Per-weekday templates").setHeading();
+    const weekdayDesc = containerEl.createEl("p", {
+      cls: "setting-item-description"
+    });
+    weekdayDesc.append(
+      "Optional vault paths to weekday-specific template files. The matching file's contents are appended to the base ",
+      makeCode("Daily note template"),
+      " when a daily note is created on that day \u2014 handy for routines that vary by day (e.g. ",
+      makeCode("monday.md"),
+      " for the weekly review). Leave a row blank to skip; the base template still applies."
+    );
+    const dayLabels = {
+      sunday: "Sunday",
+      monday: "Monday",
+      tuesday: "Tuesday",
+      wednesday: "Wednesday",
+      thursday: "Thursday",
+      friday: "Friday",
+      saturday: "Saturday"
+    };
+    for (const day of WEEKDAY_NAMES) {
+      new import_obsidian2.Setting(containerEl).setName(dayLabels[day]).setDesc(`Appended to the base template on ${dayLabels[day]}.`).addText((t) => {
+        t.setPlaceholder(`Templates/${day}.md`).setValue(this.plugin.settings.dailyNoteTemplatesByDay[day]).onChange(async (v) => {
+          this.plugin.settings.dailyNoteTemplatesByDay[day] = v.trim();
+          await this.plugin.saveSettings();
+        });
+        new FileSuggest(this.app, t.inputEl, async (file) => {
+          t.setValue(file.path);
+          this.plugin.settings.dailyNoteTemplatesByDay[day] = file.path;
+          await this.plugin.saveSettings();
+        });
+      });
+    }
   }
   renderDaySection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Day").setHeading();
@@ -2460,8 +2515,8 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
     if (!existing)
       await app.vault.createFolder(folder);
   }
-  const rawTemplate = await readTemplateContent(app, fallback.template);
   const basename = resolved.path.split("/").pop().replace(/\.md$/i, "");
+  const rawTemplate = await readCombinedTemplate(app, fallback, date);
   const initialContent = expandDateTemplate(
     rawTemplate,
     basename,
@@ -2490,7 +2545,9 @@ async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
   const existing = await app.vault.read(file);
   if (existing.length > 0)
     return;
-  const template = await readTemplateContent(app, fallback.template);
+  const parsed = parseFilenameDate(file.basename, format);
+  const refDate = parsed != null ? parsed : new Date();
+  const template = await readCombinedTemplate(app, fallback, refDate);
   if (!template)
     return;
   const expanded = expandDateTemplate(
@@ -2518,6 +2575,25 @@ async function readTemplateContent(app, templatePath) {
     return "";
   }
   return app.vault.read(file);
+}
+async function readCombinedTemplate(app, fallback, date) {
+  const base = await readTemplateContent(app, fallback.template);
+  const byDay = fallback.templatesByDay;
+  if (!byDay)
+    return base;
+  const dayKey = WEEKDAY_NAMES[date.getDay()];
+  const dayPath = byDay[dayKey];
+  if (!dayPath)
+    return base;
+  const dayContent = await readTemplateContent(app, dayPath);
+  if (!dayContent)
+    return base;
+  if (!base)
+    return dayContent;
+  const baseTrimmed = base.replace(/\s+$/, "");
+  return `${baseTrimmed}
+
+${dayContent}`;
 }
 function readDailyNotesOptions(app) {
   var _a, _b, _c;
@@ -3157,6 +3233,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat
     };
     const dailyResolved = await resolveDailyNote(
@@ -3330,6 +3407,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
@@ -3474,7 +3552,8 @@ var TodayView = class extends import_obsidian4.ItemView {
         const fallback = {
           folder: this.plugin.settings.dailyNoteFolderFallback,
           format: this.plugin.settings.dailyNoteFormatFallback,
-          template: this.plugin.settings.dailyNoteTemplate
+          template: this.plugin.settings.dailyNoteTemplate,
+          templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -4886,6 +4965,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
@@ -4931,6 +5011,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
@@ -5309,6 +5390,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
+      templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat
     };
     const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback);
@@ -7720,6 +7802,7 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
+      templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat
     };
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });
@@ -8289,6 +8372,7 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
           folder: this.settings.dailyNoteFolderFallback,
           format: this.settings.dailyNoteFormatFallback,
           template: this.settings.dailyNoteTemplate,
+          templatesByDay: this.settings.dailyNoteTemplatesByDay,
           dateLinkFormat: this.settings.dateLinkFormat
         });
       })
@@ -8297,7 +8381,7 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
   async onunload() {
   }
   async loadSettings() {
-    var _a, _b;
+    var _a, _b, _c;
     const data = await this.loadData();
     this.settings = {
       ...DEFAULT_SETTINGS,
@@ -8306,6 +8390,10 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
       autocomplete: {
         ...DEFAULT_AUTOCOMPLETE,
         ...(_b = data == null ? void 0 : data.autocomplete) != null ? _b : {}
+      },
+      dailyNoteTemplatesByDay: {
+        ...DEFAULT_WEEKDAY_TEMPLATES,
+        ...(_c = data == null ? void 0 : data.dailyNoteTemplatesByDay) != null ? _c : {}
       },
       projectColors: Array.isArray(data == null ? void 0 : data.projectColors) ? data.projectColors.filter(
         (c) => c && typeof c.project === "string" && typeof c.color === "string"
@@ -8347,6 +8435,7 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
       template: this.settings.dailyNoteTemplate,
+      templatesByDay: this.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.settings.dateLinkFormat
     };
     const file = await ensureDailyNote(this.app, target, fallback, false);

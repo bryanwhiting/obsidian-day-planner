@@ -416,6 +416,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
 
@@ -617,6 +618,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
@@ -789,6 +791,7 @@ export class TodayView extends ItemView {
           folder: this.plugin.settings.dailyNoteFolderFallback,
           format: this.plugin.settings.dailyNoteFormatFallback,
           template: this.plugin.settings.dailyNoteTemplate,
+          templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -2434,6 +2437,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
@@ -2491,6 +2495,7 @@ export class TodayView extends ItemView {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
+      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
@@ -2966,6 +2971,7 @@ export class TodayView extends ItemView {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
+      templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat,
     };
     const target = file

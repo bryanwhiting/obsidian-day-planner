@@ -1,4 +1,8 @@
 import { App, TFile, normalizePath, Notice, moment } from "obsidian";
+import {
+  WEEKDAY_NAMES,
+  type DailyNoteWeekdayTemplates,
+} from "./settings";
 
 interface DailyNotesOptions {
   format?: string;
@@ -15,6 +19,10 @@ export interface DailyNoteFallback {
   folder: string;
   format: string;
   template?: string;
+  // Optional per-weekday templates appended to `template` based on the date's
+  // day-of-week (Date.getDay(): 0=Sunday..6=Saturday). Empty entries are
+  // skipped so the base template applies alone on those days.
+  templatesByDay?: DailyNoteWeekdayTemplates;
   // Moment.js format used for the visible alias on date links written by the
   // template parser. Empty/absent → no alias; the link uses just the basename.
   dateLinkFormat?: string;
@@ -52,11 +60,11 @@ export async function ensureDailyNote(
     const existing = app.vault.getAbstractFileByPath(folder);
     if (!existing) await app.vault.createFolder(folder);
   }
-  const rawTemplate = await readTemplateContent(app, fallback.template);
   const basename = resolved.path
     .split("/")
     .pop()!
     .replace(/\.md$/i, "");
+  const rawTemplate = await readCombinedTemplate(app, fallback, date);
   const initialContent = expandDateTemplate(
     rawTemplate,
     basename,
@@ -92,7 +100,9 @@ export async function applyDailyNoteTemplateIfEmpty(
   if (!parseFilenameDate(file.basename, format)) return;
   const existing = await app.vault.read(file);
   if (existing.length > 0) return;
-  const template = await readTemplateContent(app, fallback.template);
+  const parsed = parseFilenameDate(file.basename, format);
+  const refDate = parsed ?? new Date();
+  const template = await readCombinedTemplate(app, fallback, refDate);
   if (!template) return;
   const expanded = expandDateTemplate(
     template,
@@ -123,6 +133,29 @@ async function readTemplateContent(
     return "";
   }
   return app.vault.read(file);
+}
+
+// Reads the base template and (if configured) the weekday-specific template
+// for `date`'s day-of-week, then concatenates them with a newline separator
+// when both are non-empty. The weekday template is appended after the base.
+async function readCombinedTemplate(
+  app: App,
+  fallback: DailyNoteFallback,
+  date: Date,
+): Promise<string> {
+  const base = await readTemplateContent(app, fallback.template);
+  const byDay = fallback.templatesByDay;
+  if (!byDay) return base;
+  const dayKey = WEEKDAY_NAMES[date.getDay()];
+  const dayPath = byDay[dayKey];
+  if (!dayPath) return base;
+  const dayContent = await readTemplateContent(app, dayPath);
+  if (!dayContent) return base;
+  if (!base) return dayContent;
+  // Ensure exactly one blank line separates the two so the appended block
+  // doesn't run into the base template's trailing content.
+  const baseTrimmed = base.replace(/\s+$/, "");
+  return `${baseTrimmed}\n\n${dayContent}`;
 }
 
 function readDailyNotesOptions(app: App): DailyNotesOptions {

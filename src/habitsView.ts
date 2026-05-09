@@ -125,6 +125,7 @@ export class HabitsStatsView extends ItemView {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
+      templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat,
     };
 
