@@ -81,8 +81,11 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
     project: new RegExp(
       `#${esc(prefixes.project)}\\/([\\w-]+)(?:\\/([\\w-]+))?`,
     ),
+    // Numeric segments accept `_` as a decimal separator (Obsidian tags treat
+    // `.` as a tag terminator), so `#x/Run/1_5` parses as 1.5 reps and
+    // `#x/BodyWeight/189_3` as 189.3.
     exercise: new RegExp(
-      `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
+      `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+(?:[._]\\d+)?)(?:\\/(\\d+(?:[._]\\d+)?))?`,
       "g",
     ),
     taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`),
@@ -113,8 +116,9 @@ export function parseExercises(
     const done = taskMatch[2] === "x" || taskMatch[2] === "X";
     for (const m of taskMatch[3].matchAll(re)) {
       const name = m[1];
-      const reps = parseInt(m[2], 10);
-      const weight = m[3] !== undefined ? parseFloat(m[3]) : null;
+      const reps = parseFloat(m[2].replace("_", "."));
+      const weight =
+        m[3] !== undefined ? parseFloat(m[3].replace("_", ".")) : null;
       if (!isFinite(reps) || reps <= 0) continue;
       let summary = byName.get(name);
       if (!summary) {

@@ -356,8 +356,11 @@ function buildTagRegexes(prefixes) {
     project: new RegExp(
       `#${esc(prefixes.project)}\\/([\\w-]+)(?:\\/([\\w-]+))?`
     ),
+    // Numeric segments accept `_` as a decimal separator (Obsidian tags treat
+    // `.` as a tag terminator), so `#x/Run/1_5` parses as 1.5 reps and
+    // `#x/BodyWeight/189_3` as 189.3.
     exercise: new RegExp(
-      `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+)(?:\\/(\\d+(?:\\.\\d+)?))?`,
+      `#${esc(prefixes.exercise)}\\/([\\w-]+)\\/(\\d+(?:[._]\\d+)?)(?:\\/(\\d+(?:[._]\\d+)?))?`,
       "g"
     ),
     taskId: new RegExp(`#${esc(prefixes.taskId)}\\/([A-Za-z0-9]+)\\b`),
@@ -383,8 +386,8 @@ function parseExercises(content, prefixes) {
     const done = taskMatch[2] === "x" || taskMatch[2] === "X";
     for (const m of taskMatch[3].matchAll(re)) {
       const name = m[1];
-      const reps = parseInt(m[2], 10);
-      const weight = m[3] !== void 0 ? parseFloat(m[3]) : null;
+      const reps = parseFloat(m[2].replace("_", "."));
+      const weight = m[3] !== void 0 ? parseFloat(m[3].replace("_", ".")) : null;
       if (!isFinite(reps) || reps <= 0)
         continue;
       let summary = byName.get(name);
@@ -2761,7 +2764,7 @@ function buildHabitTagRegex(prefix, period, slug) {
 function parseExerciseGoals(content, exercisePrefix) {
   var _a;
   const re = new RegExp(
-    `#${escapeRegex2(exercisePrefix)}-(day|week|month)\\/([\\w-]+)\\/(\\d+)(?![\\w-])(.*)$`
+    `#${escapeRegex2(exercisePrefix)}-(day|week|month)\\/([\\w-]+)\\/(\\d+(?:[._]\\d+)?)(?![\\w-])(.*)$`
   );
   const goals = [];
   const seen = /* @__PURE__ */ new Set();
@@ -2771,7 +2774,7 @@ function parseExerciseGoals(content, exercisePrefix) {
       continue;
     const period = m[1];
     const name = m[2];
-    const target = parseInt(m[3], 10);
+    const target = parseFloat(m[3].replace("_", "."));
     if (!Number.isFinite(target) || target <= 0)
       continue;
     const label = ((_a = m[4]) != null ? _a : "").trim();

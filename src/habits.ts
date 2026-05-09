@@ -65,8 +65,10 @@ export function parseExerciseGoals(
   content: string,
   exercisePrefix: string,
 ): ExerciseGoal[] {
+  // Target accepts `_` as a decimal separator since Obsidian tags can't hold
+  // a literal `.` (e.g. `#x-day/Run/1_5` = 1.5).
   const re = new RegExp(
-    `#${escapeRegex(exercisePrefix)}-(day|week|month)\\/([\\w-]+)\\/(\\d+)(?![\\w-])(.*)$`,
+    `#${escapeRegex(exercisePrefix)}-(day|week|month)\\/([\\w-]+)\\/(\\d+(?:[._]\\d+)?)(?![\\w-])(.*)$`,
   );
   const goals: ExerciseGoal[] = [];
   const seen = new Set<string>();
@@ -75,7 +77,7 @@ export function parseExerciseGoals(
     if (!m) continue;
     const period = m[1] as HabitPeriod;
     const name = m[2];
-    const target = parseInt(m[3], 10);
+    const target = parseFloat(m[3].replace("_", "."));
     if (!Number.isFinite(target) || target <= 0) continue;
     const label = (m[4] ?? "").trim();
     const key = `${period}/${name}`;
