@@ -2821,10 +2821,9 @@ export class TodayView extends ItemView {
         const lines = findHabitTaskLines(
           c,
           settings.habitPrefix,
-          h.period,
           h.slug,
         );
-        for (const l of lines) if (l.checked) checkedCount++;
+        for (const l of lines) if (l.checked) checkedCount += l.count;
         if (lines.length > maxPerFile) maxPerFile = lines.length;
       }
       // For day-period habits, the window IS the displayed note, so this is
@@ -2834,7 +2833,6 @@ export class TodayView extends ItemView {
       const displayLines = findHabitTaskLines(
         displayContent,
         settings.habitPrefix,
-        h.period,
         h.slug,
       );
       const checkedOnDisplayedDate = displayLines.some((l) => l.checked);
@@ -2932,11 +2930,7 @@ export class TodayView extends ItemView {
         chip.addEventListener("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          void this.applyHabitToggle(
-            displayFile,
-            d.habit.period,
-            d.habit.slug,
-          );
+          void this.applyHabitToggle(displayFile, d.habit.slug);
         });
       });
     }
@@ -2963,7 +2957,6 @@ export class TodayView extends ItemView {
   // note if missing.
   private async applyHabitToggle(
     file: TFile | null,
-    period: HabitPeriod,
     slug: string,
   ): Promise<void> {
     const settings = this.plugin.settings;
@@ -2978,7 +2971,7 @@ export class TodayView extends ItemView {
       ? file
       : await ensureDailyNote(this.app, this.selectedDate, fallback);
     await this.app.vault.process(target, (content) =>
-      toggleHabitOnContent(content, settings.habitPrefix, period, slug),
+      toggleHabitOnContent(content, settings.habitPrefix, slug),
     );
     this.plugin.habitsScanner.invalidate(target.path);
   }

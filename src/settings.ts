@@ -122,10 +122,11 @@ export interface TodaySettings {
   peopleFolder: string;
   // Path to the habits-source file (e.g. "daily/_habits.md"). Plain hashtag
   // lines like `#h-day/call-mom Call mom` define habits. Append `/N` to set a
-  // weekly/monthly target (e.g. `#h-week/laundry/2`).
+  // weekly/monthly target (e.g. `#h-week/laundry/2`, `#h-day/drink/4`).
   habitsFile: string;
-  // Single-letter tag prefix for habits. Default "h" → tags look like
-  // `#h-day/call-mom`. Validated against /^[a-zA-Z]+$/.
+  // Single-letter tag prefix for habits. Default "h" → goal tags look like
+  // `#h-day/call-mom`, log tags like `#h/call-mom`. Validated against
+  // /^[a-zA-Z]+$/.
   habitPrefix: string;
   // First day of the habit week. 0=Sunday..6=Saturday. Default Sunday.
   habitWeekStart: number;
@@ -134,6 +135,10 @@ export interface TodaySettings {
   habitsHideCompleted: boolean;
   // Number of buckets shown in each heatmap row in the stats pane.
   habitsStatsWindow: number;
+  // Set after the one-shot rewrite of legacy `#h-<period>/<slug>` log tags
+  // inside daily notes to the short `#h/<slug>` form. Goal tags in the habits
+  // file keep the `-<period>` segment.
+  habitLogTagsMigrated: boolean;
   // When the user picks a prior task from the title-autocomplete in the task
   // edit/new modal, copy the source task's sub-tasks too. Project, duration,
   // description, and tags are always copied; sub-tasks are gated by this flag
@@ -177,6 +182,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   habitWeekStart: 0,
   habitsHideCompleted: false,
   habitsStatsWindow: 10,
+  habitLogTagsMigrated: false,
   copySubtasksOnAutocomplete: false,
 };
 
@@ -1378,9 +1384,17 @@ export class TodaySettingTab extends PluginSettingTab {
       makeCode("/N"),
       " to set a per-period target — e.g. ",
       makeCode("#h-week/laundry/2"),
-      " counts as done once two checked task lines appear in that week. The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
-      makeCode("- [x] <slug> #h-<period>/<slug>"),
-      " to the displayed daily note. The point is to avoid muddying your daily checklist — habits stay invisible in the note unless completed.",
+      " counts as done once two completed log entries appear in that week, and ",
+      makeCode("#h-day/drink/4"),
+      " expects four water-glasses each day. Daily notes log habits with the short shape ",
+      makeCode("#h/<slug>"),
+      " (or ",
+      makeCode("#h/<slug>/N"),
+      " to log multiples on one line — same grammar as exercise sets). Clicking a habit on the dashboard appends ",
+      makeCode("- [x] <slug> #h/<slug>"),
+      " to the displayed daily note; manually edit the line to add ",
+      makeCode("/N"),
+      " or to add another line for repeat completions.",
     );
     new Setting(containerEl).setDesc(desc);
 
@@ -1404,7 +1418,7 @@ export class TodaySettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Habit tag prefix")
       .setDesc(
-        "Letter(s) used between # and the period segment. Default `h` → tags look like `#h-day/call-mom`.",
+        "Letter(s) used at the start of habit tags. Default `h` → goal tags `#h-day/call-mom`, log tags `#h/call-mom`.",
       )
       .addText((t) =>
         t

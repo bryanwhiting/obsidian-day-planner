@@ -1203,6 +1203,7 @@ var DEFAULT_SETTINGS = {
   habitWeekStart: 0,
   habitsHideCompleted: false,
   habitsStatsWindow: 10,
+  habitLogTagsMigrated: false,
   copySubtasksOnAutocomplete: false
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -2093,9 +2094,17 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("/N"),
       " to set a per-period target \u2014 e.g. ",
       makeCode("#h-week/laundry/2"),
-      " counts as done once two checked task lines appear in that week. The dashboard renders uncompleted habits below the workout line; clicking a habit appends ",
-      makeCode("- [x] <slug> #h-<period>/<slug>"),
-      " to the displayed daily note. The point is to avoid muddying your daily checklist \u2014 habits stay invisible in the note unless completed."
+      " counts as done once two completed log entries appear in that week, and ",
+      makeCode("#h-day/drink/4"),
+      " expects four water-glasses each day. Daily notes log habits with the short shape ",
+      makeCode("#h/<slug>"),
+      " (or ",
+      makeCode("#h/<slug>/N"),
+      " to log multiples on one line \u2014 same grammar as exercise sets). Clicking a habit on the dashboard appends ",
+      makeCode("- [x] <slug> #h/<slug>"),
+      " to the displayed daily note; manually edit the line to add ",
+      makeCode("/N"),
+      " or to add another line for repeat completions."
     );
     new import_obsidian2.Setting(containerEl).setDesc(desc);
     new import_obsidian2.Setting(containerEl).setName("Habits file").setDesc("Vault path to the habits-source file. Default: daily/_habits.md.").addText((t) => {
@@ -2110,7 +2119,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       });
     });
     new import_obsidian2.Setting(containerEl).setName("Habit tag prefix").setDesc(
-      "Letter(s) used between # and the period segment. Default `h` \u2192 tags look like `#h-day/call-mom`."
+      "Letter(s) used at the start of habit tags. Default `h` \u2192 goal tags `#h-day/call-mom`, log tags `#h/call-mom`."
     ).addText(
       (t) => t.setPlaceholder("h").setValue(this.plugin.settings.habitPrefix).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
@@ -2826,14 +2835,17 @@ function buildPersonLinkInsert(app, path) {
 
 // src/habits.ts
 var SLUG_PATTERN = "[\\w-]+";
+var NUM_PATTERN = "\\d+(?:[._]\\d+)?";
 function escapeRegex2(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function buildHabitTagRegex(prefix, period, slug) {
-  const periodPart = period != null ? period : "(day|week|month)";
-  const slugPart = slug ? escapeRegex2(slug) : `(${SLUG_PATTERN})`;
+function parseNum(s) {
+  return parseFloat(s.replace("_", "."));
+}
+function buildHabitLogTagRegex(prefix, slug) {
+  const slugPart = slug ? escapeRegex2(slug) : SLUG_PATTERN;
   return new RegExp(
-    `#${escapeRegex2(prefix)}-${periodPart}\\/${slugPart}(?:\\/\\d+)?(?![\\w\\-/])`,
+    `#${escapeRegex2(prefix)}(?:-(?:day|week|month))?\\/${slugPart}(?:\\/(${NUM_PATTERN}))?(?![\\w\\-/])`,
     "g"
   );
 }
@@ -2865,7 +2877,7 @@ function parseExerciseGoals(content, exercisePrefix) {
 function parseHabitsFile(content, prefix) {
   var _a;
   const re = new RegExp(
-    `#${escapeRegex2(prefix)}-(day|week|month)\\/(${SLUG_PATTERN})(?:\\/(\\d+))?(?![\\w\\-/])(.*)$`
+    `#${escapeRegex2(prefix)}-(day|week|month)\\/(${SLUG_PATTERN})(?:\\/(${NUM_PATTERN}))?(?![\\w\\-/])(.*)$`
   );
   const habits = [];
   const seen = /* @__PURE__ */ new Set();
@@ -2877,7 +2889,7 @@ function parseHabitsFile(content, prefix) {
     const slug = m[2];
     const targetRaw = m[3];
     const label = ((_a = m[4]) != null ? _a : "").trim();
-    const parsed = targetRaw ? parseInt(targetRaw, 10) : 1;
+    const parsed = targetRaw ? parseNum(targetRaw) : 1;
     const target = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
     const key = `${period}/${slug}`;
     if (seen.has(key))
@@ -2887,8 +2899,8 @@ function parseHabitsFile(content, prefix) {
   }
   return habits;
 }
-function appendHabitLine(content, prefix, period, slug) {
-  const line = `- [x] ${slug} #${prefix}-${period}/${slug}`;
+function appendHabitLine(content, prefix, slug) {
+  const line = `- [x] ${slug} #${prefix}/${slug}`;
   if (content.length === 0)
     return line + "\n";
   if (content.endsWith("\n"))
@@ -2896,23 +2908,32 @@ function appendHabitLine(content, prefix, period, slug) {
   return content + "\n" + line + "\n";
 }
 var HABIT_TASK_LINE_RE = /^(\s*)- \[([ xX])\]\s+(.*)$/;
-function findHabitTaskLines(content, prefix, period, slug) {
-  const tagRe = buildHabitTagRegex(prefix, period, slug);
+function findHabitTaskLines(content, prefix, slug) {
   const out = [];
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const tm = HABIT_TASK_LINE_RE.exec(lines[i]);
     if (!tm)
       continue;
-    tagRe.lastIndex = 0;
-    if (!tagRe.test(lines[i]))
+    const tagRe = buildHabitLogTagRegex(prefix, slug);
+    let count = 0;
+    let any = false;
+    for (const m of lines[i].matchAll(tagRe)) {
+      any = true;
+      count += m[1] !== void 0 ? parseNum(m[1]) : 1;
+    }
+    if (!any)
       continue;
-    out.push({ lineNumber: i, checked: tm[2] === "x" || tm[2] === "X" });
+    out.push({
+      lineNumber: i,
+      checked: tm[2] === "x" || tm[2] === "X",
+      count
+    });
   }
   return out;
 }
-function toggleHabitOnContent(content, prefix, period, slug) {
-  const tagRe = buildHabitTagRegex(prefix, period, slug);
+function toggleHabitOnContent(content, prefix, slug) {
+  const tagRe = buildHabitLogTagRegex(prefix, slug);
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const tm = HABIT_TASK_LINE_RE.exec(lines[i]);
@@ -2925,7 +2946,19 @@ function toggleHabitOnContent(content, prefix, period, slug) {
     lines[i] = `${tm[1]}- [${checked ? " " : "x"}] ${tm[3]}`;
     return lines.join("\n");
   }
-  return appendHabitLine(content, prefix, period, slug);
+  return appendHabitLine(content, prefix, slug);
+}
+function migrateHabitLogTags(content, prefix) {
+  const re = new RegExp(
+    `#${escapeRegex2(prefix)}-(?:day|week|month)\\/(${SLUG_PATTERN})((?:\\/${NUM_PATTERN})?)(?![\\w\\-/])`,
+    "g"
+  );
+  let replacements = 0;
+  const next = content.replace(re, (_full, slug, tail) => {
+    replacements++;
+    return `#${prefix}/${slug}${tail}`;
+  });
+  return { content: next, replacements };
 }
 function weekRange(date, weekStart) {
   const d = startOfDay(date);
@@ -5260,19 +5293,17 @@ var TodayView = class extends import_obsidian4.ItemView {
         const lines = findHabitTaskLines(
           c,
           settings.habitPrefix,
-          h.period,
           h.slug
         );
         for (const l of lines)
           if (l.checked)
-            checkedCount++;
+            checkedCount += l.count;
         if (lines.length > maxPerFile)
           maxPerFile = lines.length;
       }
       const displayLines = findHabitTaskLines(
         displayContent,
         settings.habitPrefix,
-        h.period,
         h.slug
       );
       const checkedOnDisplayedDate = displayLines.some((l) => l.checked);
@@ -5357,11 +5388,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         chip.addEventListener("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          void this.applyHabitToggle(
-            displayFile,
-            d.habit.period,
-            d.habit.slug
-          );
+          void this.applyHabitToggle(displayFile, d.habit.slug);
         });
       });
     }
@@ -5384,7 +5411,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   // line. The line is never deleted, which preserves user-templated
   // planned-ahead habits across click/un-click cycles. Creates the daily
   // note if missing.
-  async applyHabitToggle(file, period, slug) {
+  async applyHabitToggle(file, slug) {
     const settings = this.plugin.settings;
     const fallback = {
       folder: settings.dailyNoteFolderFallback,
@@ -5396,7 +5423,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback);
     await this.app.vault.process(
       target,
-      (content) => toggleHabitOnContent(content, settings.habitPrefix, period, slug)
+      (content) => toggleHabitOnContent(content, settings.habitPrefix, slug)
     );
     this.plugin.habitsScanner.invalidate(target.path);
   }
@@ -8050,12 +8077,11 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
           const lines = findHabitTaskLines(
             c,
             settings.habitPrefix,
-            h.period,
             h.slug
           );
           for (const l of lines)
             if (l.checked)
-              count++;
+              count += l.count;
         }
         cells.push({ bucket: b, checkedCount: count });
         totalChecked += count;
@@ -8317,6 +8343,7 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
+    void this.runHabitLogMigrationOnce();
     if (import_obsidian6.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
@@ -8407,6 +8434,51 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
     )) {
       const view = leaf.view;
       view.scheduleRender();
+    }
+  }
+  // One-shot rewrite of legacy `#<habitPrefix>-<period>/<slug>` log tags to
+  // the new short shape `#<habitPrefix>/<slug>` inside daily notes. Restricted
+  // to files inside the configured daily-note folder whose basename parses
+  // against the daily-note format — that excludes `_habits.md` (which keeps
+  // the goal-tag shape) and any other markdown lying around the folder.
+  // Gated by a settings flag so it runs at most once per vault.
+  async runHabitLogMigrationOnce() {
+    var _a;
+    if (this.settings.habitLogTagsMigrated)
+      return;
+    const folder = ((_a = this.settings.dailyNoteFolderFallback) != null ? _a : "").replace(/^\/+|\/+$/g, "").trim();
+    const format = (this.settings.dailyNoteFormatFallback || "YYYY-MM-DD").trim() || "YYYY-MM-DD";
+    const prefix = this.settings.habitPrefix;
+    const folderPrefix = folder ? `${folder}/` : "";
+    const files = this.app.vault.getMarkdownFiles().filter((f) => {
+      if (folderPrefix && !f.path.startsWith(folderPrefix))
+        return false;
+      return parseFilenameDate(f.basename, format) !== null;
+    });
+    let totalReplacements = 0;
+    let touchedFiles = 0;
+    for (const file of files) {
+      let fileReplacements = 0;
+      await this.app.vault.process(file, (content) => {
+        const { content: next, replacements } = migrateHabitLogTags(
+          content,
+          prefix
+        );
+        fileReplacements = replacements;
+        return replacements > 0 ? next : content;
+      });
+      if (fileReplacements > 0) {
+        totalReplacements += fileReplacements;
+        touchedFiles++;
+        this.habitsScanner.invalidate(file.path);
+      }
+    }
+    this.settings.habitLogTagsMigrated = true;
+    await this.saveData(this.settings);
+    if (totalReplacements > 0) {
+      new import_obsidian6.Notice(
+        `Today: migrated ${totalReplacements} habit-log tag${totalReplacements === 1 ? "" : "s"} across ${touchedFiles} daily note${touchedFiles === 1 ? "" : "s"}.`
+      );
     }
   }
   async activateView(opts = {}) {

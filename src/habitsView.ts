@@ -418,10 +418,9 @@ export class HabitsStatsView extends ItemView {
           const lines = findHabitTaskLines(
             c,
             settings.habitPrefix,
-            h.period,
             h.slug,
           );
-          for (const l of lines) if (l.checked) count++;
+          for (const l of lines) if (l.checked) count += l.count;
         }
         cells.push({ bucket: b, checkedCount: count });
         totalChecked += count;
