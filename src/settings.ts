@@ -135,10 +135,6 @@ export interface TodaySettings {
   habitsHideCompleted: boolean;
   // Number of buckets shown in each heatmap row in the stats pane.
   habitsStatsWindow: number;
-  // Set after the one-shot rewrite of legacy `#h-<period>/<slug>` log tags
-  // inside daily notes to the short `#h/<slug>` form. Goal tags in the habits
-  // file keep the `-<period>` segment.
-  habitLogTagsMigrated: boolean;
   // When the user picks a prior task from the title-autocomplete in the task
   // edit/new modal, copy the source task's sub-tasks too. Project, duration,
   // description, and tags are always copied; sub-tasks are gated by this flag
@@ -182,7 +178,6 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   habitWeekStart: 0,
   habitsHideCompleted: false,
   habitsStatsWindow: 10,
-  habitLogTagsMigrated: false,
   copySubtasksOnAutocomplete: false,
 };
 

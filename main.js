@@ -1203,7 +1203,6 @@ var DEFAULT_SETTINGS = {
   habitWeekStart: 0,
   habitsHideCompleted: false,
   habitsStatsWindow: 10,
-  habitLogTagsMigrated: false,
   copySubtasksOnAutocomplete: false
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -2947,18 +2946,6 @@ function toggleHabitOnContent(content, prefix, slug) {
     return lines.join("\n");
   }
   return appendHabitLine(content, prefix, slug);
-}
-function migrateHabitLogTags(content, prefix) {
-  const re = new RegExp(
-    `#${escapeRegex2(prefix)}-(?:day|week|month)\\/(${SLUG_PATTERN})((?:\\/${NUM_PATTERN})?)(?![\\w\\-/])`,
-    "g"
-  );
-  let replacements = 0;
-  const next = content.replace(re, (_full, slug, tail) => {
-    replacements++;
-    return `#${prefix}/${slug}${tail}`;
-  });
-  return { content: next, replacements };
 }
 function weekRange(date, weekStart) {
   const d = startOfDay(date);
@@ -8343,7 +8330,6 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    void this.runHabitLogMigrationOnce();
     if (import_obsidian6.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
@@ -8434,51 +8420,6 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
     )) {
       const view = leaf.view;
       view.scheduleRender();
-    }
-  }
-  // One-shot rewrite of legacy `#<habitPrefix>-<period>/<slug>` log tags to
-  // the new short shape `#<habitPrefix>/<slug>` inside daily notes. Restricted
-  // to files inside the configured daily-note folder whose basename parses
-  // against the daily-note format — that excludes `_habits.md` (which keeps
-  // the goal-tag shape) and any other markdown lying around the folder.
-  // Gated by a settings flag so it runs at most once per vault.
-  async runHabitLogMigrationOnce() {
-    var _a;
-    if (this.settings.habitLogTagsMigrated)
-      return;
-    const folder = ((_a = this.settings.dailyNoteFolderFallback) != null ? _a : "").replace(/^\/+|\/+$/g, "").trim();
-    const format = (this.settings.dailyNoteFormatFallback || "YYYY-MM-DD").trim() || "YYYY-MM-DD";
-    const prefix = this.settings.habitPrefix;
-    const folderPrefix = folder ? `${folder}/` : "";
-    const files = this.app.vault.getMarkdownFiles().filter((f) => {
-      if (folderPrefix && !f.path.startsWith(folderPrefix))
-        return false;
-      return parseFilenameDate(f.basename, format) !== null;
-    });
-    let totalReplacements = 0;
-    let touchedFiles = 0;
-    for (const file of files) {
-      let fileReplacements = 0;
-      await this.app.vault.process(file, (content) => {
-        const { content: next, replacements } = migrateHabitLogTags(
-          content,
-          prefix
-        );
-        fileReplacements = replacements;
-        return replacements > 0 ? next : content;
-      });
-      if (fileReplacements > 0) {
-        totalReplacements += fileReplacements;
-        touchedFiles++;
-        this.habitsScanner.invalidate(file.path);
-      }
-    }
-    this.settings.habitLogTagsMigrated = true;
-    await this.saveData(this.settings);
-    if (totalReplacements > 0) {
-      new import_obsidian6.Notice(
-        `Today: migrated ${totalReplacements} habit-log tag${totalReplacements === 1 ? "" : "s"} across ${touchedFiles} daily note${touchedFiles === 1 ? "" : "s"}.`
-      );
     }
   }
   async activateView(opts = {}) {

@@ -230,26 +230,6 @@ export function toggleHabitOnContent(
   return appendHabitLine(content, prefix, slug);
 }
 
-// Rewrites legacy log-tag occurrences `#<prefix>-<period>/<slug>[/N]` to the
-// short shape `#<prefix>/<slug>[/N]`. Returns the new content and the number
-// of replacements. Goal tags in `_habits.md` are NOT rewritten — callers must
-// only feed daily-note content here.
-export function migrateHabitLogTags(
-  content: string,
-  prefix: string,
-): { content: string; replacements: number } {
-  const re = new RegExp(
-    `#${escapeRegex(prefix)}-(?:day|week|month)\\/(${SLUG_PATTERN})((?:\\/${NUM_PATTERN})?)(?![\\w\\-/])`,
-    "g",
-  );
-  let replacements = 0;
-  const next = content.replace(re, (_full, slug: string, tail: string) => {
-    replacements++;
-    return `#${prefix}/${slug}${tail}`;
-  });
-  return { content: next, replacements };
-}
-
 // Returns the half-open [start, end) bounds of the calendar week containing
 // `date`. weekStart 0=Sunday..6=Saturday.
 export function weekRange(

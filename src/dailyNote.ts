@@ -281,7 +281,7 @@ export function expandDateTemplate(
 // "YYYY-MM-DD") in strict mode. Returns null when the filename doesn't match
 // the expected daily-note shape — callers should leave the placeholder
 // untouched in that case so users can spot the mismatch.
-export function parseFilenameDate(basename: string, fileFormat: string): Date | null {
+function parseFilenameDate(basename: string, fileFormat: string): Date | null {
   const fmt = (fileFormat || "YYYY-MM-DD").trim();
   const m = moment(basename, fmt, true);
   return m.isValid() ? m.toDate() : null;
