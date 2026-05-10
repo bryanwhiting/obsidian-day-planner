@@ -4184,11 +4184,9 @@
   .dp-md-timeline-block {
     --dp-color: var(--dp-md-color, var(--color-accent));
     position: absolute;
-    background: var(--dp-color);
-    color: #fff;
     border: 0;
     border-radius: var(--radius-tab);
-    padding: 2px 6px;
+    padding: 3px 6px;
     margin: 0;
     text-align: left;
     overflow: hidden;
@@ -4198,8 +4196,7 @@
       inset 2px 0 0 0 rgba(255, 255, 255, 0.4),
       0 1px 1px rgba(0, 0, 0, 0.08);
     transition: filter 120ms ease;
-    display: flex;
-    align-items: center;
+    display: block;
     line-height: 1.15;
   }
 
@@ -4213,6 +4210,7 @@
   }
 
   .dp-md-timeline-block-text {
+    display: block;
     width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -4316,4 +4314,16 @@
 }
 .today-root a.dp-datenav-label.is-clickable:hover {
   opacity: 0.75;
+}
+
+/* Unlayered: Obsidian's default `button { background: var(--interactive-normal) }`
+ * is unlayered, so a layered rule (even at higher specificity) loses to it.
+ * Force the project color through on multi-day timeline blocks and keep the
+ * label readable. */
+.today-root .dp-md-timeline-block,
+.today-root .dp-md-timeline-block:hover,
+.today-root .dp-md-timeline-block:focus,
+.today-root .dp-md-timeline-block:active {
+  background-color: var(--dp-color);
+  color: #fff;
 }
