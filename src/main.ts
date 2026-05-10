@@ -31,6 +31,7 @@ import {
   ensureDailyNote,
 } from "./dailyNote";
 import { buildPeopleSuggestions, buildPersonLinkInsert } from "./people";
+import { collectUnfinished } from "./collect";
 import { HabitsScanner } from "./habits";
 import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
 import { moment } from "obsidian";
@@ -101,6 +102,12 @@ export default class TodayPlugin extends Plugin {
       id: "open-daily-note-tomorrow",
       name: "Open tomorrow's daily note",
       callback: () => void this.openDailyNoteForOffset(1),
+    });
+
+    this.addCommand({
+      id: "collect-unfinished",
+      name: "Collect unfinished tasks into inbox",
+      callback: () => void collectUnfinished(this),
     });
 
     this.addSettingTab(new TodaySettingTab(this.app, this));

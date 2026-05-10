@@ -318,7 +318,7 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
@@ -438,8 +438,8 @@ function formatExerciseSummary(summary) {
     return `${summary.name} (${pending})`;
   return summary.name;
 }
-function parseIntention(content, intentionTag) {
-  const tag = intentionTag.replace(/^#+/, "").trim();
+function parseTaggedLine(content, tagName) {
+  const tag = tagName.replace(/^#+/, "").trim();
   if (!tag)
     return null;
   const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -757,6 +757,18 @@ function setTaskChecked(rawLine, checked) {
   const indent = m[1];
   const body = m[3];
   return `${indent}- [${checked ? "x" : " "}] ${body}`;
+}
+function setTaskMigrated(rawLine) {
+  const m = TASK_LINE.exec(rawLine);
+  if (!m)
+    return rawLine;
+  const indent = m[1];
+  const body = m[3];
+  return `${indent}- [>] ${body}`;
+}
+function parseTaskCreated(body, prefixes) {
+  const m = buildTagRegexes(prefixes).taskCreated.exec(body);
+  return m ? m[1] : null;
 }
 function setTaskCreatedTag(rawLine, dateStr, prefixes) {
   const re = buildTagRegexes(prefixes).taskCreated;
@@ -1234,6 +1246,7 @@ var DEFAULT_SETTINGS = {
   contextTags: [],
   noteTag: "note",
   intentionTag: "intention",
+  quoteTag: "quote",
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
   pomodoroWorkMin: 25,
@@ -2217,6 +2230,24 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    const quoteDesc = document.createDocumentFragment();
+    quoteDesc.append(
+      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your quote for the day and shown on its own row in the dashboard header beneath the intention. Pairs with the ",
+      makeCode("<@quote>"),
+      " template placeholder \u2014 e.g. ",
+      makeCode("#quote <@quote>"),
+      " seeds a random quote into the note at creation time and surfaces it in the header. Enter the bare tag without the leading ",
+      makeCode("#"),
+      ". If multiple ",
+      makeCode("#quote"),
+      " lines exist, only the first is shown."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Quote tag").setDesc(quoteDesc).addText(
+      (t) => t.setPlaceholder("quote").setValue(this.plugin.settings.quoteTag).onChange(async (v) => {
+        this.plugin.settings.quoteTag = v.trim().replace(/^#+/, "");
+        await this.plugin.saveSettings();
+      })
+    );
   }
   renderHabitsSection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Habits").setHeading();
@@ -2850,6 +2881,31 @@ function parseFilenameDate(basename, fileFormat) {
   const m = (0, import_obsidian3.moment)(basename, fmt, true);
   return m.isValid() ? m.toDate() : null;
 }
+function getDailyNoteOptions(app, fallback) {
+  var _a;
+  const opts = readDailyNotesOptions(app);
+  const format = (opts.format || fallback.format || "YYYY-MM-DD").trim();
+  const folder = stripSlashes(((_a = opts.folder) != null ? _a : fallback.folder).trim());
+  return { folder, format };
+}
+function parseDailyNoteDateStr(basename, format) {
+  const d = parseFilenameDate(basename, format);
+  return d ? toIsoDateStr(d) : null;
+}
+function listDailyNotes(app, options) {
+  var _a, _b;
+  const out = [];
+  for (const file of app.vault.getMarkdownFiles()) {
+    const fileFolder = stripSlashes((_b = (_a = file.parent) == null ? void 0 : _a.path) != null ? _b : "");
+    if (fileFolder !== options.folder)
+      continue;
+    const date = parseDailyNoteDateStr(file.basename, options.format);
+    if (date)
+      out.push({ file, date });
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
 function todayDateStr() {
   return toIsoDateStr(new Date());
 }
@@ -3451,7 +3507,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       this.plugin.settings.defaultDurationMin
     ) : [];
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
-    const intention = displayFile ? parseIntention(fileContent, this.plugin.settings.intentionTag) : null;
+    const intention = displayFile ? parseTaggedLine(fileContent, this.plugin.settings.intentionTag) : null;
+    const quote = displayFile ? parseTaggedLine(fileContent, this.plugin.settings.quoteTag) : null;
     const activeFile = this.app.workspace.getActiveFile();
     this.lastActiveFilePath = (_a = activeFile == null ? void 0 : activeFile.path) != null ? _a : null;
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
@@ -3479,7 +3536,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       true,
       colorMap,
       showOpenActiveLink ? activeFile : null,
-      intention
+      intention,
+      quote
     );
     this.renderTimelineHints(root);
     root.scrollTop = prevRootScroll;
@@ -3692,7 +3750,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       day: "numeric"
     });
   }
-  renderSection(parent, title, subtitle, file, path, tasks, exercises, habitDisplays, isPrimary, colorMap, openActiveTarget = null, intention = null) {
+  renderSection(parent, title, subtitle, file, path, tasks, exercises, habitDisplays, isPrimary, colorMap, openActiveTarget = null, intention = null, quote = null) {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed)
       section.addClass("is-summaries-collapsed");
@@ -3739,6 +3797,10 @@ var TodayView = class extends import_obsidian4.ItemView {
           this.scheduleRender();
         });
       }
+    }
+    if (quote) {
+      const quoteRow = header.createDiv({ cls: "dp-quote-row" });
+      quoteRow.createSpan({ cls: "dp-quote", text: quote });
     }
     if (isPrimary) {
       const workout = header.createDiv({ cls: "dp-workout" });
@@ -7978,10 +8040,329 @@ var SubtaskQuickAddModal = class extends import_obsidian4.Modal {
   }
 };
 
-// src/habitsView.ts
+// src/collect.ts
 var import_obsidian5 = require("obsidian");
+var TASK_LINE2 = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
+async function collectUnfinished(plugin) {
+  const fallback = {
+    folder: plugin.settings.dailyNoteFolderFallback,
+    format: plugin.settings.dailyNoteFormatFallback
+  };
+  const dailyOptions = getDailyNoteOptions(plugin.app, fallback);
+  const inboxPath = resolveInboxPath(
+    plugin.settings.inboxPath,
+    dailyOptions.folder
+  );
+  if (!inboxPath) {
+    new import_obsidian5.Notice("Today: set an inbox file path in settings before collecting.");
+    return;
+  }
+  const scope = await pickScope(plugin.app);
+  if (!scope)
+    return;
+  const plan = await buildMigrationPlan(plugin, dailyOptions, inboxPath, scope);
+  if (plan.totalCount === 0) {
+    new import_obsidian5.Notice("Today: no unfinished tasks to migrate.");
+    return;
+  }
+  if (plugin.settings.confirmCollectMigration) {
+    const ok = await confirmMigration(plugin.app, plan);
+    if (!ok)
+      return;
+  }
+  await applyPlan(plugin.app, plan);
+  new import_obsidian5.Notice(
+    `Today: migrated ${plan.totalCount} task${plan.totalCount === 1 ? "" : "s"} to ${plan.inboxPath}.`
+  );
+}
+function resolveInboxPath(template, dailyFolder) {
+  const t = (template || "").trim();
+  if (!t)
+    return "";
+  return (0, import_obsidian5.normalizePath)(t.replace(/\{daily\}/g, dailyFolder));
+}
+function pickScope(app) {
+  return new Promise((resolve) => {
+    new ScopeModal(app, resolve).open();
+  });
+}
+function confirmMigration(app, plan) {
+  return new Promise((resolve) => {
+    new ConfirmModal(app, plan, resolve).open();
+  });
+}
+var ScopeModal = class extends import_obsidian5.Modal {
+  constructor(app, resolve) {
+    super(app);
+    this.settled = false;
+    this.resolve = resolve;
+  }
+  onOpen() {
+    this.modalEl.addClass("dp-title-modal");
+    this.titleEl.setText("Collect unfinished tasks");
+    const desc = this.contentEl.createDiv({ cls: "dp-migrate-summary" });
+    desc.createDiv({
+      cls: "dp-migrate-summary-row",
+      text: "Sweep unchecked tasks from which daily notes?"
+    });
+    const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+    const past = actions.createEl("button", {
+      cls: "dp-edit-save-btn mod-cta",
+      text: "All past"
+    });
+    past.type = "button";
+    past.addEventListener("click", () => this.finish("past"));
+    const today = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Today"
+    });
+    today.type = "button";
+    today.addEventListener("click", () => this.finish("today"));
+    const cancel = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Cancel"
+    });
+    cancel.type = "button";
+    cancel.addEventListener("click", () => this.close());
+  }
+  finish(scope) {
+    this.settled = true;
+    this.close();
+    this.resolve(scope);
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.settled)
+      this.resolve(null);
+  }
+};
+var ConfirmModal = class extends import_obsidian5.Modal {
+  constructor(app, plan, resolve) {
+    super(app);
+    this.settled = false;
+    this.plan = plan;
+    this.resolve = resolve;
+  }
+  onOpen() {
+    this.modalEl.addClass("dp-title-modal");
+    this.modalEl.addClass("dp-migrate-modal");
+    this.titleEl.setText("Migrate unfinished tasks");
+    const summary = this.contentEl.createDiv({ cls: "dp-migrate-summary" });
+    const row = summary.createDiv({ cls: "dp-migrate-summary-row" });
+    row.createSpan({ cls: "dp-migrate-summary-label", text: "Inbox" });
+    row.createSpan({
+      cls: "dp-migrate-summary-value",
+      text: this.plan.inboxPath
+    });
+    const stats = this.contentEl.createDiv({ cls: "dp-migrate-stats" });
+    const fileWord = this.plan.edits.length === 1 ? "file" : "files";
+    const taskWord = this.plan.totalCount === 1 ? "task" : "tasks";
+    stats.setText(
+      `Migrating ${this.plan.totalCount} ${taskWord} from ${this.plan.edits.length} ${fileWord}.`
+    );
+    const list = this.contentEl.createDiv({ cls: "dp-migrate-files" });
+    const previewLimit = 30;
+    const titles = this.plan.previewTitles.slice(0, previewLimit);
+    for (const title of titles) {
+      const r = list.createDiv({ cls: "dp-migrate-file-row" });
+      r.createSpan({ cls: "dp-migrate-file-path", text: title });
+    }
+    if (this.plan.previewTitles.length > previewLimit) {
+      const r = list.createDiv({ cls: "dp-migrate-file-row" });
+      r.createSpan({
+        cls: "dp-migrate-file-path",
+        text: `\u2026and ${this.plan.previewTitles.length - previewLimit} more`
+      });
+    }
+    const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+    const cancel = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Cancel"
+    });
+    cancel.type = "button";
+    cancel.addEventListener("click", () => this.close());
+    const apply = actions.createEl("button", {
+      cls: "dp-edit-save-btn mod-cta",
+      text: `Migrate ${this.plan.totalCount} ${taskWord}`
+    });
+    apply.type = "button";
+    apply.addEventListener("click", () => {
+      this.settled = true;
+      this.close();
+      this.resolve(true);
+    });
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.settled)
+      this.resolve(false);
+  }
+};
+async function buildMigrationPlan(plugin, options, inboxPath, scope) {
+  const today = todayDateStr();
+  const candidates = listDailyNotes(plugin.app, options).filter(
+    ({ file, date }) => {
+      if (file.path === inboxPath)
+        return false;
+      if (scope === "past")
+        return date < today;
+      return date === today;
+    }
+  );
+  const prefixes = plugin.settings.prefixes;
+  const idLength = plugin.settings.taskIdLength;
+  const edits = [];
+  let totalCount = 0;
+  const previewTitles = [];
+  for (const { file, date } of candidates) {
+    const content = await plugin.app.vault.read(file);
+    const result = scanContent(content, date, prefixes, idLength);
+    if (result.inboxLines.length === 0)
+      continue;
+    edits.push({
+      file,
+      date,
+      edits: result.edits,
+      inboxLines: result.inboxLines
+    });
+    totalCount += result.inboxLines.length;
+    for (const line of result.inboxLines) {
+      previewTitles.push(extractTitle(line));
+    }
+  }
+  return { edits, totalCount, inboxPath, previewTitles };
+}
+function scanContent(content, date, prefixes, idLength) {
+  const lines = content.split("\n");
+  const taskLines = [];
+  for (let i2 = 0; i2 < lines.length; i2++) {
+    const m = TASK_LINE2.exec(lines[i2]);
+    if (!m)
+      continue;
+    const ch = m[2];
+    taskLines.push({
+      lineNumber: i2,
+      indent: m[1],
+      checked: ch === "x" || ch === "X",
+      migrated: ch === ">",
+      body: m[3],
+      rawLine: lines[i2]
+    });
+  }
+  const edits = [];
+  const inboxLines = [];
+  let i = 0;
+  while (i < taskLines.length) {
+    const t = taskLines[i];
+    if (t.checked || t.migrated || !isMigrationRoot(taskLines, i)) {
+      i++;
+      continue;
+    }
+    const subtree = [t];
+    let k = i + 1;
+    while (k < taskLines.length) {
+      const next = taskLines[k];
+      if (next.indent.length <= t.indent.length)
+        break;
+      if (!next.checked && !next.migrated)
+        subtree.push(next);
+      k++;
+    }
+    appendBlockToPlan(subtree, t, date, prefixes, idLength, edits, inboxLines);
+    i = k;
+  }
+  return { edits, inboxLines };
+}
+function isMigrationRoot(taskLines, i) {
+  const t = taskLines[i];
+  for (let j = i - 1; j >= 0; j--) {
+    const a = taskLines[j];
+    if (a.indent.length < t.indent.length) {
+      return a.checked || a.migrated;
+    }
+  }
+  return true;
+}
+function appendBlockToPlan(subtree, root, date, prefixes, idLength, edits, inboxLines) {
+  for (const line of subtree) {
+    let id = parseTaskId(line.body, prefixes);
+    let updatedSource = line.rawLine;
+    if (!id) {
+      id = generateTaskId(idLength);
+      updatedSource = setTaskIdTag(updatedSource, id, prefixes);
+    }
+    const migratedSource = setTaskMigrated(updatedSource);
+    const rebasedIndent = stripIndentPrefix(line.indent, root.indent);
+    const sourceBodyMatch = TASK_LINE2.exec(updatedSource);
+    const inboxBody = sourceBodyMatch ? sourceBodyMatch[3] : line.body;
+    let inboxLine = `${rebasedIndent}- [ ] ${inboxBody}`;
+    if (parseTaskCreated(inboxBody, prefixes) === null) {
+      inboxLine = setTaskCreatedTag(inboxLine, date, prefixes);
+    }
+    edits.push({
+      lineNumber: line.lineNumber,
+      oldText: line.rawLine,
+      newText: migratedSource
+    });
+    inboxLines.push(inboxLine);
+  }
+}
+function stripIndentPrefix(indent, rootIndent) {
+  if (indent.startsWith(rootIndent))
+    return indent.slice(rootIndent.length);
+  return indent;
+}
+async function applyPlan(app, plan) {
+  for (const fe of plan.edits) {
+    await app.vault.process(fe.file, (content) => {
+      const lines = content.split("\n");
+      for (const e of fe.edits) {
+        if (lines[e.lineNumber] === e.oldText) {
+          lines[e.lineNumber] = e.newText;
+        }
+      }
+      return lines.join("\n");
+    });
+  }
+  const allInboxLines = [];
+  for (const fe of plan.edits)
+    allInboxLines.push(...fe.inboxLines);
+  await appendToInbox(app, plan.inboxPath, allInboxLines);
+}
+async function appendToInbox(app, inboxPath, newLines) {
+  if (newLines.length === 0)
+    return;
+  const payload = newLines.join("\n") + "\n";
+  const existing = app.vault.getAbstractFileByPath(inboxPath);
+  if (existing instanceof import_obsidian5.TFile) {
+    await app.vault.process(existing, (content) => {
+      if (content.length === 0)
+        return payload;
+      const sep = content.endsWith("\n") ? "" : "\n";
+      return content + sep + payload;
+    });
+    return;
+  }
+  const slash = inboxPath.lastIndexOf("/");
+  if (slash > 0) {
+    const folder = inboxPath.slice(0, slash);
+    if (!app.vault.getAbstractFileByPath(folder)) {
+      await app.vault.createFolder(folder);
+    }
+  }
+  await app.vault.create(inboxPath, payload);
+}
+function extractTitle(rawLine) {
+  const m = TASK_LINE2.exec(rawLine);
+  if (!m)
+    return rawLine.trim();
+  return m[3].replace(/#[A-Za-z][\w-]*(?:\/[\w./_-]+)?/g, "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim();
+}
+
+// src/habitsView.ts
+var import_obsidian6 = require("obsidian");
 var VIEW_TYPE_HABITS_STATS = "today-habits-stats";
-var HabitsStatsView = class extends import_obsidian5.ItemView {
+var HabitsStatsView = class extends import_obsidian6.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -8179,7 +8560,7 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
   async loadHabitsAndGoals() {
     const path = this.plugin.settings.habitsFile;
     const f = this.app.vault.getAbstractFileByPath(path);
-    if (!(f instanceof import_obsidian5.TFile))
+    if (!(f instanceof import_obsidian6.TFile))
       return { habits: [], goals: [] };
     const content = await this.plugin.habitsScanner.getContent(f);
     const settings = this.plugin.settings;
@@ -8540,13 +8921,13 @@ function formatMonthRange(start, endExclusive) {
 }
 
 // src/main.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian6.Plugin {
+var TodayPlugin = class extends import_obsidian7.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    if (import_obsidian6.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian7.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
@@ -8591,11 +8972,16 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
       name: "Open tomorrow's daily note",
       callback: () => void this.openDailyNoteForOffset(1)
     });
+    this.addCommand({
+      id: "collect-unfinished",
+      name: "Collect unfinished tasks into inbox",
+      callback: () => void collectUnfinished(this)
+    });
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian6.TFile))
+        if (!(af instanceof import_obsidian7.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -8660,7 +9046,7 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
     }
   }
   async openDailyNoteForOffset(dayOffset) {
-    const target = (0, import_obsidian7.moment)().startOf("day").add(dayOffset, "day").toDate();
+    const target = (0, import_obsidian8.moment)().startOf("day").add(dayOffset, "day").toDate();
     const fallback = {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
@@ -8694,7 +9080,7 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
 };
-var InlineSuggest = class extends import_obsidian6.EditorSuggest {
+var InlineSuggest = class extends import_obsidian7.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -8786,7 +9172,7 @@ var InlineSuggest = class extends import_obsidian6.EditorSuggest {
       const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian7.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian8.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,
