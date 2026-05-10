@@ -5,6 +5,9 @@ var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __defNormalProp = (obj, key2, value) => key2 in obj ? __defProp(obj, key2, { enumerable: true, configurable: true, writable: true, value }) : obj[key2] = value;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -339,35 +342,60 @@ var require_index_min = __commonJS({
   }
 });
 
-// src/main.ts
-var main_exports = {};
-__export(main_exports, {
-  default: () => TodayPlugin
-});
-module.exports = __toCommonJS(main_exports);
-var import_obsidian12 = require("obsidian");
-var import_mobile_drag_drop = __toESM(require_index_min());
-
-// src/view.ts
-var import_obsidian5 = require("obsidian");
-
-// src/settings.ts
-var import_obsidian2 = require("obsidian");
-
 // src/parser.ts
-var DEFAULT_PREFIXES = {
-  duration: "d",
-  time: "t",
-  order: "o",
-  project: "p",
-  exercise: "x",
-  taskId: "tid",
-  actual: "ta",
-  taskContext: "tc",
-  taskCreated: "tcr"
-};
-var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
-var DESCRIPTION_RE = /\{([^{}]*)\}/;
+var parser_exports = {};
+__export(parser_exports, {
+  DEFAULT_PREFIXES: () => DEFAULT_PREFIXES,
+  addActualTimeTag: () => addActualTimeTag,
+  applyComputedParentDurations: () => applyComputedParentDurations,
+  buildTagRegexes: () => buildTagRegexes,
+  buildTaskLine: () => buildTaskLine,
+  buildTimeOptions: () => buildTimeOptions,
+  findLastTaskLine: () => findLastTaskLine,
+  formatActualTime: () => formatActualTime,
+  formatClockShort: () => formatClockShort,
+  formatCompactDuration: () => formatCompactDuration,
+  formatDuration: () => formatDuration,
+  formatExerciseLine: () => formatExerciseLine,
+  formatExerciseSummary: () => formatExerciseSummary,
+  formatTime: () => formatTime,
+  formatTotal: () => formatTotal,
+  generateTaskId: () => generateTaskId,
+  parseActualTime: () => parseActualTime,
+  parseCompactDuration: () => parseCompactDuration,
+  parseDescription: () => parseDescription,
+  parseDuration: () => parseDuration,
+  parseExercises: () => parseExercises,
+  parseFileTasks: () => parseFileTasks,
+  parseFrontmatterField: () => parseFrontmatterField,
+  parseOrder: () => parseOrder,
+  parseProject: () => parseProject,
+  parseSubproject: () => parseSubproject,
+  parseTaggedLine: () => parseTaggedLine,
+  parseTaskContexts: () => parseTaskContexts,
+  parseTaskCreated: () => parseTaskCreated,
+  parseTaskId: () => parseTaskId,
+  parseTaskLine: () => parseTaskLine,
+  parseTime: () => parseTime,
+  removeDurationTag: () => removeDurationTag,
+  removeOrderTag: () => removeOrderTag,
+  removeProjectTag: () => removeProjectTag,
+  removeTimeTag: () => removeTimeTag,
+  setDurationTag: () => setDurationTag,
+  setOrderTag: () => setOrderTag,
+  setProjectTag: () => setProjectTag,
+  setTaskChecked: () => setTaskChecked,
+  setTaskContextTags: () => setTaskContextTags,
+  setTaskCreatedTag: () => setTaskCreatedTag,
+  setTaskDescription: () => setTaskDescription,
+  setTaskIdTag: () => setTaskIdTag,
+  setTaskMigrated: () => setTaskMigrated,
+  setTaskTitle: () => setTaskTitle,
+  setTimeTag: () => setTimeTag,
+  snapToInterval: () => snapToInterval,
+  sumSubtaskDurations: () => sumSubtaskDurations,
+  timeDisplayToTagBody: () => timeDisplayToTagBody
+});
 function buildTagRegexes(prefixes) {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return {
@@ -618,6 +646,15 @@ function applyComputedParentDurations(content, prefixes) {
     lines[t.lineNumber] = setDurationTag(t.rawLine, sum, prefixes);
   }
   return lines ? lines.join("\n") : content;
+}
+function parseActualTime(body, prefixes) {
+  const m = buildTagRegexes(prefixes).actual.exec(body);
+  if (!m)
+    return null;
+  const h = m[1] ? parseInt(m[1], 10) : 0;
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  const total = h * 60 + min;
+  return total > 0 ? total : null;
 }
 function formatActualTime(totalMin, prefixes) {
   const safe = Math.max(1, Math.round(totalMin));
@@ -966,6 +1003,40 @@ function parseCompactDuration(raw) {
   const total = (m[1] ? parseInt(m[1], 10) : 0) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
   return total > 0 ? total : null;
 }
+var DEFAULT_PREFIXES, TASK_LINE, DESCRIPTION_RE;
+var init_parser = __esm({
+  "src/parser.ts"() {
+    DEFAULT_PREFIXES = {
+      duration: "d",
+      time: "t",
+      order: "o",
+      project: "p",
+      exercise: "x",
+      taskId: "tid",
+      actual: "ta",
+      taskContext: "tc",
+      taskCreated: "tcr"
+    };
+    TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
+    DESCRIPTION_RE = /\{([^{}]*)\}/;
+  }
+});
+
+// src/main.ts
+var main_exports = {};
+__export(main_exports, {
+  default: () => TodayPlugin
+});
+module.exports = __toCommonJS(main_exports);
+var import_obsidian13 = require("obsidian");
+var import_mobile_drag_drop = __toESM(require_index_min());
+
+// src/view.ts
+var import_obsidian5 = require("obsidian");
+
+// src/settings.ts
+var import_obsidian2 = require("obsidian");
+init_parser();
 
 // src/colors.ts
 var DEFAULT_PALETTE = [
@@ -2614,6 +2685,9 @@ var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
   }
 };
 
+// src/view.ts
+init_parser();
+
 // src/scheduler.ts
 function partition(tasks) {
   const scheduled = [];
@@ -2728,10 +2802,11 @@ function layoutTimeline(scheduled, rangeStartMin, pxPerMin, maxColumns) {
         }
       }
     }
-    const colCount = columns.length;
-    const widthPct = 100 / colCount;
     columns.forEach((col, idx) => {
       for (const t of col) {
+        const concurrent = peakConcurrentDuring(t, group);
+        const lanes = Math.min(concurrent, maxColumns != null ? maxColumns : concurrent);
+        const widthPct = 100 / lanes;
         blocks.push({
           task: t,
           topPx: (t.startMin - rangeStartMin) * pxPerMin,
@@ -2743,6 +2818,30 @@ function layoutTimeline(scheduled, rangeStartMin, pxPerMin, maxColumns) {
     });
   }
   return blocks;
+}
+function peakConcurrentDuring(t, group) {
+  const tStart = t.startMin;
+  const tEnd = tStart + t.durationMin;
+  const events = [];
+  for (const o of group) {
+    const oStart = o.startMin;
+    const oEnd = oStart + o.durationMin;
+    const s = Math.max(oStart, tStart);
+    const e = Math.min(oEnd, tEnd);
+    if (e <= s)
+      continue;
+    events.push({ time: s, delta: 1 });
+    events.push({ time: e, delta: -1 });
+  }
+  events.sort((a, b) => a.time - b.time || b.delta - a.delta);
+  let cur = 0;
+  let max = 0;
+  for (const ev of events) {
+    cur += ev.delta;
+    if (cur > max)
+      max = cur;
+  }
+  return Math.max(1, max);
 }
 function groupOverlaps(scheduled) {
   const groups = [];
@@ -2767,6 +2866,7 @@ function groupOverlaps(scheduled) {
 
 // src/dailyNote.ts
 var import_obsidian3 = require("obsidian");
+init_parser();
 async function resolveDailyNote(app, date, fallback2) {
   var _a5;
   const opts = readDailyNotesOptions(app);
@@ -3237,6 +3337,7 @@ function buildPersonLinkInsert(app, path) {
 
 // src/taskMove.ts
 var import_obsidian4 = require("obsidian");
+init_parser();
 async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fallback2, options = {}) {
   var _a5;
   const notify = options.notify !== false;
@@ -8338,8 +8439,12 @@ var SubtaskQuickAddModal = class extends import_obsidian5.Modal {
   }
 };
 
+// src/main.ts
+init_parser();
+
 // src/collect.ts
 var import_obsidian6 = require("obsidian");
+init_parser();
 var TASK_LINE2 = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 async function collectUnfinished(plugin) {
   const fallback2 = {
@@ -8659,6 +8764,7 @@ function extractTitle(rawLine) {
 
 // src/habitsView.ts
 var import_obsidian7 = require("obsidian");
+init_parser();
 var VIEW_TYPE_HABITS_STATS = "today-habits-stats";
 var HabitsStatsView = class extends import_obsidian7.ItemView {
   constructor(leaf, plugin) {
@@ -15152,6 +15258,7 @@ if (typeof window !== "undefined") {
 
 // src/multiDay.ts
 var import_obsidian8 = require("obsidian");
+init_parser();
 function buildFallback(settings) {
   return {
     folder: settings.dailyNoteFolderFallback,
@@ -15252,7 +15359,7 @@ var root_2 = from_html(`<div class="dp-md-summary-bar"></div> <div class="dp-md-
 var root = from_html(`<div class="dp-md-summary"><!></div>`);
 function SummaryBar($$anchor, $$props) {
   push($$props, true);
-  function fmtMin(min) {
+  function fmtMin2(min) {
     if (min <= 0)
       return "0m";
     const h = Math.floor(min / 60);
@@ -15285,7 +15392,7 @@ function SummaryBar($$anchor, $$props) {
               background: get2(p).color
             });
           },
-          [() => fmtMin(get2(p).minutes)]
+          [() => fmtMin2(get2(p).minutes)]
         );
         append($$anchor3, div_3);
       });
@@ -15312,12 +15419,12 @@ function SummaryBar($$anchor, $$props) {
             set_text(text_1, get2(p).project);
             set_text(text_2, $0);
           },
-          [() => fmtMin(get2(p).minutes)]
+          [() => fmtMin2(get2(p).minutes)]
         );
         append($$anchor3, span_1);
       });
       reset(div_4);
-      template_effect(($0) => set_text(text2, `${$0 != null ? $0 : ""} total`), [() => fmtMin($$props.summary.totalMin)]);
+      template_effect(($0) => set_text(text2, `${$0 != null ? $0 : ""} total`), [() => fmtMin2($$props.summary.totalMin)]);
       append($$anchor2, fragment);
     };
     if_block(node, ($$render) => {
@@ -15368,7 +15475,7 @@ function InboxPanel($$anchor, $$props) {
     const leaf = $$props.plugin.app.workspace.getLeaf(false);
     await leaf.openFile($$props.file, { eState: { line: task.lineNumber } });
   }
-  function bodyText(task) {
+  function bodyText2(task) {
     return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
   }
   var div = root2();
@@ -15408,7 +15515,7 @@ function InboxPanel($$anchor, $$props) {
             });
             set_text(text_1, $0);
           },
-          [() => bodyText(get2(task))]
+          [() => bodyText2(get2(task))]
         );
         event("dragstart", li, (ev) => onDragStart(ev, get2(task)));
         event("dragend", li, onDragEnd);
@@ -15438,6 +15545,7 @@ delegate(["click"]);
 var import_obsidian10 = require("obsidian");
 
 // src/multiday/MiniTimeline.svelte
+init_parser();
 var root_13 = from_html(`<div class="dp-md-timeline-row"><div class="dp-md-timeline-line"></div> <div class="dp-md-timeline-label"> </div></div>`);
 var root_23 = from_html(`<button><span class="dp-md-timeline-block-text"> </span></button>`);
 var root3 = from_html(`<div class="dp-md-timeline"><!> <div class="dp-md-timeline-blocks"></div></div>`);
@@ -15463,7 +15571,7 @@ function MiniTimeline($$anchor, $$props) {
   function hourTopPx(h) {
     return (h * 60 - get2(startMin)) * PX_PER_MIN;
   }
-  function bodyText(task) {
+  function bodyText2(task) {
     return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
   }
   var div = root3();
@@ -15508,7 +15616,7 @@ function MiniTimeline($$anchor, $$props) {
         set_text(text_1, $2);
       },
       [
-        () => bodyText(get2(b).task),
+        () => bodyText2(get2(b).task),
         () => {
           var _a6, _b4, _c2, _d;
           return {
@@ -15519,7 +15627,7 @@ function MiniTimeline($$anchor, $$props) {
             "--dp-md-color": (_d = get2(color)) != null ? _d : "var(--color-accent)"
           };
         },
-        () => bodyText(get2(b).task)
+        () => bodyText2(get2(b).task)
       ]
     );
     delegated("click", button, () => $$props.onClickTask(get2(b).task));
@@ -15589,7 +15697,7 @@ function DayColumn($$anchor, $$props) {
     await moveTaskBetweenDailyNotes($$props.plugin.app, $$props.inboxFile, drag.task, $$props.day.date, fallback2);
     await $$props.onMoved();
   }
-  function bodyText(task) {
+  function bodyText2(task) {
     return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
   }
   var div = root4();
@@ -15642,7 +15750,7 @@ function DayColumn($$anchor, $$props) {
             });
             set_text(text_2, $0);
           },
-          [() => bodyText(get2(task))]
+          [() => bodyText2(get2(task))]
         );
         delegated("click", li, () => openTask(get2(task)));
         append($$anchor3, li);
@@ -15905,14 +16013,648 @@ var MultiDayView = class extends import_obsidian11.ItemView {
   }
 };
 
+// src/multiDay2View.ts
+var import_obsidian12 = require("obsidian");
+init_parser();
+var VIEW_TYPE_MULTI_DAY_2 = "today-multi-day-2";
+var VISIBLE_DAYS = 3;
+var TIMELINE_PX_PER_MIN = 0.9;
+var TIMELINE_LANE_CAP = 2;
+var INBOX_PX_PER_MIN = 0.6;
+var INBOX_FLAT_HEIGHT_PX = 28;
+var MultiDay2View = class extends import_obsidian12.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.rerenderTimer = null;
+    this.anchor = startOfDay(new Date());
+    this.searchQuery = "";
+    this.projectFilter = /* @__PURE__ */ new Set();
+    this.filterAllSelected = true;
+    this.inboxProportionalHeights = false;
+    this.days = [];
+    this.inbox = { path: "", file: null, tasks: [] };
+    this.dragState = null;
+    this.dropIndicator = null;
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return VIEW_TYPE_MULTI_DAY_2;
+  }
+  getDisplayText() {
+    return "Multi-day 2";
+  }
+  getIcon() {
+    return "calendar-days";
+  }
+  async onOpen() {
+    this.registerEvent(
+      this.app.vault.on("modify", () => this.scheduleRefresh())
+    );
+    this.registerEvent(
+      this.app.vault.on("delete", () => this.scheduleRefresh())
+    );
+    this.registerEvent(
+      this.app.vault.on("create", () => this.scheduleRefresh())
+    );
+    await this.refresh();
+  }
+  async onClose() {
+    if (this.rerenderTimer !== null)
+      window.clearTimeout(this.rerenderTimer);
+  }
+  scheduleRefresh() {
+    if (this.rerenderTimer !== null)
+      window.clearTimeout(this.rerenderTimer);
+    this.rerenderTimer = window.setTimeout(() => {
+      this.rerenderTimer = null;
+      void this.refresh();
+    }, 100);
+  }
+  async refresh() {
+    const [d, i] = await Promise.all([
+      loadDayWindow(this.app, this.plugin.settings, this.anchor, VISIBLE_DAYS),
+      loadInboxTasks(this.app, this.plugin.settings)
+    ]);
+    this.days = d;
+    this.inbox = i;
+    this.render();
+  }
+  render() {
+    const root7 = this.containerEl.children[1];
+    root7.empty();
+    root7.addClass("today-root");
+    root7.addClass("dp-multiday2");
+    const wrap = root7.createDiv({ cls: "dp-md2-root" });
+    this.renderHeader(wrap);
+    const colorMap = buildWindowColorMap(
+      this.days,
+      this.inbox.tasks,
+      this.plugin.settings.projectColors
+    );
+    const summary = summarizeWindow(this.days, this.plugin.settings.projectColors);
+    this.renderSummary(wrap, summary);
+    const body = wrap.createDiv({ cls: "dp-md2-body" });
+    this.renderInbox(body, colorMap);
+    this.renderGrid(body, colorMap);
+  }
+  // ---------- header ----------
+  renderHeader(parent) {
+    const header = parent.createDiv({ cls: "dp-md2-header" });
+    const nav = header.createDiv({ cls: "dp-md2-nav" });
+    const prev = nav.createEl("button", {
+      cls: "dp-md2-nav-btn",
+      text: "\u2039",
+      attr: { "aria-label": "Previous days" }
+    });
+    prev.addEventListener("click", () => {
+      this.anchor = addDays(this.anchor, -VISIBLE_DAYS);
+      void this.refresh();
+    });
+    const today = nav.createEl("button", {
+      cls: "dp-md2-today-btn",
+      text: "Today"
+    });
+    today.addEventListener("click", () => {
+      this.anchor = startOfDay(new Date());
+      void this.refresh();
+    });
+    const next2 = nav.createEl("button", {
+      cls: "dp-md2-nav-btn",
+      text: "\u203A",
+      attr: { "aria-label": "Next days" }
+    });
+    next2.addEventListener("click", () => {
+      this.anchor = addDays(this.anchor, VISIBLE_DAYS);
+      void this.refresh();
+    });
+    const range = header.createDiv({ cls: "dp-md2-range" });
+    const last = addDays(this.anchor, VISIBLE_DAYS - 1);
+    range.setText(`${this.fmtRangeDate(this.anchor)} \u2013 ${this.fmtRangeDate(last)}`);
+  }
+  fmtRangeDate(d) {
+    return d.toLocaleDateString(void 0, {
+      month: "short",
+      day: "numeric"
+    });
+  }
+  // ---------- summary ----------
+  renderSummary(parent, summary) {
+    const wrap = parent.createDiv({ cls: "dp-md2-summary" });
+    if (summary.totalMin === 0) {
+      wrap.createDiv({
+        cls: "dp-md2-summary-empty",
+        text: "No scheduled time in this window."
+      });
+      return;
+    }
+    const bar = wrap.createDiv({ cls: "dp-md2-summary-bar" });
+    for (const p of summary.byProject) {
+      const seg = bar.createDiv({ cls: "dp-md2-summary-seg" });
+      seg.style.width = `${p.minutes / summary.totalMin * 100}%`;
+      seg.style.background = p.color;
+      seg.setAttribute("title", `${p.project} \xB7 ${fmtMin(p.minutes)}`);
+    }
+    const legend = wrap.createDiv({ cls: "dp-md2-summary-legend" });
+    legend.createSpan({
+      cls: "dp-md2-summary-total",
+      text: `${fmtMin(summary.totalMin)} total`
+    });
+    for (const p of summary.byProject) {
+      const chip = legend.createSpan({ cls: "dp-md2-summary-chip" });
+      const dot = chip.createSpan({ cls: "dp-md2-summary-dot" });
+      dot.style.background = p.color;
+      chip.createSpan({ cls: "dp-md2-summary-name", text: p.project });
+      chip.createSpan({
+        cls: "dp-md2-summary-min",
+        text: fmtMin(p.minutes)
+      });
+    }
+  }
+  // ---------- inbox panel (left) ----------
+  renderInbox(parent, colorMap) {
+    var _a5;
+    const panel = parent.createDiv({ cls: "dp-md2-inbox" });
+    const header = panel.createDiv({ cls: "dp-md2-inbox-header" });
+    header.createSpan({ cls: "dp-md2-inbox-title", text: "Inbox" });
+    const count = header.createSpan({ cls: "dp-md2-inbox-count" });
+    panel.addEventListener("dragover", (ev) => {
+      if (!this.dragState || this.dragState.origin !== "day")
+        return;
+      if (!this.inbox.file)
+        return;
+      ev.preventDefault();
+      if (ev.dataTransfer)
+        ev.dataTransfer.dropEffect = "move";
+      panel.addClass("is-drop-target");
+    });
+    panel.addEventListener("dragleave", (ev) => {
+      const related = ev.relatedTarget;
+      if (!related || !panel.contains(related))
+        panel.removeClass("is-drop-target");
+    });
+    panel.addEventListener("drop", (ev) => {
+      panel.removeClass("is-drop-target");
+      if (!this.dragState || this.dragState.origin !== "day")
+        return;
+      if (!this.inbox.file)
+        return;
+      ev.preventDefault();
+      void this.dropToInbox(this.dragState);
+    });
+    const controls = panel.createDiv({ cls: "dp-md2-inbox-controls" });
+    const search = controls.createEl("input", {
+      cls: "dp-md2-inbox-search",
+      attr: { type: "text", placeholder: "Search inbox" }
+    });
+    search.value = this.searchQuery;
+    search.addEventListener("input", () => {
+      this.searchQuery = search.value;
+      this.renderInboxList(panel, listEl, count, colorMap);
+    });
+    const heightToggle = controls.createEl("button", {
+      cls: "dp-md2-inbox-height-toggle",
+      text: this.inboxProportionalHeights ? "Flat" : "Duration",
+      attr: { "aria-label": "Toggle inbox row height" }
+    });
+    heightToggle.addEventListener("click", () => {
+      this.inboxProportionalHeights = !this.inboxProportionalHeights;
+      heightToggle.setText(
+        this.inboxProportionalHeights ? "Flat" : "Duration"
+      );
+      this.renderInboxList(panel, listEl, count, colorMap);
+    });
+    const chipRow = panel.createDiv({ cls: "dp-md2-inbox-filters" });
+    const projects = uniqueProjects(this.inbox.tasks);
+    const allChip = chipRow.createSpan({
+      cls: "dp-md2-filter-chip" + (this.filterAllSelected ? " is-active" : ""),
+      text: "All"
+    });
+    allChip.addEventListener("click", () => {
+      this.filterAllSelected = true;
+      this.projectFilter.clear();
+      this.render();
+    });
+    for (const proj of projects) {
+      const isOn = !this.filterAllSelected && this.projectFilter.has(proj);
+      const chip = chipRow.createSpan({
+        cls: "dp-md2-filter-chip" + (isOn ? " is-active" : ""),
+        text: proj
+      });
+      const color = (_a5 = colorMap.get(proj)) != null ? _a5 : null;
+      if (color)
+        chip.style.borderColor = color;
+      chip.addEventListener("click", () => {
+        if (this.filterAllSelected) {
+          this.filterAllSelected = false;
+          this.projectFilter = /* @__PURE__ */ new Set([proj]);
+        } else if (this.projectFilter.has(proj)) {
+          this.projectFilter.delete(proj);
+          if (this.projectFilter.size === 0)
+            this.filterAllSelected = true;
+        } else {
+          this.projectFilter.add(proj);
+        }
+        this.render();
+      });
+    }
+    const listEl = panel.createEl("ul", { cls: "dp-md2-inbox-list" });
+    this.renderInboxList(panel, listEl, count, colorMap);
+  }
+  renderInboxList(panel, listEl, countEl, colorMap) {
+    listEl.empty();
+    const filtered = this.filteredInboxTasks();
+    countEl.setText(String(filtered.length));
+    if (!this.inbox.file) {
+      listEl.createDiv({
+        cls: "dp-md2-inbox-empty",
+        text: "No inbox file at this path."
+      });
+      return;
+    }
+    if (filtered.length === 0) {
+      listEl.createDiv({
+        cls: "dp-md2-inbox-empty",
+        text: this.inbox.tasks.length === 0 ? "Inbox is clear." : "No tasks match."
+      });
+      return;
+    }
+    for (const task of filtered) {
+      const li = listEl.createEl("li", { cls: "dp-md2-inbox-item" });
+      li.draggable = true;
+      li.style.height = this.inboxProportionalHeights ? `${Math.max(20, task.durationMin * INBOX_PX_PER_MIN)}px` : `${INBOX_FLAT_HEIGHT_PX}px`;
+      const color = colorFor(task, colorMap);
+      if (color) {
+        li.style.setProperty("--dp-md2-color", color);
+        li.addClass("has-color");
+      }
+      const dot = li.createSpan({ cls: "dp-md2-inbox-dot" });
+      if (color) {
+        dot.style.background = color;
+        dot.style.borderColor = color;
+      }
+      const text2 = li.createSpan({
+        cls: "dp-md2-inbox-text",
+        text: bodyText(task)
+      });
+      li.setAttribute("title", `${bodyText(task)} \xB7 ${fmtMin(task.durationMin)}`);
+      li.addEventListener("dragstart", (ev) => {
+        if (!this.inbox.file)
+          return;
+        const rect = li.getBoundingClientRect();
+        this.dragState = {
+          task,
+          origin: "inbox",
+          fromFile: this.inbox.file,
+          grabOffsetY: ev.clientY - rect.top
+        };
+        li.addClass("is-dragging");
+        if (ev.dataTransfer) {
+          ev.dataTransfer.setData("text/plain", task.rawLine);
+          ev.dataTransfer.effectAllowed = "move";
+        }
+      });
+      li.addEventListener("dragend", () => {
+        li.removeClass("is-dragging");
+        this.dragState = null;
+        this.hideDropIndicator();
+      });
+      li.addEventListener("click", () => void this.openTask(task, this.inbox.file));
+    }
+  }
+  filteredInboxTasks() {
+    const q = this.searchQuery.trim().toLowerCase();
+    return this.inbox.tasks.filter((t) => {
+      if (this.filterAllSelected) {
+      } else if (!t.project || !this.projectFilter.has(t.project)) {
+        return false;
+      }
+      if (!q)
+        return true;
+      return bodyText(t).toLowerCase().includes(q);
+    });
+  }
+  // ---------- day grid (right) ----------
+  renderGrid(parent, colorMap) {
+    const grid = parent.createDiv({ cls: "dp-md2-grid" });
+    grid.style.gridTemplateColumns = `repeat(${this.days.length}, minmax(0, 1fr))`;
+    for (const day of this.days)
+      this.renderDayColumn(grid, day, colorMap);
+  }
+  renderDayColumn(parent, day, colorMap) {
+    const col = parent.createDiv({ cls: "dp-md2-day" });
+    if (sameDay(day.date, new Date()))
+      col.addClass("is-today");
+    const header = col.createDiv({ cls: "dp-md2-day-header" });
+    const link2 = header.createEl("button", {
+      cls: "dp-md2-day-link",
+      text: this.fmtDayHeader(day.date)
+    });
+    link2.addEventListener("click", () => void this.openDay(day));
+    header.createSpan({
+      cls: "dp-md2-day-count",
+      text: String(day.tasks.length)
+    });
+    this.renderTimeline(col, day, colorMap);
+  }
+  fmtDayHeader(d) {
+    return d.toLocaleDateString(void 0, {
+      weekday: "short",
+      month: "short",
+      day: "numeric"
+    });
+  }
+  renderTimeline(parent, day, colorMap) {
+    const settings = this.plugin.settings;
+    const startMin = settings.visibleStartHour * 60;
+    const endMin = settings.visibleEndHour * 60;
+    const totalMin = endMin - startMin;
+    const heightPx = totalMin * TIMELINE_PX_PER_MIN;
+    const timeline = parent.createDiv({ cls: "dp-md2-timeline" });
+    timeline.style.height = `${heightPx}px`;
+    for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
+      const top = (h * 60 - startMin) * TIMELINE_PX_PER_MIN;
+      const row = timeline.createDiv({ cls: "dp-md2-timeline-row" });
+      row.style.top = `${top}px`;
+      row.createDiv({ cls: "dp-md2-timeline-line" });
+      row.createDiv({
+        cls: "dp-md2-timeline-label",
+        text: formatClockShort(h * 60)
+      });
+    }
+    const blocksLayer = timeline.createDiv({ cls: "dp-md2-timeline-blocks" });
+    const scheduled = day.tasks.filter((t) => t.startMin !== null);
+    const layout = layoutTimeline(
+      scheduled,
+      startMin,
+      TIMELINE_PX_PER_MIN,
+      TIMELINE_LANE_CAP
+    );
+    for (const b of layout) {
+      const el = blocksLayer.createEl("button", {
+        cls: "dp-md2-timeline-block"
+      });
+      if (b.task.checked)
+        el.addClass("is-done");
+      el.style.top = `${b.topPx}px`;
+      el.style.height = `${Math.max(8, b.heightPx)}px`;
+      el.style.left = `${b.leftPct}%`;
+      el.style.width = `calc(${b.widthPct}% - 2px)`;
+      const color = colorFor(b.task, colorMap);
+      el.style.setProperty("--dp-md2-color", color != null ? color : "var(--color-accent)");
+      el.setAttribute("title", bodyText(b.task));
+      el.createSpan({
+        cls: "dp-md2-timeline-block-text",
+        text: bodyText(b.task)
+      });
+      el.addEventListener("click", () => void this.openTask(b.task, day.file));
+      el.draggable = true;
+      el.addEventListener("dragstart", (ev) => {
+        if (!day.file)
+          return;
+        const rect = el.getBoundingClientRect();
+        this.dragState = {
+          task: b.task,
+          origin: "day",
+          fromFile: day.file,
+          grabOffsetY: ev.clientY - rect.top
+        };
+        el.addClass("is-dragging");
+        if (ev.dataTransfer) {
+          ev.dataTransfer.setData("text/plain", b.task.rawLine);
+          ev.dataTransfer.effectAllowed = "move";
+        }
+      });
+      el.addEventListener("dragend", () => {
+        el.removeClass("is-dragging");
+        this.dragState = null;
+        this.hideDropIndicator();
+      });
+    }
+    const computeSnap = (clientY) => {
+      if (!this.dragState)
+        return null;
+      const rect = timeline.getBoundingClientRect();
+      const yPx = clientY - rect.top + timeline.scrollTop - this.dragState.grabOffsetY;
+      const rawMin = yPx / TIMELINE_PX_PER_MIN + startMin;
+      const snapped = snapToInterval(rawMin, settings.snapMin);
+      const maxStart = endMin - this.dragState.task.durationMin;
+      return Math.max(startMin, Math.min(maxStart, snapped));
+    };
+    timeline.addEventListener("dragover", (ev) => {
+      if (!this.dragState)
+        return;
+      ev.preventDefault();
+      if (ev.dataTransfer)
+        ev.dataTransfer.dropEffect = "move";
+      const snapped = computeSnap(ev.clientY);
+      if (snapped === null)
+        return;
+      this.showDropIndicator(
+        blocksLayer,
+        snapped,
+        this.dragState.task.durationMin,
+        startMin
+      );
+    });
+    timeline.addEventListener("dragleave", (ev) => {
+      const related = ev.relatedTarget;
+      if (!related || !timeline.contains(related))
+        this.hideDropIndicator();
+    });
+    timeline.addEventListener("drop", (ev) => {
+      if (!this.dragState)
+        return;
+      ev.preventDefault();
+      const snapped = computeSnap(ev.clientY);
+      this.hideDropIndicator();
+      if (snapped === null)
+        return;
+      void this.dropToDay(this.dragState, day, snapped);
+    });
+  }
+  // ---------- drop indicator ----------
+  showDropIndicator(layer, snappedStartMin, durationMin, rangeStartMin) {
+    var _a5;
+    if (!this.dropIndicator || this.dropIndicator.parentElement !== layer) {
+      (_a5 = this.dropIndicator) == null ? void 0 : _a5.detach();
+      this.dropIndicator = layer.createDiv({ cls: "dp-md2-drop-indicator" });
+    }
+    const ind = this.dropIndicator;
+    ind.empty();
+    ind.style.top = `${(snappedStartMin - rangeStartMin) * TIMELINE_PX_PER_MIN}px`;
+    ind.style.height = `${Math.max(18, durationMin * TIMELINE_PX_PER_MIN)}px`;
+    ind.createDiv({
+      cls: "dp-md2-drop-indicator-time",
+      text: `${formatClockShort(snappedStartMin)}\u2013${formatClockShort(
+        snappedStartMin + durationMin
+      )}`
+    });
+  }
+  hideDropIndicator() {
+    var _a5;
+    (_a5 = this.dropIndicator) == null ? void 0 : _a5.detach();
+    this.dropIndicator = null;
+  }
+  // ---------- drop handlers ----------
+  async dropToDay(drag, day, newStartMin) {
+    const settings = this.plugin.settings;
+    const prefixes = settings.prefixes;
+    const fallback2 = buildFallback(settings);
+    const subtaskSum = drag.origin === "inbox" && !drag.task.hasExplicitDuration ? sumSubtaskDurations(
+      drag.task.subtasks.map((s) => s.rawLine),
+      prefixes
+    ) : 0;
+    const inSameFile = day.file !== null && drag.fromFile.path === day.file.path;
+    if (inSameFile && day.file) {
+      await this.app.vault.process(day.file, (content) => {
+        const lines = content.split("\n");
+        const idx = drag.task.lineNumber;
+        if (idx < 0 || idx >= lines.length || lines[idx] !== drag.task.rawLine)
+          return content;
+        let next2 = setTimeTag(lines[idx], newStartMin, prefixes);
+        next2 = removeOrderTag(next2, prefixes);
+        if (subtaskSum > 0 && parseDuration(next2, prefixes) === null) {
+          next2 = setDurationTag(next2, subtaskSum, prefixes);
+        }
+        if (next2 === lines[idx])
+          return content;
+        lines[idx] = next2;
+        return lines.join("\n");
+      });
+      await this.refresh();
+      return;
+    }
+    await this.app.vault.process(drag.fromFile, (content) => {
+      const lines = content.split("\n");
+      const idx = drag.task.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== drag.task.rawLine)
+        return content;
+      let next2 = setTimeTag(lines[idx], newStartMin, prefixes);
+      next2 = removeOrderTag(next2, prefixes);
+      if (subtaskSum > 0 && parseDuration(next2, prefixes) === null) {
+        next2 = setDurationTag(next2, subtaskSum, prefixes);
+      }
+      if (next2 === lines[idx])
+        return content;
+      lines[idx] = next2;
+      return lines.join("\n");
+    });
+    const updatedTask = await this.refetchTask(drag.fromFile, drag.task);
+    if (!updatedTask) {
+      new import_obsidian12.Notice("Today: source line changed since drag started.");
+      await this.refresh();
+      return;
+    }
+    await moveTaskBetweenDailyNotes(
+      this.app,
+      drag.fromFile,
+      updatedTask,
+      day.date,
+      fallback2,
+      { notify: false }
+    );
+    await this.refresh();
+  }
+  async dropToInbox(drag) {
+    if (!this.inbox.file)
+      return;
+    if (drag.fromFile.path === this.inbox.file.path) {
+      return;
+    }
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(drag.fromFile, (content) => {
+      const lines = content.split("\n");
+      const idx = drag.task.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== drag.task.rawLine)
+        return content;
+      let next2 = removeTimeTag(lines[idx], prefixes);
+      const maxOrder = this.inbox.tasks.reduce(
+        (acc, t) => t.order !== null && t.order > acc ? t.order : acc,
+        0
+      );
+      next2 = setOrderTag(next2, maxOrder + 1, prefixes);
+      if (next2 === lines[idx])
+        return content;
+      lines[idx] = next2;
+      return lines.join("\n");
+    });
+    const updatedTask = await this.refetchTask(drag.fromFile, drag.task);
+    if (!updatedTask) {
+      await this.refresh();
+      return;
+    }
+    await moveTaskBetweenDailyNotes(
+      this.app,
+      drag.fromFile,
+      updatedTask,
+      new Date(),
+      // unused — targetFile bypasses date resolution
+      buildFallback(this.plugin.settings),
+      { targetFile: this.inbox.file, notify: false }
+    );
+    await this.refresh();
+  }
+  async refetchTask(file, original) {
+    var _a5;
+    const { parseFileTasks: parseFileTasks2 } = await Promise.resolve().then(() => (init_parser(), parser_exports));
+    const content = await this.app.vault.read(file);
+    const tasks = parseFileTasks2(
+      file.path,
+      content,
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin
+    );
+    const sameLine = tasks.find((t) => t.lineNumber === original.lineNumber);
+    if (sameLine && bodyText(sameLine) === bodyText(original))
+      return sameLine;
+    return (_a5 = tasks.find((t) => bodyText(t) === bodyText(original))) != null ? _a5 : null;
+  }
+  // ---------- task / day open ----------
+  async openTask(task, file) {
+    if (!file)
+      return;
+    const leaf = this.app.workspace.getLeaf(false);
+    await leaf.openFile(file, { eState: { line: task.lineNumber } });
+  }
+  async openDay(day) {
+    if (day.file) {
+      const leaf = this.app.workspace.getLeaf(false);
+      await leaf.openFile(day.file);
+    } else {
+      await this.app.workspace.openLinkText(day.path, "");
+    }
+  }
+};
+function bodyText(task) {
+  return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
+}
+function fmtMin(min) {
+  if (min <= 0)
+    return "0m";
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0)
+    return `${m}m`;
+  if (m === 0)
+    return `${h}h`;
+  return `${h}h ${m}m`;
+}
+function uniqueProjects(tasks) {
+  const set2 = /* @__PURE__ */ new Set();
+  for (const t of tasks)
+    if (t.project)
+      set2.add(t.project);
+  return Array.from(set2).sort((a, b) => a.localeCompare(b));
+}
+
 // src/main.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian12.Plugin {
+var TodayPlugin = class extends import_obsidian13.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    if (import_obsidian12.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian13.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
@@ -15927,6 +16669,10 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     this.registerView(
       VIEW_TYPE_MULTI_DAY,
       (leaf) => new MultiDayView(leaf, this)
+    );
+    this.registerView(
+      VIEW_TYPE_MULTI_DAY_2,
+      (leaf) => new MultiDay2View(leaf, this)
     );
     this.addRibbonIcon("calendar-clock", "Open Today", () => {
       void this.activateView();
@@ -15954,6 +16700,11 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
       name: "Open multi-day view",
       hotkeys: [{ modifiers: ["Mod", "Shift"], key: "M" }],
       callback: () => void this.activateMultiDayView()
+    });
+    this.addCommand({
+      id: "open-multi-day-2",
+      name: "Open multi-day 2 view",
+      callback: () => void this.activateMultiDay2View()
     });
     this.addCommand({
       id: "open-combined-popout",
@@ -15984,7 +16735,7 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian12.TFile))
+        if (!(af instanceof import_obsidian13.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -16051,7 +16802,7 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     }
   }
   async openDailyNoteForOffset(dayOffset) {
-    const target = (0, import_obsidian13.moment)().startOf("day").add(dayOffset, "day").toDate();
+    const target = (0, import_obsidian14.moment)().startOf("day").add(dayOffset, "day").toDate();
     const fallback2 = {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
@@ -16086,7 +16837,7 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
   async openCombinedPopout() {
-    if (import_obsidian12.Platform.isMobile) {
+    if (import_obsidian13.Platform.isMobile) {
       await this.activateView();
       await this.activateMultiDayView();
       await this.activateHabitsStatsView();
@@ -16128,8 +16879,25 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     });
     this.app.workspace.revealLeaf(leaf);
   }
+  async activateMultiDay2View() {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_MULTI_DAY_2);
+    let leaf;
+    if (existing.length > 0) {
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      return;
+    }
+    leaf = this.app.workspace.getLeaf("tab");
+    if (!leaf)
+      return;
+    await leaf.setViewState({
+      type: VIEW_TYPE_MULTI_DAY_2,
+      active: true
+    });
+    this.app.workspace.revealLeaf(leaf);
+  }
 };
-var InlineSuggest = class extends import_obsidian12.EditorSuggest {
+var InlineSuggest = class extends import_obsidian13.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -16221,7 +16989,7 @@ var InlineSuggest = class extends import_obsidian12.EditorSuggest {
       const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian13.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian14.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,

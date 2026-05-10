@@ -4284,6 +4284,417 @@
 }
 
 /* ============================================================
+ *  Multi-day 2 view (.dp-multiday2)
+ *  TS-rendered companion to the Svelte multi-day view. 3-day grid
+ *  with a left inbox rail, project summary on top, and interactive
+ *  drag-and-drop between inbox/columns/back-to-inbox.
+ * ============================================================ */
+
+@layer components {
+  .today-root.dp-multiday2 {
+    padding: 10px 12px;
+    overflow: auto;
+  }
+
+  .dp-md2-root {
+    @apply flex flex-col;
+    gap: 10px;
+    min-height: 100%;
+  }
+
+  /* ---------- header ---------- */
+
+  .dp-md2-header {
+    @apply flex items-center justify-between;
+    gap: 12px;
+  }
+
+  .dp-md2-nav {
+    @apply inline-flex items-center;
+    gap: 4px;
+  }
+
+  .dp-md2-nav-btn,
+  .dp-md2-today-btn,
+  .dp-md2-inbox-height-toggle {
+    @apply inline-flex items-center justify-center;
+    border: 1px solid var(--color-hairline);
+    background: transparent;
+    color: var(--color-ink);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 120ms, border-color 120ms, color 120ms;
+  }
+
+  .dp-md2-nav-btn {
+    min-width: 28px;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .dp-md2-nav-btn:hover,
+  .dp-md2-today-btn:hover,
+  .dp-md2-inbox-height-toggle:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .dp-md2-range {
+    color: var(--color-ink-muted);
+    font-size: 0.85rem;
+  }
+
+  /* ---------- summary bar ---------- */
+
+  .dp-md2-summary {
+    @apply flex flex-col;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--color-paper-2);
+    border: 1px solid var(--color-hairline);
+    border-radius: 6px;
+  }
+
+  .dp-md2-summary-empty {
+    color: var(--color-ink-muted);
+    font-size: 0.85rem;
+  }
+
+  .dp-md2-summary-bar {
+    @apply flex;
+    height: 10px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .dp-md2-summary-seg {
+    height: 100%;
+  }
+
+  .dp-md2-summary-legend {
+    @apply flex flex-wrap items-center;
+    gap: 8px;
+    font-size: 0.8rem;
+  }
+
+  .dp-md2-summary-total {
+    color: var(--color-ink-muted);
+    font-weight: 600;
+  }
+
+  .dp-md2-summary-chip {
+    @apply inline-flex items-center;
+    gap: 4px;
+  }
+
+  .dp-md2-summary-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+  }
+
+  .dp-md2-summary-name {
+    color: var(--color-ink);
+  }
+
+  .dp-md2-summary-min {
+    color: var(--color-ink-muted);
+  }
+
+  /* ---------- body / two-column layout ---------- */
+
+  .dp-md2-body {
+    @apply grid;
+    grid-template-columns: minmax(180px, 230px) 1fr;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ---------- inbox rail ---------- */
+
+  .dp-md2-inbox {
+    @apply flex flex-col;
+    gap: 6px;
+    padding: 8px;
+    background: var(--color-paper-2);
+    border: 1px solid var(--color-hairline);
+    border-radius: 6px;
+    min-height: 0;
+  }
+
+  .dp-md2-inbox.is-drop-target {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent) inset;
+  }
+
+  .dp-md2-inbox-header {
+    @apply flex items-center justify-between;
+  }
+
+  .dp-md2-inbox-title {
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  .dp-md2-inbox-count {
+    color: var(--color-ink-muted);
+    font-size: 0.8rem;
+    background: var(--color-paper-3, var(--color-paper-2));
+    border-radius: 999px;
+    padding: 0 8px;
+  }
+
+  .dp-md2-inbox-controls {
+    @apply flex items-center;
+    gap: 6px;
+  }
+
+  .dp-md2-inbox-search {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--color-hairline);
+    background: var(--background-primary);
+    color: var(--color-ink);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 0.85rem;
+  }
+
+  .dp-md2-inbox-height-toggle {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+  }
+
+  .dp-md2-inbox-filters {
+    @apply flex flex-wrap;
+    gap: 4px;
+  }
+
+  .dp-md2-filter-chip {
+    border: 1px solid var(--color-hairline);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 0.75rem;
+    color: var(--color-ink-muted);
+    cursor: pointer;
+    background: transparent;
+  }
+
+  .dp-md2-filter-chip:hover {
+    color: var(--color-ink);
+  }
+
+  .dp-md2-filter-chip.is-active {
+    background: var(--color-accent);
+    color: var(--text-on-accent);
+    border-color: var(--color-accent);
+  }
+
+  .dp-md2-inbox-list {
+    @apply flex flex-col;
+    gap: 4px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .dp-md2-inbox-empty {
+    color: var(--color-ink-faint);
+    font-size: 0.8rem;
+    padding: 6px 4px;
+  }
+
+  .dp-md2-inbox-item {
+    @apply flex items-center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--color-hairline);
+    background: var(--background-primary);
+    cursor: grab;
+    overflow: hidden;
+  }
+
+  .dp-md2-inbox-item:active {
+    cursor: grabbing;
+  }
+
+  .dp-md2-inbox-item.is-dragging {
+    opacity: 0.4;
+  }
+
+  .dp-md2-inbox-item:hover {
+    border-color: var(--color-accent);
+  }
+
+  .dp-md2-inbox-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    border: 1px solid var(--background-modifier-border);
+    background: transparent;
+  }
+
+  .dp-md2-inbox-text {
+    color: var(--color-ink);
+    font-size: 0.85rem;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ---------- day grid ---------- */
+
+  .dp-md2-grid {
+    @apply grid;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .dp-md2-day {
+    @apply flex flex-col;
+    border: 1px solid var(--color-hairline);
+    border-radius: 6px;
+    background: var(--color-paper-2);
+    overflow: hidden;
+  }
+
+  .dp-md2-day.is-today {
+    border-color: var(--color-accent);
+  }
+
+  .dp-md2-day-header {
+    @apply flex items-center justify-between;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .dp-md2-day-link {
+    background: transparent;
+    border: none;
+    color: var(--color-ink);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+
+  .dp-md2-day-link:hover {
+    color: var(--color-accent);
+  }
+
+  .dp-md2-day-count {
+    color: var(--color-ink-muted);
+    font-size: 0.75rem;
+  }
+
+  /* ---------- timeline ---------- */
+
+  .dp-md2-timeline {
+    position: relative;
+    flex: 1;
+    overflow: auto;
+  }
+
+  .dp-md2-timeline-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .dp-md2-timeline-line {
+    height: 1px;
+    background: var(--color-hairline);
+  }
+
+  .dp-md2-timeline-label {
+    position: absolute;
+    top: -7px;
+    left: 4px;
+    font-size: 0.65rem;
+    color: var(--color-ink-faint);
+    background: var(--color-paper-2);
+    padding: 0 2px;
+  }
+
+  .dp-md2-timeline-blocks {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .dp-md2-timeline-block {
+    position: absolute;
+    pointer-events: auto;
+    border: 1px solid color-mix(in srgb, var(--dp-md2-color) 70%, black);
+    border-radius: 4px;
+    padding: 2px 4px;
+    cursor: grab;
+    overflow: hidden;
+    text-align: left;
+    color: #fff;
+    background: var(--dp-md2-color);
+  }
+
+  .dp-md2-timeline-block:active {
+    cursor: grabbing;
+  }
+
+  .dp-md2-timeline-block.is-dragging {
+    opacity: 0.4;
+  }
+
+  .dp-md2-timeline-block.is-done {
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+
+  .dp-md2-timeline-block-text {
+    font-size: 0.7rem;
+    line-height: 1.1;
+    display: block;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---------- drop indicator ---------- */
+
+  .dp-md2-drop-indicator {
+    position: absolute;
+    left: 0;
+    right: 2px;
+    border: 1px dashed var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .dp-md2-drop-indicator-time {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 0.65rem;
+    color: var(--color-accent);
+    font-weight: 600;
+  }
+}
+
+/* ============================================================
  *  mobile-drag-drop polyfill
  *  These rules apply to the floating drag image the polyfill clones
  *  onto <body> during touch drag. They sit outside .today-root because
@@ -4325,5 +4736,13 @@
 .today-root .dp-md-timeline-block:focus,
 .today-root .dp-md-timeline-block:active {
   background-color: var(--dp-color);
+  color: #fff;
+}
+
+.today-root .dp-md2-timeline-block,
+.today-root .dp-md2-timeline-block:hover,
+.today-root .dp-md2-timeline-block:focus,
+.today-root .dp-md2-timeline-block:active {
+  background-color: var(--dp-md2-color);
   color: #fff;
 }
