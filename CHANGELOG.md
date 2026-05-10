@@ -2,6 +2,8 @@
 
 ## 2026-05-09
 
+- [fix]: Navbar date title link was still rendering blue/underlined despite the previous override. Cause: the override sat inside `@layer components`, but Obsidian's default `a { color: var(--text-accent); }` is unlayered, and unlayered styles always beat layered ones regardless of selector specificity. Moved the override out of the layer (placed alongside the existing unlayered `.dnd-poly-drag-image` rules at the bottom of `src/styles.src.css`) so it actually wins the cascade. Now: `--color-ink` color, no underline, `cursor: pointer`, `opacity: 0.75` on hover.
+
 - [chore]: Navbar date title link no longer turns blue or gets underlined on hover — keeps `--color-ink` color and no underline in all states (base / hover / focus / active), with a subtle `opacity: 0.75` on hover as the only affordance. File: `src/styles.src.css` (`a.dp-datenav-label.is-clickable` rule). The user asked: "update the formatting so it's not blue and not underlined".
 
 - [feat]: Navbar date title (e.g. "Sat, May 9, 2026") is now clickable and opens the displayed daily note; the redundant `daily/YYYY-MM-DD.md` path subtitle below the date has been removed. Files: `src/view.ts` (`renderDateNav` takes a `displayFile` and renders an `<a class="dp-datenav-label is-clickable">` that calls `openFile`; primary `renderSection` call passes `""` for subtitle so the path link is dropped), `src/styles.src.css` (hover/cursor styles for `a.dp-datenav-label.is-clickable`). The user asked: "update the title on the navbar of the plugin to be clickable. Right now it says Sat, May 9, 2026. When i click this, it should open the file. This means you can get rid of the daily/YYYY-MM-DD.md on the second line".

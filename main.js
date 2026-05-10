@@ -373,6 +373,9 @@ function buildTagRegexes(prefixes) {
     taskContext: new RegExp(
       `#${esc(prefixes.taskContext)}\\/([\\w-]+)`,
       "g"
+    ),
+    taskCreated: new RegExp(
+      `#${esc(prefixes.taskCreated)}\\/(\\d{4}-\\d{2}-\\d{2})\\b`
     )
   };
 }
@@ -755,6 +758,12 @@ function setTaskChecked(rawLine, checked) {
   const body = m[3];
   return `${indent}- [${checked ? "x" : " "}] ${body}`;
 }
+function setTaskCreatedTag(rawLine, dateStr, prefixes) {
+  const re = buildTagRegexes(prefixes).taskCreated;
+  if (re.test(rawLine))
+    return rawLine;
+  return appendTag(rawLine, `#${prefixes.taskCreated}/${dateStr}`);
+}
 function setTaskTitle(rawLine, newTitle, prefixes) {
   const m = TASK_LINE.exec(rawLine);
   if (!m)
@@ -764,7 +773,7 @@ function setTaskTitle(rawLine, newTitle, prefixes) {
   const body = m[3];
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)}|${esc(prefixes.taskCreated)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   let tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -813,7 +822,7 @@ function setTaskDescription(rawLine, newDescription, prefixes) {
     return rawLine;
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)}|${esc(prefixes.taskCreated)})\\/`
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
@@ -1169,6 +1178,12 @@ function keyLabel(key) {
       return "Exercise";
     case "taskId":
       return "Task ID";
+    case "actual":
+      return "Actual time";
+    case "taskContext":
+      return "Task context";
+    case "taskCreated":
+      return "Task created";
   }
 }
 
@@ -1234,7 +1249,9 @@ var DEFAULT_SETTINGS = {
   habitWeekStart: 0,
   habitsHideCompleted: false,
   habitsStatsWindow: 10,
-  copySubtasksOnAutocomplete: false
+  copySubtasksOnAutocomplete: false,
+  inboxPath: "{daily}/_inbox.md",
+  confirmCollectMigration: true
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1379,7 +1396,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       "exercise",
       "taskId",
       "actual",
-      "taskContext"
+      "taskContext",
+      "taskCreated"
     ];
     const changes = [];
     for (const key of keys) {
@@ -1490,6 +1508,47 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       (t) => t.setValue(this.plugin.settings.copySubtasksOnAutocomplete).onChange(async (v) => {
         this.plugin.settings.copySubtasksOnAutocomplete = v;
         await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Inbox").setHeading();
+    const inboxDesc = document.createDocumentFragment();
+    inboxDesc.append(
+      "Where the ",
+      makeCode("Collect unfinished tasks into inbox"),
+      " command writes. Use ",
+      makeCode("{daily}"),
+      " to refer to your daily-notes folder. Default ",
+      makeCode("{daily}/_inbox.md"),
+      ". Migrated tasks are appended to this file as ",
+      makeCode("- [ ]"),
+      " copies; the source line gets ",
+      makeCode("- [>]"),
+      " (migrated) and both share a ",
+      makeCode("#tid/"),
+      " task id."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Inbox file path").setDesc(inboxDesc).addText((t) => {
+      t.setPlaceholder("{daily}/_inbox.md").setValue(this.plugin.settings.inboxPath).onChange(async (v) => {
+        this.plugin.settings.inboxPath = v.trim();
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian2.Setting(containerEl).setName("Confirm before migrating").setDesc(
+      "Show a preview modal listing the tasks to migrate before writing. Off skips straight to the write and shows a notice with the count."
+    ).addToggle(
+      (t) => t.setValue(this.plugin.settings.confirmCollectMigration).onChange(async (v) => {
+        this.plugin.settings.confirmCollectMigration = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Task created tag prefix").setDesc(
+      "Stamps a creation date on tasks made through the new-task modal. Default `tcr` \u2192 `#tcr/2026-05-09`. Carried with migrated tasks so the inbox copy keeps the original date."
+    ).addText(
+      (t) => t.setValue(this.plugin.settings.prefixes.taskCreated).onChange(async (v) => {
+        if (/^[a-zA-Z]+$/.test(v)) {
+          this.plugin.settings.prefixes.taskCreated = v;
+          await this.plugin.saveSettings();
+        }
       })
     );
   }
@@ -2791,6 +2850,15 @@ function parseFilenameDate(basename, fileFormat) {
   const m = (0, import_obsidian3.moment)(basename, fmt, true);
   return m.isValid() ? m.toDate() : null;
 }
+function todayDateStr() {
+  return toIsoDateStr(new Date());
+}
+function toIsoDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 var MONTH_NAMES = [
   "january",
   "february",
@@ -3950,6 +4018,11 @@ var TodayView = class extends import_obsidian4.ItemView {
             this.plugin.settings.prefixes
           );
         }
+        newLine = setTaskCreatedTag(
+          newLine,
+          todayDateStr(),
+          this.plugin.settings.prefixes
+        );
         void this.appendTaskAfterLast(
           file,
           newLine,

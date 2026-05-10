@@ -211,5 +211,11 @@ function keyLabel(key: keyof TagPrefixes): string {
       return "Exercise";
     case "taskId":
       return "Task ID";
+    case "actual":
+      return "Actual time";
+    case "taskContext":
+      return "Task context";
+    case "taskCreated":
+      return "Task created";
   }
 }

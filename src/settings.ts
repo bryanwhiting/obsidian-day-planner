@@ -144,6 +144,13 @@ export interface TodaySettings {
   // description, and tags are always copied; sub-tasks are gated by this flag
   // because most "recurring task" use-cases want a fresh, empty checklist.
   copySubtasksOnAutocomplete: boolean;
+  // Vault path the "Collect unfinished" command writes to. The literal token
+  // `{daily}` is replaced at runtime with the daily-notes folder. Default
+  // `{daily}/_inbox.md`.
+  inboxPath: string;
+  // When true (default), the collect-unfinished command shows a preview modal
+  // with the count and tasks before writing. Off skips straight to the write.
+  confirmCollectMigration: boolean;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -184,6 +191,8 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   habitsHideCompleted: false,
   habitsStatsWindow: 10,
   copySubtasksOnAutocomplete: false,
+  inboxPath: "{daily}/_inbox.md",
+  confirmCollectMigration: true,
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -358,6 +367,7 @@ export class TodaySettingTab extends PluginSettingTab {
       "taskId",
       "actual",
       "taskContext",
+      "taskCreated",
     ];
     const changes: PrefixChange[] = [];
     for (const key of keys) {
@@ -520,6 +530,65 @@ export class TodaySettingTab extends PluginSettingTab {
           }),
       );
 
+    new Setting(containerEl).setName("Inbox").setHeading();
+
+    const inboxDesc = document.createDocumentFragment();
+    inboxDesc.append(
+      "Where the ",
+      makeCode("Collect unfinished tasks into inbox"),
+      " command writes. Use ",
+      makeCode("{daily}"),
+      " to refer to your daily-notes folder. Default ",
+      makeCode("{daily}/_inbox.md"),
+      ". Migrated tasks are appended to this file as ",
+      makeCode("- [ ]"),
+      " copies; the source line gets ",
+      makeCode("- [>]"),
+      " (migrated) and both share a ",
+      makeCode("#tid/"),
+      " task id.",
+    );
+    new Setting(containerEl)
+      .setName("Inbox file path")
+      .setDesc(inboxDesc)
+      .addText((t) => {
+        t.setPlaceholder("{daily}/_inbox.md")
+          .setValue(this.plugin.settings.inboxPath)
+          .onChange(async (v) => {
+            this.plugin.settings.inboxPath = v.trim();
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Confirm before migrating")
+      .setDesc(
+        "Show a preview modal listing the tasks to migrate before writing. Off skips straight to the write and shows a notice with the count.",
+      )
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.confirmCollectMigration)
+          .onChange(async (v) => {
+            this.plugin.settings.confirmCollectMigration = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Task created tag prefix")
+      .setDesc(
+        "Stamps a creation date on tasks made through the new-task modal. Default `tcr` → `#tcr/2026-05-09`. Carried with migrated tasks so the inbox copy keeps the original date.",
+      )
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.prefixes.taskCreated)
+          .onChange(async (v) => {
+            if (/^[a-zA-Z]+$/.test(v)) {
+              this.plugin.settings.prefixes.taskCreated = v;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
   }
 
   private renderPomodoroSection(containerEl: HTMLElement): void {

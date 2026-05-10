@@ -39,6 +39,7 @@ import {
   setTaskIdTag,
   parseTaskId,
   generateTaskId,
+  setTaskCreatedTag,
   snapToInterval,
   formatTotal,
   formatCompactDuration,
@@ -73,6 +74,7 @@ import {
   startOfDay,
   buildDateSuggestions,
   buildDateLinkInsert,
+  todayDateStr,
 } from "./dailyNote";
 import type { DailyNoteFallback } from "./dailyNote";
 import {
@@ -1128,6 +1130,11 @@ export class TodayView extends ItemView {
             this.plugin.settings.prefixes,
           );
         }
+        newLine = setTaskCreatedTag(
+          newLine,
+          todayDateStr(),
+          this.plugin.settings.prefixes,
+        );
         void this.appendTaskAfterLast(
           file,
           newLine,

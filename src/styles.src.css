@@ -132,17 +132,6 @@
     font-feature-settings: "ss01";
   }
 
-  a.dp-datenav-label.is-clickable,
-  a.dp-datenav-label.is-clickable:hover,
-  a.dp-datenav-label.is-clickable:focus,
-  a.dp-datenav-label.is-clickable:active {
-    @apply cursor-pointer no-underline;
-    color: var(--color-ink);
-    text-decoration: none;
-  }
-  a.dp-datenav-label.is-clickable:hover {
-    opacity: 0.75;
-  }
 
   .dp-nav-btn {
     @apply inline-flex items-center justify-center cursor-pointer transition;
@@ -3793,4 +3782,19 @@
   transition-property: transform, -webkit-transform !important;
   transition-duration: 250ms !important;
   transition-timing-function: ease-out !important;
+}
+
+/* Unlayered: Obsidian's default `a { color: var(--text-accent); }` is also
+ * unlayered, so a layered rule (even at higher specificity) loses to it.
+ * Keep the navbar date link in body-text color with no underline. */
+.today-root a.dp-datenav-label.is-clickable,
+.today-root a.dp-datenav-label.is-clickable:hover,
+.today-root a.dp-datenav-label.is-clickable:focus,
+.today-root a.dp-datenav-label.is-clickable:active {
+  color: var(--color-ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+.today-root a.dp-datenav-label.is-clickable:hover {
+  opacity: 0.75;
 }

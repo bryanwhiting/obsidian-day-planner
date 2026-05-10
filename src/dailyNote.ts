@@ -338,6 +338,68 @@ function parseFilenameDate(basename: string, fileFormat: string): Date | null {
   return m.isValid() ? m.toDate() : null;
 }
 
+export interface DailyNoteOptions {
+  // Vault-relative folder, normalized without leading/trailing slashes.
+  // Empty string means daily notes live at the vault root.
+  folder: string;
+  // Moment.js format string (e.g. "YYYY-MM-DD").
+  format: string;
+}
+
+// Resolves the active daily-notes folder and format. Prefers the core
+// Daily Notes plugin's settings, falling back to the user-configured values
+// in this plugin. Mirrors the precedence used by `resolveDailyNote`.
+export function getDailyNoteOptions(
+  app: App,
+  fallback: DailyNoteFallback,
+): DailyNoteOptions {
+  const opts = readDailyNotesOptions(app);
+  const format = ((opts.format || fallback.format) || "YYYY-MM-DD").trim();
+  const folder = stripSlashes((opts.folder ?? fallback.folder).trim());
+  return { folder, format };
+}
+
+// Returns YYYY-MM-DD when `basename` parses against `format`, else null.
+// The output is always canonical ISO regardless of the input format — used
+// for tag values like `#tcr/2026-05-09` that must stay format-stable.
+export function parseDailyNoteDateStr(
+  basename: string,
+  format: string,
+): string | null {
+  const d = parseFilenameDate(basename, format);
+  return d ? toIsoDateStr(d) : null;
+}
+
+// Enumerates every markdown file in the daily folder whose basename parses
+// against the daily-note format. Returns them sorted ascending by date.
+export function listDailyNotes(
+  app: App,
+  options: DailyNoteOptions,
+): { file: TFile; date: string }[] {
+  const out: { file: TFile; date: string }[] = [];
+  for (const file of app.vault.getMarkdownFiles()) {
+    const fileFolder = stripSlashes(file.parent?.path ?? "");
+    if (fileFolder !== options.folder) continue;
+    const date = parseDailyNoteDateStr(file.basename, options.format);
+    if (date) out.push({ file, date });
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+// Today as YYYY-MM-DD using the local date — used for stamping `#tcr/` on
+// new tasks. Independent of the daily-note format setting.
+export function todayDateStr(): string {
+  return toIsoDateStr(new Date());
+}
+
+function toIsoDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 const MONTH_NAMES = [
   "january", "february", "march", "april", "may", "june",
   "july", "august", "september", "october", "november", "december",

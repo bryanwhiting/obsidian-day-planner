@@ -613,6 +613,39 @@ export function setTaskChecked(rawLine: string, checked: boolean): string {
   return `${indent}- [${checked ? "x" : " "}] ${body}`;
 }
 
+// Marks a task line as migrated by replacing its checkbox with `[>]`. The
+// migrated state is distinct from completion: the task moved to another
+// file (typically the inbox) where a `[ ]` copy carrying the same
+// `#tid/<id>` continues to live.
+export function setTaskMigrated(rawLine: string): string {
+  const m = TASK_LINE.exec(rawLine);
+  if (!m) return rawLine;
+  const indent = m[1];
+  const body = m[3];
+  return `${indent}- [>] ${body}`;
+}
+
+export function parseTaskCreated(
+  body: string,
+  prefixes: TagPrefixes,
+): string | null {
+  const m = buildTagRegexes(prefixes).taskCreated.exec(body);
+  return m ? m[1] : null;
+}
+
+// Adds `#<taskCreated>/<YYYY-MM-DD>` to the line if it doesn't already
+// carry one. No-op when a creation tag is already present — we never
+// overwrite an existing date.
+export function setTaskCreatedTag(
+  rawLine: string,
+  dateStr: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).taskCreated;
+  if (re.test(rawLine)) return rawLine;
+  return appendTag(rawLine, `#${prefixes.taskCreated}/${dateStr}`);
+}
+
 export function setTaskTitle(
   rawLine: string,
   newTitle: string,
@@ -626,7 +659,7 @@ export function setTaskTitle(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)}|${esc(prefixes.taskCreated)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   let tagsPart = tagMatch ? body.slice(tagMatch.index).trim() : "";
@@ -695,7 +728,7 @@ export function setTaskDescription(
 
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tagRe = new RegExp(
-    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)})\\/`,
+    `#(?:${esc(prefixes.duration)}|${esc(prefixes.time)}|${esc(prefixes.order)}|${esc(prefixes.project)}|${esc(prefixes.exercise)}|${esc(prefixes.taskId)}|${esc(prefixes.taskContext)}|${esc(prefixes.taskCreated)})\\/`,
   );
   const tagMatch = tagRe.exec(body);
   if (tagMatch) {
