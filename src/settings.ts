@@ -163,6 +163,8 @@ export interface TodaySettings {
   // When true (default), the collect-unfinished command shows a preview modal
   // with the count and tasks before writing. Off skips straight to the write.
   confirmCollectMigration: boolean;
+  // Default number of day columns shown in the multi-day view (3 or 7).
+  multiDayCount: number;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -207,6 +209,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   copySubtasksOnAutocomplete: false,
   inboxPath: "{daily}/_inbox.md",
   confirmCollectMigration: true,
+  multiDayCount: 7,
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;

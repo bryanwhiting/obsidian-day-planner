@@ -18,9 +18,12 @@
     "@types/node": "^16.11.6",
     "builtin-modules": "^3.3.0",
     "esbuild": "0.17.3",
+    "esbuild-svelte": "^0.9.5",
     "obsidian": "latest",
+    "svelte": "^5.55.5",
+    "svelte-preprocess": "^6.0.3",
     "tslib": "2.4.0",
-    "typescript": "4.7.4"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "mobile-drag-drop": "^3.0.0-rc.0"

@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import esbuildSvelte from "esbuild-svelte";
+import { sveltePreprocess } from "svelte-preprocess";
 
 const prod = process.argv[2] === "production";
 
@@ -29,6 +31,14 @@ const ctx = await esbuild.context({
   sourcemap: prod ? false : "inline",
   treeShaking: true,
   outfile: "main.js",
+  mainFields: ["svelte", "browser", "module", "main"],
+  conditions: ["svelte", "browser"],
+  plugins: [
+    esbuildSvelte({
+      preprocess: sveltePreprocess(),
+      compilerOptions: { css: "injected" },
+    }),
+  ],
 });
 
 if (prod) {

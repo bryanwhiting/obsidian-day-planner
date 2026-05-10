@@ -76,7 +76,7 @@ export async function collectUnfinished(plugin: TodayPlugin): Promise<void> {
   );
 }
 
-function resolveInboxPath(template: string, dailyFolder: string): string {
+export function resolveInboxPath(template: string, dailyFolder: string): string {
   const t = (template || "").trim();
   if (!t) return "";
   return normalizePath(t.replace(/\{daily\}/g, dailyFolder));

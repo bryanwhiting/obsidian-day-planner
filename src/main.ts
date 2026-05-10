@@ -34,6 +34,7 @@ import { buildPeopleSuggestions, buildPersonLinkInsert } from "./people";
 import { collectUnfinished } from "./collect";
 import { HabitsScanner } from "./habits";
 import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
+import { MultiDayView, VIEW_TYPE_MULTI_DAY } from "./multiDayView";
 import { moment } from "obsidian";
 
 let polyfillInstalled = false;
@@ -64,8 +65,17 @@ export default class TodayPlugin extends Plugin {
       (leaf) => new HabitsStatsView(leaf, this),
     );
 
+    this.registerView(
+      VIEW_TYPE_MULTI_DAY,
+      (leaf) => new MultiDayView(leaf, this),
+    );
+
     this.addRibbonIcon("calendar-clock", "Open Today", () => {
       void this.activateView();
+    });
+
+    this.addRibbonIcon("calendar-range", "Open multi-day view", () => {
+      void this.activateMultiDayView();
     });
 
     this.addCommand({
@@ -84,6 +94,12 @@ export default class TodayPlugin extends Plugin {
       id: "open-habits-stats",
       name: "Open habit stats",
       callback: () => void this.activateHabitsStatsView(),
+    });
+
+    this.addCommand({
+      id: "open-multi-day",
+      name: "Open multi-day view",
+      callback: () => void this.activateMultiDayView(),
     });
 
     this.addCommand({
@@ -221,6 +237,23 @@ export default class TodayPlugin extends Plugin {
     if (!leaf) return;
     await leaf.setViewState({
       type: VIEW_TYPE_HABITS_STATS,
+      active: true,
+    });
+    this.app.workspace.revealLeaf(leaf);
+  }
+
+  async activateMultiDayView(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_MULTI_DAY);
+    let leaf: WorkspaceLeaf | null;
+    if (existing.length > 0) {
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      return;
+    }
+    leaf = this.app.workspace.getLeaf("tab");
+    if (!leaf) return;
+    await leaf.setViewState({
+      type: VIEW_TYPE_MULTI_DAY,
       active: true,
     });
     this.app.workspace.revealLeaf(leaf);
