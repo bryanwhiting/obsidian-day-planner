@@ -24,8 +24,10 @@ import {
   sumSubtaskDurations,
   type ParsedTask,
 } from "./parser";
+import { contrastingTextColor } from "./colors";
 import { layoutTimeline } from "./scheduler";
 import { moveTaskBetweenDailyNotes } from "./taskMove";
+import { TodayView, VIEW_TYPE_TODAY } from "./view";
 
 export const VIEW_TYPE_MULTI_DAY = "today-multi-day";
 
@@ -383,7 +385,11 @@ export class MultiDayView extends ItemView {
         this.dragState = null;
         this.hideDropIndicator();
       });
-      li.addEventListener("click", () => void this.openTask(task, this.inbox.file));
+      // Inbox tasks aren't tied to a specific day; the modal anchors its
+      // move-picker to today, since that's the most likely target.
+      li.addEventListener("click", () => {
+        void this.openEditor(this.inbox.file, task, new Date());
+      });
     }
   }
 
@@ -452,18 +458,27 @@ export class MultiDayView extends ItemView {
     const timeline = parent.createDiv({ cls: "dp-md-timeline" });
     timeline.style.height = `${heightPx}px`;
 
+    // Left gutter holds the hour labels so blocks don't overlap them. The
+    // blocks layer sits to the right of this gutter, mirroring how the
+    // daily-view timeline lays out its hour labels + block lanes.
+    const gutter = timeline.createDiv({ cls: "dp-md-timeline-gutter" });
     for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
       const top = (h * 60 - startMin) * TIMELINE_PX_PER_MIN;
-      const row = timeline.createDiv({ cls: "dp-md-timeline-row" });
-      row.style.top = `${top}px`;
-      row.createDiv({ cls: "dp-md-timeline-line" });
-      row.createDiv({
+      const lbl = gutter.createDiv({
         cls: "dp-md-timeline-label",
         text: formatClockShort(h * 60),
       });
+      lbl.style.top = `${top}px`;
     }
 
-    const blocksLayer = timeline.createDiv({ cls: "dp-md-timeline-blocks" });
+    const lanes = timeline.createDiv({ cls: "dp-md-timeline-lanes" });
+    for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
+      const top = (h * 60 - startMin) * TIMELINE_PX_PER_MIN;
+      const line = lanes.createDiv({ cls: "dp-md-timeline-line" });
+      line.style.top = `${top}px`;
+    }
+
+    const blocksLayer = lanes.createDiv({ cls: "dp-md-timeline-blocks" });
     const scheduled = day.tasks.filter((t) => t.startMin !== null);
     const layout = layoutTimeline(
       scheduled,
@@ -472,53 +487,14 @@ export class MultiDayView extends ItemView {
       TIMELINE_LANE_CAP,
     );
     for (const b of layout) {
-      const el = blocksLayer.createEl("button", {
-        cls: "dp-md-timeline-block",
-      });
-      if (b.task.checked) el.addClass("is-done");
-      el.style.top = `${b.topPx}px`;
-      el.style.height = `${Math.max(8, b.heightPx)}px`;
-      el.style.left = `${b.leftPct}%`;
-      el.style.width = `calc(${b.widthPct}% - 2px)`;
-      const color = colorFor(b.task, colorMap);
-      el.style.setProperty("--dp-color", color ?? "var(--color-accent)");
-      el.setAttribute("title", bodyText(b.task));
-      el.createSpan({
-        cls: "dp-md-timeline-block-text",
-        text: bodyText(b.task),
-      });
-      el.addEventListener("click", () => void this.openTask(b.task, day.file));
-
-      // Re-drag scheduled blocks: dragging from the timeline lets the user
-      // reschedule (drop on another column) or unschedule (drop on inbox).
-      el.draggable = true;
-      el.addEventListener("dragstart", (ev) => {
-        if (!day.file) return;
-        const rect = el.getBoundingClientRect();
-        this.dragState = {
-          task: b.task,
-          origin: "day",
-          fromFile: day.file,
-          grabOffsetY: ev.clientY - rect.top,
-        };
-        el.addClass("is-dragging");
-        if (ev.dataTransfer) {
-          ev.dataTransfer.setData("text/plain", b.task.rawLine);
-          ev.dataTransfer.effectAllowed = "move";
-        }
-      });
-      el.addEventListener("dragend", () => {
-        el.removeClass("is-dragging");
-        this.dragState = null;
-        this.hideDropIndicator();
-      });
+      this.renderBlock(blocksLayer, day, b, colorMap);
     }
 
     // Drop handling: snap to settings.snapMin, show a preview indicator, and
     // on drop write time + (optionally) move the task between daily notes.
     const computeSnap = (clientY: number): number | null => {
       if (!this.dragState) return null;
-      const rect = timeline.getBoundingClientRect();
+      const rect = lanes.getBoundingClientRect();
       const yPx = clientY - rect.top + timeline.scrollTop - this.dragState.grabOffsetY;
       const rawMin = yPx / TIMELINE_PX_PER_MIN + startMin;
       const snapped = snapToInterval(rawMin, settings.snapMin);
@@ -526,7 +502,7 @@ export class MultiDayView extends ItemView {
       return Math.max(startMin, Math.min(maxStart, snapped));
     };
 
-    timeline.addEventListener("dragover", (ev) => {
+    lanes.addEventListener("dragover", (ev) => {
       if (!this.dragState) return;
       ev.preventDefault();
       if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
@@ -539,11 +515,11 @@ export class MultiDayView extends ItemView {
         startMin,
       );
     });
-    timeline.addEventListener("dragleave", (ev) => {
+    lanes.addEventListener("dragleave", (ev) => {
       const related = ev.relatedTarget as Node | null;
-      if (!related || !timeline.contains(related)) this.hideDropIndicator();
+      if (!related || !lanes.contains(related)) this.hideDropIndicator();
     });
-    timeline.addEventListener("drop", (ev) => {
+    lanes.addEventListener("drop", (ev) => {
       if (!this.dragState) return;
       ev.preventDefault();
       const snapped = computeSnap(ev.clientY);
@@ -551,6 +527,276 @@ export class MultiDayView extends ItemView {
       if (snapped === null) return;
       void this.dropToDay(this.dragState, day, snapped);
     });
+  }
+
+  // Render a single timeline block using the daily-view's `dp-block` DOM and
+  // class names so multi-day blocks inherit the same color, padding, and
+  // resize-handle styling. A `.dp-block-md` modifier opts in to the narrower
+  // typography this view needs.
+  private renderBlock(
+    layer: HTMLElement,
+    day: DayBundle,
+    block: { task: ParsedTask; topPx: number; heightPx: number; leftPct: number; widthPct: number },
+    colorMap: Map<string, string>,
+  ): void {
+    const el = layer.createDiv({ cls: "dp-block dp-block-md" });
+    if (block.task.checked) el.addClass("is-done");
+    if (!block.task.hasExplicitDuration) el.addClass("is-implicit-duration");
+    if (block.task.durationMin <= 20) el.addClass("is-compact");
+    if (block.widthPct < 99.5) el.addClass("is-narrow");
+
+    el.style.top = `${block.topPx}px`;
+    el.style.height = `${Math.max(18, block.heightPx)}px`;
+    el.style.left = `${block.leftPct}%`;
+    el.style.width = `calc(${block.widthPct}% - 2px)`;
+
+    const color = colorFor(block.task, colorMap);
+    if (color) {
+      el.style.setProperty("--dp-color", color);
+      el.style.setProperty("--dp-on-color", contrastingTextColor(color));
+      el.addClass("has-project-color");
+    }
+
+    const row = el.createDiv({ cls: "dp-block-row" });
+    if (block.task.startMin !== null) {
+      const meta = row.createSpan({ cls: "dp-block-meta" });
+      meta.createSpan({
+        cls: "dp-block-time",
+        text: formatClockShort(block.task.startMin),
+      });
+    }
+    row.createSpan({
+      cls: "dp-block-text",
+      text: bodyText(block.task),
+    });
+
+    el.setAttribute("title", bodyText(block.task));
+
+    el.addEventListener("click", () => {
+      void this.openEditor(day.file, block.task, day.date);
+    });
+
+    el.draggable = true;
+    el.addEventListener("dragstart", (ev) => {
+      if (!day.file) return;
+      const rect = el.getBoundingClientRect();
+      this.dragState = {
+        task: block.task,
+        origin: "day",
+        fromFile: day.file,
+        grabOffsetY: ev.clientY - rect.top,
+      };
+      el.addClass("is-dragging");
+      if (ev.dataTransfer) {
+        ev.dataTransfer.setData("text/plain", block.task.rawLine);
+        ev.dataTransfer.effectAllowed = "move";
+      }
+    });
+    el.addEventListener("dragend", () => {
+      el.removeClass("is-dragging");
+      this.dragState = null;
+      this.hideDropIndicator();
+    });
+
+    // Resize handles — bottom adjusts duration only, top adjusts both start
+    // and duration (anchored end). Mirrors the daily-view block.
+    if (day.file) {
+      const file = day.file;
+      const bottom = el.createDiv({ cls: "dp-resize-handle" });
+      bottom.addEventListener("pointerdown", (ev) =>
+        this.beginResize(ev, el, file, block.task),
+      );
+      if (block.task.startMin !== null) {
+        const top = el.createDiv({
+          cls: "dp-resize-handle dp-resize-handle-top",
+        });
+        top.addEventListener("pointerdown", (ev) =>
+          this.beginResizeTop(ev, el, file, block.task),
+        );
+      }
+    }
+  }
+
+  // Bottom-edge drag → adjust duration. Snaps to settings.snapMin; on
+  // pointerup writes a new `#d/<…>` tag onto the line. Duplicates the
+  // daily-view behavior so the multi-day timeline feels the same.
+  private beginResize(
+    ev: PointerEvent,
+    blockEl: HTMLElement,
+    file: TFile,
+    task: ParsedTask,
+  ): void {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const handle = ev.currentTarget as HTMLElement;
+    const settings = this.plugin.settings;
+    const startY = ev.clientY;
+    const startHeightPx = blockEl.offsetHeight;
+    const minDuration = settings.snapMin;
+    const pxPerMin = TIMELINE_PX_PER_MIN;
+    let pendingDuration = task.durationMin;
+
+    blockEl.draggable = false;
+    blockEl.addClass("is-resizing");
+    handle.setPointerCapture(ev.pointerId);
+
+    const onMove = (e: PointerEvent) => {
+      const dy = e.clientY - startY;
+      const newHeightPx = Math.max(minDuration * pxPerMin, startHeightPx + dy);
+      const rawMin = newHeightPx / pxPerMin;
+      pendingDuration = Math.max(
+        minDuration,
+        snapToInterval(rawMin, settings.snapMin),
+      );
+      blockEl.style.height = `${pendingDuration * pxPerMin}px`;
+    };
+
+    const onUp = (e: PointerEvent) => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      blockEl.removeClass("is-resizing");
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {}
+      // Swallow the click that fires after pointerup so it doesn't bubble to
+      // the block and open the edit modal.
+      const suppressClick = (clickEv: MouseEvent) => clickEv.stopPropagation();
+      blockEl.addEventListener("click", suppressClick, { capture: true });
+      window.setTimeout(
+        () => blockEl.removeEventListener("click", suppressClick, true),
+        0,
+      );
+      const finalDuration = pendingDuration;
+      if (finalDuration === task.durationMin) {
+        blockEl.draggable = true;
+        return;
+      }
+      void this.applyDurationChange(file, task, finalDuration).finally(() => {
+        blockEl.draggable = true;
+      });
+    };
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
+  }
+
+  // Top-edge drag → move the start time, anchoring the end so the duration
+  // shrinks/grows by the inverse of the start delta.
+  private beginResizeTop(
+    ev: PointerEvent,
+    blockEl: HTMLElement,
+    file: TFile,
+    task: ParsedTask,
+  ): void {
+    if (task.startMin === null) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const handle = ev.currentTarget as HTMLElement;
+    const settings = this.plugin.settings;
+    const startY = ev.clientY;
+    const startTopPx = blockEl.offsetTop;
+    const startHeightPx = blockEl.offsetHeight;
+    const startStartMin = task.startMin;
+    const startDurationMin = task.durationMin;
+    const minDuration = settings.snapMin;
+    const pxPerMin = TIMELINE_PX_PER_MIN;
+    let pendingStart = startStartMin;
+    let pendingDuration = startDurationMin;
+
+    blockEl.draggable = false;
+    blockEl.addClass("is-resizing");
+    handle.setPointerCapture(ev.pointerId);
+
+    const onMove = (e: PointerEvent) => {
+      const dy = e.clientY - startY;
+      const rawNewStart = startStartMin + dy / pxPerMin;
+      let snappedStart = snapToInterval(rawNewStart, settings.snapMin);
+      const maxStart = startStartMin + startDurationMin - minDuration;
+      if (snappedStart > maxStart) snappedStart = maxStart;
+      if (snappedStart < 0) snappedStart = 0;
+      pendingStart = snappedStart;
+      pendingDuration = startDurationMin - (snappedStart - startStartMin);
+      const deltaPx = (snappedStart - startStartMin) * pxPerMin;
+      blockEl.style.top = `${startTopPx + deltaPx}px`;
+      blockEl.style.height = `${startHeightPx - deltaPx}px`;
+    };
+
+    const onUp = (e: PointerEvent) => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      blockEl.removeClass("is-resizing");
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {}
+      const suppressClick = (clickEv: MouseEvent) => clickEv.stopPropagation();
+      blockEl.addEventListener("click", suppressClick, { capture: true });
+      window.setTimeout(
+        () => blockEl.removeEventListener("click", suppressClick, true),
+        0,
+      );
+      if (
+        pendingStart === startStartMin &&
+        pendingDuration === startDurationMin
+      ) {
+        blockEl.draggable = true;
+        return;
+      }
+      void this.applyStartAndDurationChange(
+        file,
+        task,
+        pendingStart,
+        pendingDuration,
+      ).finally(() => {
+        blockEl.draggable = true;
+      });
+    };
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
+  }
+
+  private async applyDurationChange(
+    file: TFile,
+    task: ParsedTask,
+    newDurationMin: number,
+  ): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const idx = task.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== task.rawLine)
+        return content;
+      const next = setDurationTag(lines[idx], newDurationMin, prefixes);
+      if (next === lines[idx]) return content;
+      lines[idx] = next;
+      return lines.join("\n");
+    });
+    await this.refresh();
+  }
+
+  private async applyStartAndDurationChange(
+    file: TFile,
+    task: ParsedTask,
+    newStartMin: number,
+    newDurationMin: number,
+  ): Promise<void> {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const idx = task.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== task.rawLine)
+        return content;
+      let next = setTimeTag(lines[idx], newStartMin, prefixes);
+      next = setDurationTag(next, newDurationMin, prefixes);
+      if (next === lines[idx]) return content;
+      lines[idx] = next;
+      return lines.join("\n");
+    });
+    await this.refresh();
   }
 
   // ---------- drop indicator ----------
@@ -729,10 +975,24 @@ export class MultiDayView extends ItemView {
 
   // ---------- task / day open ----------
 
-  private async openTask(task: ParsedTask, file: TFile | null): Promise<void> {
+  // Click → edit modal. We delegate to an existing TodayView instance so we
+  // can reuse its TaskEditModal + the entire callback graph (apply edits,
+  // toggle subtasks, move-to-date, etc.) without re-implementing any of it.
+  // No TodayView open? Open the file at the line as a graceful fallback.
+  private async openEditor(
+    file: TFile | null,
+    task: ParsedTask,
+    date: Date,
+  ): Promise<void> {
     if (!file) return;
-    const leaf = this.app.workspace.getLeaf(false);
-    await leaf.openFile(file, { eState: { line: task.lineNumber } });
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY)[0];
+    const view = leaf?.view;
+    if (view instanceof TodayView) {
+      view.openTaskEditorForDay(file, task, date);
+      return;
+    }
+    const fallbackLeaf = this.app.workspace.getLeaf(false);
+    await fallbackLeaf.openFile(file, { eState: { line: task.lineNumber } });
   }
 
   private async openDay(day: DayBundle): Promise<void> {

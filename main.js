@@ -5431,6 +5431,15 @@ var TodayView = class extends import_obsidian5.ItemView {
       end--;
     return end;
   }
+  // External-entry-point counterpart to openTaskEditor: callers from other
+  // views (e.g. the multi-day grid) pass the task's day so the move-picker /
+  // calendar inside the modal anchor to the right reference date instead of
+  // whatever day this view happens to be showing.
+  openTaskEditorForDay(file, task, date) {
+    this.selectedDate = startOfDay(date);
+    this.calendarMonth = startOfMonth(this.selectedDate);
+    this.openTaskEditor(file, task);
+  }
   openTaskEditor(file, task) {
     var _a;
     const prefixes = this.plugin.settings.prefixes;
@@ -9691,7 +9700,9 @@ var MultiDayView = class extends import_obsidian9.ItemView {
         this.dragState = null;
         this.hideDropIndicator();
       });
-      li.addEventListener("click", () => void this.openTask(task, this.inbox.file));
+      li.addEventListener("click", () => {
+        void this.openEditor(this.inbox.file, task, new Date());
+      });
     }
   }
   filteredInboxTasks() {
@@ -9744,17 +9755,22 @@ var MultiDayView = class extends import_obsidian9.ItemView {
     const heightPx = totalMin * TIMELINE_PX_PER_MIN;
     const timeline = parent.createDiv({ cls: "dp-md-timeline" });
     timeline.style.height = `${heightPx}px`;
+    const gutter = timeline.createDiv({ cls: "dp-md-timeline-gutter" });
     for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
       const top = (h * 60 - startMin) * TIMELINE_PX_PER_MIN;
-      const row = timeline.createDiv({ cls: "dp-md-timeline-row" });
-      row.style.top = `${top}px`;
-      row.createDiv({ cls: "dp-md-timeline-line" });
-      row.createDiv({
+      const lbl = gutter.createDiv({
         cls: "dp-md-timeline-label",
         text: formatClockShort(h * 60)
       });
+      lbl.style.top = `${top}px`;
     }
-    const blocksLayer = timeline.createDiv({ cls: "dp-md-timeline-blocks" });
+    const lanes = timeline.createDiv({ cls: "dp-md-timeline-lanes" });
+    for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
+      const top = (h * 60 - startMin) * TIMELINE_PX_PER_MIN;
+      const line = lanes.createDiv({ cls: "dp-md-timeline-line" });
+      line.style.top = `${top}px`;
+    }
+    const blocksLayer = lanes.createDiv({ cls: "dp-md-timeline-blocks" });
     const scheduled = day.tasks.filter((t) => t.startMin !== null);
     const layout = layoutTimeline(
       scheduled,
@@ -9763,57 +9779,19 @@ var MultiDayView = class extends import_obsidian9.ItemView {
       TIMELINE_LANE_CAP
     );
     for (const b of layout) {
-      const el = blocksLayer.createEl("button", {
-        cls: "dp-md-timeline-block"
-      });
-      if (b.task.checked)
-        el.addClass("is-done");
-      el.style.top = `${b.topPx}px`;
-      el.style.height = `${Math.max(8, b.heightPx)}px`;
-      el.style.left = `${b.leftPct}%`;
-      el.style.width = `calc(${b.widthPct}% - 2px)`;
-      const color = colorFor(b.task, colorMap);
-      el.style.setProperty("--dp-color", color != null ? color : "var(--color-accent)");
-      el.setAttribute("title", bodyText(b.task));
-      el.createSpan({
-        cls: "dp-md-timeline-block-text",
-        text: bodyText(b.task)
-      });
-      el.addEventListener("click", () => void this.openTask(b.task, day.file));
-      el.draggable = true;
-      el.addEventListener("dragstart", (ev) => {
-        if (!day.file)
-          return;
-        const rect = el.getBoundingClientRect();
-        this.dragState = {
-          task: b.task,
-          origin: "day",
-          fromFile: day.file,
-          grabOffsetY: ev.clientY - rect.top
-        };
-        el.addClass("is-dragging");
-        if (ev.dataTransfer) {
-          ev.dataTransfer.setData("text/plain", b.task.rawLine);
-          ev.dataTransfer.effectAllowed = "move";
-        }
-      });
-      el.addEventListener("dragend", () => {
-        el.removeClass("is-dragging");
-        this.dragState = null;
-        this.hideDropIndicator();
-      });
+      this.renderBlock(blocksLayer, day, b, colorMap);
     }
     const computeSnap = (clientY) => {
       if (!this.dragState)
         return null;
-      const rect = timeline.getBoundingClientRect();
+      const rect = lanes.getBoundingClientRect();
       const yPx = clientY - rect.top + timeline.scrollTop - this.dragState.grabOffsetY;
       const rawMin = yPx / TIMELINE_PX_PER_MIN + startMin;
       const snapped = snapToInterval(rawMin, settings.snapMin);
       const maxStart = endMin - this.dragState.task.durationMin;
       return Math.max(startMin, Math.min(maxStart, snapped));
     };
-    timeline.addEventListener("dragover", (ev) => {
+    lanes.addEventListener("dragover", (ev) => {
       if (!this.dragState)
         return;
       ev.preventDefault();
@@ -9829,12 +9807,12 @@ var MultiDayView = class extends import_obsidian9.ItemView {
         startMin
       );
     });
-    timeline.addEventListener("dragleave", (ev) => {
+    lanes.addEventListener("dragleave", (ev) => {
       const related = ev.relatedTarget;
-      if (!related || !timeline.contains(related))
+      if (!related || !lanes.contains(related))
         this.hideDropIndicator();
     });
-    timeline.addEventListener("drop", (ev) => {
+    lanes.addEventListener("drop", (ev) => {
       if (!this.dragState)
         return;
       ev.preventDefault();
@@ -9844,6 +9822,239 @@ var MultiDayView = class extends import_obsidian9.ItemView {
         return;
       void this.dropToDay(this.dragState, day, snapped);
     });
+  }
+  // Render a single timeline block using the daily-view's `dp-block` DOM and
+  // class names so multi-day blocks inherit the same color, padding, and
+  // resize-handle styling. A `.dp-block-md` modifier opts in to the narrower
+  // typography this view needs.
+  renderBlock(layer, day, block, colorMap) {
+    const el = layer.createDiv({ cls: "dp-block dp-block-md" });
+    if (block.task.checked)
+      el.addClass("is-done");
+    if (!block.task.hasExplicitDuration)
+      el.addClass("is-implicit-duration");
+    if (block.task.durationMin <= 20)
+      el.addClass("is-compact");
+    if (block.widthPct < 99.5)
+      el.addClass("is-narrow");
+    el.style.top = `${block.topPx}px`;
+    el.style.height = `${Math.max(18, block.heightPx)}px`;
+    el.style.left = `${block.leftPct}%`;
+    el.style.width = `calc(${block.widthPct}% - 2px)`;
+    const color = colorFor(block.task, colorMap);
+    if (color) {
+      el.style.setProperty("--dp-color", color);
+      el.style.setProperty("--dp-on-color", contrastingTextColor(color));
+      el.addClass("has-project-color");
+    }
+    const row = el.createDiv({ cls: "dp-block-row" });
+    if (block.task.startMin !== null) {
+      const meta = row.createSpan({ cls: "dp-block-meta" });
+      meta.createSpan({
+        cls: "dp-block-time",
+        text: formatClockShort(block.task.startMin)
+      });
+    }
+    row.createSpan({
+      cls: "dp-block-text",
+      text: bodyText(block.task)
+    });
+    el.setAttribute("title", bodyText(block.task));
+    el.addEventListener("click", () => {
+      void this.openEditor(day.file, block.task, day.date);
+    });
+    el.draggable = true;
+    el.addEventListener("dragstart", (ev) => {
+      if (!day.file)
+        return;
+      const rect = el.getBoundingClientRect();
+      this.dragState = {
+        task: block.task,
+        origin: "day",
+        fromFile: day.file,
+        grabOffsetY: ev.clientY - rect.top
+      };
+      el.addClass("is-dragging");
+      if (ev.dataTransfer) {
+        ev.dataTransfer.setData("text/plain", block.task.rawLine);
+        ev.dataTransfer.effectAllowed = "move";
+      }
+    });
+    el.addEventListener("dragend", () => {
+      el.removeClass("is-dragging");
+      this.dragState = null;
+      this.hideDropIndicator();
+    });
+    if (day.file) {
+      const file = day.file;
+      const bottom = el.createDiv({ cls: "dp-resize-handle" });
+      bottom.addEventListener(
+        "pointerdown",
+        (ev) => this.beginResize(ev, el, file, block.task)
+      );
+      if (block.task.startMin !== null) {
+        const top = el.createDiv({
+          cls: "dp-resize-handle dp-resize-handle-top"
+        });
+        top.addEventListener(
+          "pointerdown",
+          (ev) => this.beginResizeTop(ev, el, file, block.task)
+        );
+      }
+    }
+  }
+  // Bottom-edge drag → adjust duration. Snaps to settings.snapMin; on
+  // pointerup writes a new `#d/<…>` tag onto the line. Duplicates the
+  // daily-view behavior so the multi-day timeline feels the same.
+  beginResize(ev, blockEl, file, task) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const handle = ev.currentTarget;
+    const settings = this.plugin.settings;
+    const startY = ev.clientY;
+    const startHeightPx = blockEl.offsetHeight;
+    const minDuration = settings.snapMin;
+    const pxPerMin = TIMELINE_PX_PER_MIN;
+    let pendingDuration = task.durationMin;
+    blockEl.draggable = false;
+    blockEl.addClass("is-resizing");
+    handle.setPointerCapture(ev.pointerId);
+    const onMove = (e) => {
+      const dy = e.clientY - startY;
+      const newHeightPx = Math.max(minDuration * pxPerMin, startHeightPx + dy);
+      const rawMin = newHeightPx / pxPerMin;
+      pendingDuration = Math.max(
+        minDuration,
+        snapToInterval(rawMin, settings.snapMin)
+      );
+      blockEl.style.height = `${pendingDuration * pxPerMin}px`;
+    };
+    const onUp = (e) => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      blockEl.removeClass("is-resizing");
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch (e2) {
+      }
+      const suppressClick = (clickEv) => clickEv.stopPropagation();
+      blockEl.addEventListener("click", suppressClick, { capture: true });
+      window.setTimeout(
+        () => blockEl.removeEventListener("click", suppressClick, true),
+        0
+      );
+      const finalDuration = pendingDuration;
+      if (finalDuration === task.durationMin) {
+        blockEl.draggable = true;
+        return;
+      }
+      void this.applyDurationChange(file, task, finalDuration).finally(() => {
+        blockEl.draggable = true;
+      });
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
+  }
+  // Top-edge drag → move the start time, anchoring the end so the duration
+  // shrinks/grows by the inverse of the start delta.
+  beginResizeTop(ev, blockEl, file, task) {
+    if (task.startMin === null)
+      return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const handle = ev.currentTarget;
+    const settings = this.plugin.settings;
+    const startY = ev.clientY;
+    const startTopPx = blockEl.offsetTop;
+    const startHeightPx = blockEl.offsetHeight;
+    const startStartMin = task.startMin;
+    const startDurationMin = task.durationMin;
+    const minDuration = settings.snapMin;
+    const pxPerMin = TIMELINE_PX_PER_MIN;
+    let pendingStart = startStartMin;
+    let pendingDuration = startDurationMin;
+    blockEl.draggable = false;
+    blockEl.addClass("is-resizing");
+    handle.setPointerCapture(ev.pointerId);
+    const onMove = (e) => {
+      const dy = e.clientY - startY;
+      const rawNewStart = startStartMin + dy / pxPerMin;
+      let snappedStart = snapToInterval(rawNewStart, settings.snapMin);
+      const maxStart = startStartMin + startDurationMin - minDuration;
+      if (snappedStart > maxStart)
+        snappedStart = maxStart;
+      if (snappedStart < 0)
+        snappedStart = 0;
+      pendingStart = snappedStart;
+      pendingDuration = startDurationMin - (snappedStart - startStartMin);
+      const deltaPx = (snappedStart - startStartMin) * pxPerMin;
+      blockEl.style.top = `${startTopPx + deltaPx}px`;
+      blockEl.style.height = `${startHeightPx - deltaPx}px`;
+    };
+    const onUp = (e) => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      blockEl.removeClass("is-resizing");
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch (e2) {
+      }
+      const suppressClick = (clickEv) => clickEv.stopPropagation();
+      blockEl.addEventListener("click", suppressClick, { capture: true });
+      window.setTimeout(
+        () => blockEl.removeEventListener("click", suppressClick, true),
+        0
+      );
+      if (pendingStart === startStartMin && pendingDuration === startDurationMin) {
+        blockEl.draggable = true;
+        return;
+      }
+      void this.applyStartAndDurationChange(
+        file,
+        task,
+        pendingStart,
+        pendingDuration
+      ).finally(() => {
+        blockEl.draggable = true;
+      });
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
+  }
+  async applyDurationChange(file, task, newDurationMin) {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const idx = task.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== task.rawLine)
+        return content;
+      const next = setDurationTag(lines[idx], newDurationMin, prefixes);
+      if (next === lines[idx])
+        return content;
+      lines[idx] = next;
+      return lines.join("\n");
+    });
+    await this.refresh();
+  }
+  async applyStartAndDurationChange(file, task, newStartMin, newDurationMin) {
+    const prefixes = this.plugin.settings.prefixes;
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      const idx = task.lineNumber;
+      if (idx < 0 || idx >= lines.length || lines[idx] !== task.rawLine)
+        return content;
+      let next = setTimeTag(lines[idx], newStartMin, prefixes);
+      next = setDurationTag(next, newDurationMin, prefixes);
+      if (next === lines[idx])
+        return content;
+      lines[idx] = next;
+      return lines.join("\n");
+    });
+    await this.refresh();
   }
   // ---------- drop indicator ----------
   showDropIndicator(layer, snappedStartMin, durationMin, rangeStartMin) {
@@ -9983,11 +10194,21 @@ var MultiDayView = class extends import_obsidian9.ItemView {
     return (_a = tasks.find((t) => bodyText(t) === bodyText(original))) != null ? _a : null;
   }
   // ---------- task / day open ----------
-  async openTask(task, file) {
+  // Click → edit modal. We delegate to an existing TodayView instance so we
+  // can reuse its TaskEditModal + the entire callback graph (apply edits,
+  // toggle subtasks, move-to-date, etc.) without re-implementing any of it.
+  // No TodayView open? Open the file at the line as a graceful fallback.
+  async openEditor(file, task, date) {
     if (!file)
       return;
-    const leaf = this.app.workspace.getLeaf(false);
-    await leaf.openFile(file, { eState: { line: task.lineNumber } });
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY)[0];
+    const view = leaf == null ? void 0 : leaf.view;
+    if (view instanceof TodayView) {
+      view.openTaskEditorForDay(file, task, date);
+      return;
+    }
+    const fallbackLeaf = this.app.workspace.getLeaf(false);
+    await fallbackLeaf.openFile(file, { eState: { line: task.lineNumber } });
   }
   async openDay(day) {
     if (day.file) {

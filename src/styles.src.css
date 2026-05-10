@@ -4148,32 +4148,45 @@
 
   /* ---------- timeline ---------- */
 
+  /* Two-column layout: a fixed gutter on the left for hour labels, then a
+   * lanes area where blocks render. Anchoring labels in the gutter keeps
+   * them visible when blocks span the full lanes width. */
   .dp-md-timeline {
     position: relative;
     flex: 1;
     overflow: auto;
+    display: flex;
   }
 
-  .dp-md-timeline-row {
+  .dp-md-timeline-gutter {
+    position: relative;
+    flex: 0 0 32px;
+    width: 32px;
+  }
+
+  .dp-md-timeline-lanes {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dp-md-timeline-line {
     position: absolute;
     left: 0;
     right: 0;
     height: 1px;
-    pointer-events: none;
-  }
-
-  .dp-md-timeline-line {
-    height: 1px;
     background: var(--color-hairline);
+    pointer-events: none;
   }
 
   .dp-md-timeline-label {
     position: absolute;
-    top: -7px;
-    left: 4px;
+    left: 0;
+    right: 4px;
+    text-align: right;
+    margin-top: -7px;
     font-size: 0.65rem;
     color: var(--color-ink-faint);
-    background: var(--color-paper-2);
     padding: 0 2px;
   }
 
@@ -4183,40 +4196,42 @@
     pointer-events: none;
   }
 
-  .dp-md-timeline-block {
-    position: absolute;
+  /* Multi-day modifier on the shared .dp-block component. Tightens padding,
+   * shrinks the type, and forces single-line truncation so several blocks
+   * can fit in a narrow column without overflowing. */
+  .dp-block.dp-block-md {
     pointer-events: auto;
-    border: 1px solid color-mix(in srgb, var(--dp-color) 70%, black);
-    border-radius: 4px;
-    padding: 2px 4px;
-    cursor: grab;
-    overflow: hidden;
-    text-align: left;
-    color: #fff;
-    background: var(--dp-color);
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    line-height: 1.15;
   }
 
-  .dp-md-timeline-block:active {
-    cursor: grabbing;
+  .dp-block.dp-block-md .dp-block-row {
+    gap: 4px;
+    line-height: 1.15;
   }
 
-  .dp-md-timeline-block.is-dragging {
-    opacity: 0.4;
+  .dp-block.dp-block-md .dp-block-time {
+    font-size: 0.62rem;
+    opacity: 0.85;
   }
 
-  .dp-md-timeline-block.is-done {
-    opacity: 0.55;
-    text-decoration: line-through;
-  }
-
-  .dp-md-timeline-block-text {
-    font-size: 0.7rem;
-    line-height: 1.1;
-    display: block;
-    white-space: normal;
+  .dp-block.dp-block-md .dp-block-text {
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
   }
+
+  /* On narrow lanes (overlapping pair), drop the time chip so the title
+   * has room. */
+  .dp-block.dp-block-md.is-narrow .dp-block-meta {
+    display: none;
+  }
+
+  /* Compact (≤20m) blocks are too short to show two stacked elements; let
+   * the .dp-block.is-compact rule handle vertical centering. */
 
   /* ---------- drop indicator ---------- */
 
@@ -4274,10 +4289,3 @@
   opacity: 0.75;
 }
 
-.today-root .dp-md-timeline-block,
-.today-root .dp-md-timeline-block:hover,
-.today-root .dp-md-timeline-block:focus,
-.today-root .dp-md-timeline-block:active {
-  background-color: var(--dp-color);
-  color: #fff;
-}

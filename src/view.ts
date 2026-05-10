@@ -2387,6 +2387,16 @@ export class TodayView extends ItemView {
     return end;
   }
 
+  // External-entry-point counterpart to openTaskEditor: callers from other
+  // views (e.g. the multi-day grid) pass the task's day so the move-picker /
+  // calendar inside the modal anchor to the right reference date instead of
+  // whatever day this view happens to be showing.
+  public openTaskEditorForDay(file: TFile, task: ParsedTask, date: Date): void {
+    this.selectedDate = startOfDay(date);
+    this.calendarMonth = startOfMonth(this.selectedDate);
+    this.openTaskEditor(file, task);
+  }
+
   private openTaskEditor(file: TFile, task: ParsedTask): void {
     const prefixes = this.plugin.settings.prefixes;
     // Compose the full "proj/sub" path so the input shows the actual
