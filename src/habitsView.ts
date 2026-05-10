@@ -315,18 +315,43 @@ export class HabitsStatsView extends ItemView {
     window: number,
     fallback: DailyNoteFallback,
   ): Promise<void> {
-    const settings = this.plugin.settings;
+    // Three stacked pivots — daily / weekly / monthly — so the user can see
+    // recent activity at a glance and zoom out to longer trends without
+    // switching tabs. Daily is fixed at 7 cols (the user-requested "last 7
+    // days"); week + month follow `habitsStatsWindow` so all three sections
+    // honor the same setting the heatmap uses.
+    const dayBuckets = this.buildDayBuckets(today, 7);
     const weekBuckets = this.buildWeekBuckets(today, window);
+    const monthBuckets = this.buildMonthBuckets(today, window);
+    await this.renderProjectsPivot(parent, "Day", "day", dayBuckets, fallback);
+    await this.renderProjectsPivot(parent, "Week", "week", weekBuckets, fallback);
+    await this.renderProjectsPivot(
+      parent,
+      "Month",
+      "month",
+      monthBuckets,
+      fallback,
+    );
+  }
 
-    // Aggregate completed-task minutes into a (project → weekIdx → mins) map.
-    // Only `- [x]` lines count, matching how the workouts tab counts only
-    // completed sets — a planned-but-not-done block shouldn't inflate the
-    // "what I actually did" totals this report exists to show.
+  private async renderProjectsPivot(
+    parent: HTMLElement,
+    name: string,
+    period: HabitPeriod,
+    buckets: Bucket[],
+    fallback: DailyNoteFallback,
+  ): Promise<void> {
+    const settings = this.plugin.settings;
+
+    // Aggregate completed-task minutes into a (project → bucketIdx → mins)
+    // map. Only `- [x]` lines count, matching how the workouts tab counts
+    // only completed sets — a planned-but-not-done block shouldn't inflate
+    // the "what I actually did" totals this report exists to show.
     const totals = new Map<string, number[]>();
-    const colTotals = new Array<number>(weekBuckets.length).fill(0);
+    const colTotals = new Array<number>(buckets.length).fill(0);
     let grandTotal = 0;
-    for (let wi = 0; wi < weekBuckets.length; wi++) {
-      const b = weekBuckets[wi];
+    for (let bi = 0; bi < buckets.length; bi++) {
+      const b = buckets[bi];
       for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
         const content = await this.plugin.habitsScanner.readDateContent(
           d,
@@ -345,21 +370,32 @@ export class HabitsStatsView extends ItemView {
           if (t.durationMin <= 0) continue;
           let row = totals.get(t.project);
           if (!row) {
-            row = new Array<number>(weekBuckets.length).fill(0);
+            row = new Array<number>(buckets.length).fill(0);
             totals.set(t.project, row);
           }
-          row[wi] += t.durationMin;
-          colTotals[wi] += t.durationMin;
+          row[bi] += t.durationMin;
+          colTotals[bi] += t.durationMin;
           grandTotal += t.durationMin;
         }
       }
     }
 
     const sectionEl = parent.createDiv({ cls: "dp-heatmap-section" });
+
+    // Section header mirrors the Habits tab's "Day · Apr 27 – May 9" title
+    // so the three-section stack reads consistently across tabs.
+    const titleEl = sectionEl.createDiv({ cls: "dp-heatmap-row-title" });
+    titleEl.createSpan({ cls: "dp-heatmap-row-name", text: name });
+    titleEl.createSpan({ cls: "dp-heatmap-row-sep", text: " · " });
+    titleEl.createSpan({
+      cls: "dp-heatmap-row-range",
+      text: formatBucketsRange(buckets, period),
+    });
+
     if (totals.size === 0) {
       sectionEl.createDiv({
         cls: "dp-heatmap-no-habits",
-        text: "No completed tasks with a project in this window.",
+        text: `No completed tasks with a project in this ${name.toLowerCase()} window.`,
       });
       return;
     }
@@ -370,8 +406,8 @@ export class HabitsStatsView extends ItemView {
     );
 
     const rows = Array.from(totals.entries())
-      .map(([name, cells]) => ({
-        name,
+      .map(([rowName, cells]) => ({
+        name: rowName,
         cells,
         rowTotal: cells.reduce((a, b) => a + b, 0),
       }))
@@ -381,14 +417,11 @@ export class HabitsStatsView extends ItemView {
     const thead = table.createEl("thead");
     const headRow = thead.createEl("tr");
     headRow.createEl("th", { cls: "dp-workout-log-name-h", text: "Project" });
-    for (const b of weekBuckets) {
+    for (const b of buckets) {
       const th = headRow.createEl("th", {
         cls:
           "dp-workout-log-date" + (b.isCurrent ? " is-current" : ""),
-        text: b.start.toLocaleDateString(undefined, {
-          month: "numeric",
-          day: "numeric",
-        }),
+        text: formatPivotColLabel(b, period),
       });
       th.title = b.tooltip;
     }
@@ -402,16 +435,16 @@ export class HabitsStatsView extends ItemView {
       const color = colorMap.get(row.name);
       if (color) swatch.style.backgroundColor = color;
       nameTd.createSpan({ text: row.name });
-      for (let i = 0; i < weekBuckets.length; i++) {
+      for (let i = 0; i < buckets.length; i++) {
         const mins = row.cells[i];
         const td = tr.createEl("td", {
           cls:
             "dp-workout-log-cell" +
             (mins === 0 ? " is-empty" : "") +
-            (weekBuckets[i].isCurrent ? " is-current" : ""),
+            (buckets[i].isCurrent ? " is-current" : ""),
           text: mins > 0 ? formatTotal(mins) : "",
         });
-        td.title = `${row.name} · ${weekBuckets[i].tooltip}\n${formatTotal(mins)}`;
+        td.title = `${row.name} · ${buckets[i].tooltip}\n${formatTotal(mins)}`;
       }
       tr.createEl("td", {
         cls: "dp-workout-log-total",
@@ -427,12 +460,12 @@ export class HabitsStatsView extends ItemView {
       cls: "dp-workout-log-name dp-workout-log-foot",
       text: "Total",
     });
-    for (let i = 0; i < weekBuckets.length; i++) {
+    for (let i = 0; i < buckets.length; i++) {
       footRow.createEl("td", {
         cls:
           "dp-workout-log-cell dp-workout-log-foot" +
           (colTotals[i] === 0 ? " is-empty" : "") +
-          (weekBuckets[i].isCurrent ? " is-current" : ""),
+          (buckets[i].isCurrent ? " is-current" : ""),
         text: colTotals[i] > 0 ? formatTotal(colTotals[i]) : "",
       });
     }
@@ -846,6 +879,22 @@ function quintile(count: number): number {
   if (count === 2) return 2;
   if (count === 3) return 3;
   return 4;
+}
+
+// Per-period column label for the project pivot. Day = weekday short
+// ("Sat"), Week = M/D of week-start ("5/4"), Month = month abbreviation
+// ("May"). Tooltip on each <th> still carries the full date for ambiguity.
+function formatPivotColLabel(bucket: Bucket, period: HabitPeriod): string {
+  if (period === "day") {
+    return bucket.start.toLocaleDateString(undefined, { weekday: "short" });
+  }
+  if (period === "month") {
+    return bucket.start.toLocaleDateString(undefined, { month: "short" });
+  }
+  return bucket.start.toLocaleDateString(undefined, {
+    month: "numeric",
+    day: "numeric",
+  });
 }
 
 function formatBucketsRange(buckets: Bucket[], period: HabitPeriod): string {

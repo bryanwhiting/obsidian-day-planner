@@ -8956,13 +8956,26 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
     }
   }
   async renderProjectsByWeek(parent, today, window2, fallback) {
-    const settings = this.plugin.settings;
+    const dayBuckets = this.buildDayBuckets(today, 7);
     const weekBuckets = this.buildWeekBuckets(today, window2);
+    const monthBuckets = this.buildMonthBuckets(today, window2);
+    await this.renderProjectsPivot(parent, "Day", "day", dayBuckets, fallback);
+    await this.renderProjectsPivot(parent, "Week", "week", weekBuckets, fallback);
+    await this.renderProjectsPivot(
+      parent,
+      "Month",
+      "month",
+      monthBuckets,
+      fallback
+    );
+  }
+  async renderProjectsPivot(parent, name, period, buckets, fallback) {
+    const settings = this.plugin.settings;
     const totals = /* @__PURE__ */ new Map();
-    const colTotals = new Array(weekBuckets.length).fill(0);
+    const colTotals = new Array(buckets.length).fill(0);
     let grandTotal = 0;
-    for (let wi = 0; wi < weekBuckets.length; wi++) {
-      const b = weekBuckets[wi];
+    for (let bi = 0; bi < buckets.length; bi++) {
+      const b = buckets[bi];
       for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
         const content = await this.plugin.habitsScanner.readDateContent(
           d,
@@ -8985,20 +8998,27 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
             continue;
           let row = totals.get(t.project);
           if (!row) {
-            row = new Array(weekBuckets.length).fill(0);
+            row = new Array(buckets.length).fill(0);
             totals.set(t.project, row);
           }
-          row[wi] += t.durationMin;
-          colTotals[wi] += t.durationMin;
+          row[bi] += t.durationMin;
+          colTotals[bi] += t.durationMin;
           grandTotal += t.durationMin;
         }
       }
     }
     const sectionEl = parent.createDiv({ cls: "dp-heatmap-section" });
+    const titleEl = sectionEl.createDiv({ cls: "dp-heatmap-row-title" });
+    titleEl.createSpan({ cls: "dp-heatmap-row-name", text: name });
+    titleEl.createSpan({ cls: "dp-heatmap-row-sep", text: " \xB7 " });
+    titleEl.createSpan({
+      cls: "dp-heatmap-row-range",
+      text: formatBucketsRange(buckets, period)
+    });
     if (totals.size === 0) {
       sectionEl.createDiv({
         cls: "dp-heatmap-no-habits",
-        text: "No completed tasks with a project in this window."
+        text: `No completed tasks with a project in this ${name.toLowerCase()} window.`
       });
       return;
     }
@@ -9006,8 +9026,8 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
       Array.from(totals.keys()).map((p) => ({ project: p })),
       settings.projectColors
     );
-    const rows = Array.from(totals.entries()).map(([name, cells]) => ({
-      name,
+    const rows = Array.from(totals.entries()).map(([rowName, cells]) => ({
+      name: rowName,
       cells,
       rowTotal: cells.reduce((a, b) => a + b, 0)
     })).sort((a, b) => b.rowTotal - a.rowTotal || a.name.localeCompare(b.name));
@@ -9015,13 +9035,10 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
     const thead = table.createEl("thead");
     const headRow = thead.createEl("tr");
     headRow.createEl("th", { cls: "dp-workout-log-name-h", text: "Project" });
-    for (const b of weekBuckets) {
+    for (const b of buckets) {
       const th = headRow.createEl("th", {
         cls: "dp-workout-log-date" + (b.isCurrent ? " is-current" : ""),
-        text: b.start.toLocaleDateString(void 0, {
-          month: "numeric",
-          day: "numeric"
-        })
+        text: formatPivotColLabel(b, period)
       });
       th.title = b.tooltip;
     }
@@ -9035,13 +9052,13 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
       if (color)
         swatch.style.backgroundColor = color;
       nameTd.createSpan({ text: row.name });
-      for (let i = 0; i < weekBuckets.length; i++) {
+      for (let i = 0; i < buckets.length; i++) {
         const mins = row.cells[i];
         const td = tr.createEl("td", {
-          cls: "dp-workout-log-cell" + (mins === 0 ? " is-empty" : "") + (weekBuckets[i].isCurrent ? " is-current" : ""),
+          cls: "dp-workout-log-cell" + (mins === 0 ? " is-empty" : "") + (buckets[i].isCurrent ? " is-current" : ""),
           text: mins > 0 ? formatTotal(mins) : ""
         });
-        td.title = `${row.name} \xB7 ${weekBuckets[i].tooltip}
+        td.title = `${row.name} \xB7 ${buckets[i].tooltip}
 ${formatTotal(mins)}`;
       }
       tr.createEl("td", {
@@ -9055,9 +9072,9 @@ ${formatTotal(mins)}`;
       cls: "dp-workout-log-name dp-workout-log-foot",
       text: "Total"
     });
-    for (let i = 0; i < weekBuckets.length; i++) {
+    for (let i = 0; i < buckets.length; i++) {
       footRow.createEl("td", {
-        cls: "dp-workout-log-cell dp-workout-log-foot" + (colTotals[i] === 0 ? " is-empty" : "") + (weekBuckets[i].isCurrent ? " is-current" : ""),
+        cls: "dp-workout-log-cell dp-workout-log-foot" + (colTotals[i] === 0 ? " is-empty" : "") + (buckets[i].isCurrent ? " is-current" : ""),
         text: colTotals[i] > 0 ? formatTotal(colTotals[i]) : ""
       });
     }
@@ -9392,6 +9409,18 @@ function quintile(count) {
   if (count === 3)
     return 3;
   return 4;
+}
+function formatPivotColLabel(bucket, period) {
+  if (period === "day") {
+    return bucket.start.toLocaleDateString(void 0, { weekday: "short" });
+  }
+  if (period === "month") {
+    return bucket.start.toLocaleDateString(void 0, { month: "short" });
+  }
+  return bucket.start.toLocaleDateString(void 0, {
+    month: "numeric",
+    day: "numeric"
+  });
 }
 function formatBucketsRange(buckets, period) {
   if (buckets.length === 0)
