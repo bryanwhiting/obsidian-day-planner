@@ -2397,6 +2397,24 @@ export class TodayView extends ItemView {
     this.openTaskEditor(file, task);
   }
 
+  // External-entry-point counterpart to createTaskAtTime: lets the multi-day
+  // grid open the same "new task at HH:MM" modal a daily-view gutter click
+  // would, anchored to the clicked day so subsequent date pickers default
+  // correctly.
+  public createTaskAtTimeForDay(
+    file: TFile,
+    date: Date,
+    startMin: number,
+  ): void {
+    this.selectedDate = startOfDay(date);
+    this.calendarMonth = startOfMonth(this.selectedDate);
+    this.createTaskAtTime(
+      file,
+      startMin,
+      this.plugin.settings.defaultDurationMin,
+    );
+  }
+
   private openTaskEditor(file: TFile, task: ParsedTask): void {
     const prefixes = this.plugin.settings.prefixes;
     // Compose the full "proj/sub" path so the input shows the actual

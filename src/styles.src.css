@@ -4204,6 +4204,15 @@
     font-size: 0.65rem;
     color: var(--color-ink-faint);
     padding: 0 2px;
+    transition: color 100ms ease;
+  }
+
+  .dp-md-timeline-label.is-clickable {
+    cursor: pointer;
+  }
+
+  .dp-md-timeline-label.is-clickable:hover {
+    color: var(--color-accent);
   }
 
   .dp-md-timeline-blocks {

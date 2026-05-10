@@ -5462,6 +5462,19 @@ var TodayView = class extends import_obsidian5.ItemView {
     this.calendarMonth = startOfMonth(this.selectedDate);
     this.openTaskEditor(file, task);
   }
+  // External-entry-point counterpart to createTaskAtTime: lets the multi-day
+  // grid open the same "new task at HH:MM" modal a daily-view gutter click
+  // would, anchored to the clicked day so subsequent date pickers default
+  // correctly.
+  createTaskAtTimeForDay(file, date, startMin) {
+    this.selectedDate = startOfDay(date);
+    this.calendarMonth = startOfMonth(this.selectedDate);
+    this.createTaskAtTime(
+      file,
+      startMin,
+      this.plugin.settings.defaultDurationMin
+    );
+  }
   openTaskEditor(file, task) {
     var _a;
     const prefixes = this.plugin.settings.prefixes;
@@ -9936,6 +9949,14 @@ var MultiDayView = class extends import_obsidian9.ItemView {
         text: formatClockShort(h * 60)
       });
       lbl.style.top = `${top}px`;
+      if (h >= settings.visibleEndHour)
+        continue;
+      lbl.addClass("is-clickable");
+      lbl.setAttribute("aria-label", `New task at ${formatClockShort(h * 60)}`);
+      lbl.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        void this.createTaskAt(day, h * 60);
+      });
     }
     const lanes = timeline.createDiv({ cls: "dp-md-timeline-lanes" });
     for (let h = settings.visibleStartHour; h <= settings.visibleEndHour; h++) {
@@ -10377,6 +10398,28 @@ var MultiDayView = class extends import_obsidian9.ItemView {
     }
     const fallbackLeaf = this.app.workspace.getLeaf(false);
     await fallbackLeaf.openFile(file, { eState: { line: task.lineNumber } });
+  }
+  // Gutter click → "new task at HH:MM" modal for that day. Mirrors the
+  // daily-view gutter, delegating to TodayView so the modal, autocomplete,
+  // and onSave plumbing stay single-sourced. If the day's note doesn't
+  // exist yet, create it first; if no TodayView is open, surface a notice
+  // so the user knows to open one (the modal lives there).
+  async createTaskAt(day, startMin) {
+    let file = day.file;
+    if (!file) {
+      file = await ensureDailyNote(
+        this.app,
+        day.date,
+        buildFallback(this.plugin.settings)
+      );
+    }
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY)[0];
+    const view = leaf == null ? void 0 : leaf.view;
+    if (view instanceof TodayView) {
+      view.createTaskAtTimeForDay(file, day.date, startMin);
+      return;
+    }
+    new import_obsidian9.Notice("Open the Today view to add tasks from the multi-day gutter.");
   }
   async openDay(day) {
     if (day.file) {
