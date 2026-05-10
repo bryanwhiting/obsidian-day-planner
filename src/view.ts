@@ -8,6 +8,7 @@ import {
   Platform,
   setIcon,
   moment,
+  MarkdownRenderer,
 } from "obsidian";
 import { parseTimelineHeight } from "./settings";
 import type TodayPlugin from "./main";
@@ -744,6 +745,29 @@ export class TodayView extends ItemView {
     });
   }
 
+  // Renders `text` as inline Markdown into `el` — bold/italic/links/code in
+  // intentions and quotes get formatted instead of shown as raw `_foo_` /
+  // `**foo**`. Obsidian's MarkdownRenderer wraps single-line input in a `<p>`
+  // tag; we unwrap it so the result still flows inline next to surrounding
+  // header text. Fire-and-forget on purpose — the caller has already
+  // appended the empty span, so the rendered children fill it asynchronously
+  // without holding up the rest of the view render.
+  private renderInlineMarkdown(
+    text: string,
+    el: HTMLElement,
+    sourcePath: string,
+  ): void {
+    void MarkdownRenderer.render(this.app, text, el, sourcePath, this).then(
+      () => {
+        const p = el.querySelector(":scope > p");
+        if (p) {
+          while (p.firstChild) el.insertBefore(p.firstChild, p);
+          p.remove();
+        }
+      },
+    );
+  }
+
   private renderSection(
     parent: HTMLElement,
     title: string,
@@ -783,7 +807,8 @@ export class TodayView extends ItemView {
       }
       if (intention) {
         if (subtitle) sub.createSpan({ cls: "dp-subtitle-sep", text: "•" });
-        sub.createSpan({ cls: "dp-intention", text: intention });
+        const intentionEl = sub.createSpan({ cls: "dp-intention" });
+        this.renderInlineMarkdown(intention, intentionEl, path);
       }
       if (openActiveTarget) {
         if (subtitle || intention)
@@ -806,7 +831,8 @@ export class TodayView extends ItemView {
     }
     if (quote) {
       const quoteRow = header.createDiv({ cls: "dp-quote-row" });
-      quoteRow.createSpan({ cls: "dp-quote", text: quote });
+      const quoteEl = quoteRow.createSpan({ cls: "dp-quote" });
+      this.renderInlineMarkdown(quote, quoteEl, path);
     }
 
     if (isPrimary) {

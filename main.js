@@ -3888,6 +3888,25 @@ var TodayView = class extends import_obsidian4.ItemView {
       day: "numeric"
     });
   }
+  // Renders `text` as inline Markdown into `el` — bold/italic/links/code in
+  // intentions and quotes get formatted instead of shown as raw `_foo_` /
+  // `**foo**`. Obsidian's MarkdownRenderer wraps single-line input in a `<p>`
+  // tag; we unwrap it so the result still flows inline next to surrounding
+  // header text. Fire-and-forget on purpose — the caller has already
+  // appended the empty span, so the rendered children fill it asynchronously
+  // without holding up the rest of the view render.
+  renderInlineMarkdown(text, el, sourcePath) {
+    void import_obsidian4.MarkdownRenderer.render(this.app, text, el, sourcePath, this).then(
+      () => {
+        const p = el.querySelector(":scope > p");
+        if (p) {
+          while (p.firstChild)
+            el.insertBefore(p.firstChild, p);
+          p.remove();
+        }
+      }
+    );
+  }
   renderSection(parent, title, subtitle, file, path, tasks, exercises, habitDisplays, isPrimary, colorMap, openActiveTarget = null, intention = null, quote = null) {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed)
@@ -3915,7 +3934,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       if (intention) {
         if (subtitle)
           sub.createSpan({ cls: "dp-subtitle-sep", text: "\u2022" });
-        sub.createSpan({ cls: "dp-intention", text: intention });
+        const intentionEl = sub.createSpan({ cls: "dp-intention" });
+        this.renderInlineMarkdown(intention, intentionEl, path);
       }
       if (openActiveTarget) {
         if (subtitle || intention)
@@ -3938,7 +3958,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     }
     if (quote) {
       const quoteRow = header.createDiv({ cls: "dp-quote-row" });
-      quoteRow.createSpan({ cls: "dp-quote", text: quote });
+      const quoteEl = quoteRow.createSpan({ cls: "dp-quote" });
+      this.renderInlineMarkdown(quote, quoteEl, path);
     }
     if (isPrimary) {
       const workout = header.createDiv({ cls: "dp-workout" });
