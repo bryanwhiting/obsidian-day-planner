@@ -1186,11 +1186,18 @@ export class TodayView extends ItemView {
       ? `${this.fmtClock(note.startMin!)}–${this.fmtClock(note.startMin! + note.durationMin)}`
       : this.fmtClock(note.startMin!);
     strip.createSpan({ cls: "dp-note-strip-time", text: timeText });
-    strip.createSpan({
+    const titleEl = strip.createSpan({
       cls: "dp-note-strip-title",
       text: this.cleanBody(note.body) || "(untitled)",
     });
 
+    // Title click toggles done (strikethrough), matching the regular block.
+    // Clicks elsewhere on the strip (dot, time, blank space) fall through to
+    // open the task editor.
+    titleEl.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      void this.applyLineChecked(file, note.lineNumber, !note.checked);
+    });
     strip.addEventListener("click", (ev) => {
       ev.stopPropagation();
       this.openTaskEditor(file, note);

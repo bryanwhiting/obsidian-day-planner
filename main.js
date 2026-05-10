@@ -3993,9 +3993,13 @@ var TodayView = class extends import_obsidian4.ItemView {
     strip.createSpan({ cls: "dp-note-strip-dot" });
     const timeText = note.hasExplicitDuration ? `${this.fmtClock(note.startMin)}\u2013${this.fmtClock(note.startMin + note.durationMin)}` : this.fmtClock(note.startMin);
     strip.createSpan({ cls: "dp-note-strip-time", text: timeText });
-    strip.createSpan({
+    const titleEl = strip.createSpan({
       cls: "dp-note-strip-title",
       text: this.cleanBody(note.body) || "(untitled)"
+    });
+    titleEl.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      void this.applyLineChecked(file, note.lineNumber, !note.checked);
     });
     strip.addEventListener("click", (ev) => {
       ev.stopPropagation();
