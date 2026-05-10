@@ -3665,7 +3665,13 @@
     padding: 20px 28px 18px;
     color: var(--color-ink-muted);
     font-size: 12px;
-    background: var(--color-paper);
+    /* Same opaque-base trick used by .dp-calendar — themes that ship a
+     * translucent --background-primary (Minimal, Things, Blue Topaz) would
+     * otherwise let the timeline bleed through the popup. */
+    background-color: var(--background-primary, #ffffff);
+    background-image:
+      linear-gradient(var(--color-paper), var(--color-paper));
+    isolation: isolate;
     border: 1px solid var(--color-hairline);
     border-radius: var(--radius-card, 10px);
     box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
