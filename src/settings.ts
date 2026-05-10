@@ -95,6 +95,11 @@ export interface TodaySettings {
   // note template contains `<@quote>`, a random line from this file is
   // substituted at note-creation time. Empty disables the placeholder.
   quotesFile: string;
+  // When true, newly created daily notes get a `<taskCreated>/YYYY-MM-DD` tag
+  // (e.g. `tcr/2026-05-09`) injected into their frontmatter `tags:` list.
+  // The date is wall-clock today, matching the semantics of the existing
+  // `#tcr/` stamp used on tasks.
+  addCreatedTagToFrontmatter: boolean;
   defaultDurationMin: number;
   quickDurationsMin: number[];
   projectColors: ProjectColor[];
@@ -176,6 +181,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   dailyNoteTemplate: "",
   dailyNoteTemplatesByDay: { ...DEFAULT_WEEKDAY_TEMPLATES },
   quotesFile: "daily/_quotes.md",
+  addCreatedTagToFrontmatter: true,
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
@@ -836,6 +842,28 @@ export class TodaySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+
+    const createdTagDesc = document.createDocumentFragment();
+    createdTagDesc.append(
+      "When a daily note is created, inject a ",
+      makeCode(`#${this.plugin.settings.prefixes.taskCreated}/YYYY-MM-DD`),
+      " tag (today's wall-clock date) into the frontmatter ",
+      makeCode("tags:"),
+      " property. Creates the frontmatter block if the template doesn't already have one. Mirrors the ",
+      makeCode(`#${this.plugin.settings.prefixes.taskCreated}/`),
+      " stamp written onto new tasks.",
+    );
+    new Setting(containerEl)
+      .setName("Stamp creation date in frontmatter tags")
+      .setDesc(createdTagDesc)
+      .addToggle((t) =>
+        t
+          .setValue(this.plugin.settings.addCreatedTagToFrontmatter)
+          .onChange(async (v) => {
+            this.plugin.settings.addCreatedTagToFrontmatter = v;
+            await this.plugin.saveSettings();
+          }),
+      );
 
     new Setting(containerEl).setName("Per-weekday templates").setHeading();
 

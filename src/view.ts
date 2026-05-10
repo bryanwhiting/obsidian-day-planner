@@ -830,6 +830,7 @@ export class TodayView extends ItemView {
           templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
           prefixes: this.plugin.settings.prefixes,
           quotesFile: this.plugin.settings.quotesFile,
+          addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -2523,6 +2524,7 @@ export class TodayView extends ItemView {
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
       quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -2583,6 +2585,7 @@ export class TodayView extends ItemView {
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
       quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -3054,6 +3057,7 @@ export class TodayView extends ItemView {
       dateLinkFormat: settings.dateLinkFormat,
       prefixes: settings.prefixes,
       quotesFile: settings.quotesFile,
+      addCreatedTag: settings.addCreatedTagToFrontmatter,
     };
     const target = file
       ? file

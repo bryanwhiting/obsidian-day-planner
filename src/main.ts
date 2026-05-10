@@ -129,6 +129,8 @@ export default class TodayPlugin extends Plugin {
           templatesByDay: this.settings.dailyNoteTemplatesByDay,
           dateLinkFormat: this.settings.dateLinkFormat,
           prefixes: this.settings.prefixes,
+          quotesFile: this.settings.quotesFile,
+          addCreatedTag: this.settings.addCreatedTagToFrontmatter,
         });
       }),
     );
@@ -198,6 +200,7 @@ export default class TodayPlugin extends Plugin {
       dateLinkFormat: this.settings.dateLinkFormat,
       prefixes: this.settings.prefixes,
       quotesFile: this.settings.quotesFile,
+      addCreatedTag: this.settings.addCreatedTagToFrontmatter,
     };
     const file = await ensureDailyNote(this.app, target, fallback, false);
     const leaf = this.app.workspace.getLeaf(false);

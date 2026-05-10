@@ -39,6 +39,11 @@ export interface DailyNoteFallback {
   // template contains `<@quote>`, a random non-empty line is substituted
   // into newly created notes. Empty/missing → `<@quote>` expands to "".
   quotesFile?: string;
+  // When true, the daily note's frontmatter `tags:` list gets a
+  // `<taskCreated>/YYYY-MM-DD` entry (today's wall-clock date) injected at
+  // creation time. The prefix is read from `prefixes.taskCreated` (default
+  // "tcr"). When `prefixes` is missing, this flag is a no-op.
+  addCreatedTag?: boolean;
 }
 
 export async function resolveDailyNote(
@@ -88,9 +93,16 @@ export async function ensureDailyNote(
     fallback.dateLinkFormat ?? "",
     quote,
   );
-  const initialContent = fallback.prefixes
+  const withDurations = fallback.prefixes
     ? applyComputedParentDurations(expanded, fallback.prefixes)
     : expanded;
+  const initialContent =
+    fallback.addCreatedTag && fallback.prefixes
+      ? addFrontmatterTag(
+          withDurations,
+          `${fallback.prefixes.taskCreated}/${todayDateStr()}`,
+        )
+      : withDurations;
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify) new Notice(`Created ${resolved.path}`);
   return file;
@@ -132,9 +144,16 @@ export async function applyDailyNoteTemplateIfEmpty(
     fallback.dateLinkFormat ?? "",
     quote,
   );
-  const finalContent = fallback.prefixes
+  const withDurations = fallback.prefixes
     ? applyComputedParentDurations(expanded, fallback.prefixes)
     : expanded;
+  const finalContent =
+    fallback.addCreatedTag && fallback.prefixes
+      ? addFrontmatterTag(
+          withDurations,
+          `${fallback.prefixes.taskCreated}/${todayDateStr()}`,
+        )
+      : withDurations;
   await app.vault.modify(file, finalContent);
 }
 
@@ -391,6 +410,79 @@ export function listDailyNotes(
 // new tasks. Independent of the daily-note format setting.
 export function todayDateStr(): string {
   return toIsoDateStr(new Date());
+}
+
+// Inserts `tag` (e.g. "tcr/2026-05-09") into the YAML frontmatter `tags:`
+// list at the top of `content`. Handles the three shapes Obsidian users
+// typically write — block list, inline `[a, b]`, and bare scalar — and
+// creates the frontmatter block from scratch when none exists. No-ops when
+// the tag is already present so re-runs (or templates that already include
+// the tag) don't duplicate it.
+export function addFrontmatterTag(content: string, tag: string): string {
+  const fmRe = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
+  const match = content.match(fmRe);
+  if (!match) {
+    return `---\ntags:\n  - ${tag}\n---\n\n${content}`;
+  }
+  const fmBody = match[1];
+  const fmTerminator = match[2];
+  const after = content.slice(match[0].length);
+  const lines = fmBody.split(/\r?\n/);
+  let tagsIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^tags\s*:/.test(lines[i])) {
+      tagsIdx = i;
+      break;
+    }
+  }
+  if (tagsIdx < 0) {
+    const insert = ["tags:", `  - ${tag}`];
+    const newBody = [...insert, ...lines].join("\n");
+    return `---\n${newBody}\n---${fmTerminator}${after}`;
+  }
+  const tagsLine = lines[tagsIdx];
+  const valueMatch = tagsLine.match(/^tags\s*:\s*(.*)$/);
+  const value = valueMatch ? valueMatch[1].trim() : "";
+  if (value === "" || value === "[]") {
+    let lastBulletIdx = tagsIdx;
+    const bullets: string[] = [];
+    for (let i = tagsIdx + 1; i < lines.length; i++) {
+      const m = lines[i].match(/^\s+-\s+(.*)$/);
+      if (m) {
+        bullets.push(m[1].trim().replace(/^["']|["']$/g, ""));
+        lastBulletIdx = i;
+      } else if (lines[i].trim() === "") {
+        continue;
+      } else {
+        break;
+      }
+    }
+    if (bullets.includes(tag)) return content;
+    if (value === "[]") lines[tagsIdx] = "tags:";
+    lines.splice(lastBulletIdx + 1, 0, `  - ${tag}`);
+  } else if (value.startsWith("[") && value.endsWith("]")) {
+    const inner = value.slice(1, -1).trim();
+    const items =
+      inner === ""
+        ? []
+        : inner
+            .split(",")
+            .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+            .filter((s) => s.length > 0);
+    if (items.includes(tag)) return content;
+    items.push(tag);
+    lines[tagsIdx] = `tags: [${items.join(", ")}]`;
+  } else {
+    const items = value
+      .split(",")
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter((s) => s.length > 0);
+    if (items.includes(tag)) return content;
+    items.push(tag);
+    lines[tagsIdx] = `tags: [${items.join(", ")}]`;
+  }
+  const newBody = lines.join("\n");
+  return `---\n${newBody}\n---${fmTerminator}${after}`;
 }
 
 function toIsoDateStr(d: Date): string {

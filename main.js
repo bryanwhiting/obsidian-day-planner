@@ -3576,7 +3576,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
-      quotesFile: this.plugin.settings.quotesFile
+      quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
     const dailyResolved = await resolveDailyNote(
       this.app,
@@ -3767,7 +3768,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
-      quotesFile: this.plugin.settings.quotesFile
+      quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -3918,7 +3920,8 @@ var TodayView = class extends import_obsidian4.ItemView {
           template: this.plugin.settings.dailyNoteTemplate,
           templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
           prefixes: this.plugin.settings.prefixes,
-          quotesFile: this.plugin.settings.quotesFile
+          quotesFile: this.plugin.settings.quotesFile,
+          addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -5356,7 +5359,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
-      quotesFile: this.plugin.settings.quotesFile
+      quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -5404,7 +5408,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
-      quotesFile: this.plugin.settings.quotesFile
+      quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -5779,7 +5784,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat,
       prefixes: settings.prefixes,
-      quotesFile: settings.quotesFile
+      quotesFile: settings.quotesFile,
+      addCreatedTag: settings.addCreatedTagToFrontmatter
     };
     const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback);
     await this.app.vault.process(
