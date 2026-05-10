@@ -15423,9 +15423,9 @@ delegate(["click"]);
 var import_obsidian10 = require("obsidian");
 
 // src/multiday/MiniTimeline.svelte
-var root_13 = from_html(`<div class="dp-md-timeline-hour"><span class="dp-md-timeline-hour-label"> </span></div>`);
-var root_23 = from_html(`<button><span class="dp-md-timeline-block-text"> </span></button>`);
-var root3 = from_html(`<div class="dp-md-timeline"><!> <!></div>`);
+var root_13 = from_html(`<div class="dp-md-timeline-row"><div class="dp-md-timeline-line"></div> <div class="dp-md-timeline-label"> </div></div>`);
+var root_23 = from_html(`<button><span class="dp-md-timeline-block-time"> </span> <span class="dp-md-timeline-block-text"> </span></button>`);
+var root3 = from_html(`<div class="dp-md-timeline"><!> <div class="dp-md-timeline-blocks"></div></div>`);
 function MiniTimeline($$anchor, $$props) {
   push($$props, true);
   var _a5;
@@ -15435,7 +15435,7 @@ function MiniTimeline($$anchor, $$props) {
   const startMin = user_derived(() => get2(startHour) * 60);
   const endMin = user_derived(() => get2(endHour) * 60);
   const totalMin = user_derived(() => get2(endMin) - get2(startMin));
-  const PX_PER_MIN = 0.5;
+  const PX_PER_MIN = 0.7;
   const heightPx = user_derived(() => get2(totalMin) * PX_PER_MIN);
   const hourMarks = user_derived(() => {
     const out = [];
@@ -15443,23 +15443,14 @@ function MiniTimeline($$anchor, $$props) {
       out.push(h);
     return out;
   });
-  function blockTop(task) {
-    var _a6;
-    const s = (_a6 = task.startMin) !== null && _a6 !== void 0 ? _a6 : get2(startMin);
-    return Math.max(0, (s - get2(startMin)) * PX_PER_MIN);
+  const layout = user_derived(() => layoutTimeline($$props.tasks, get2(startMin), PX_PER_MIN));
+  function hourTopPx(h) {
+    return (h * 60 - get2(startMin)) * PX_PER_MIN;
   }
-  function blockHeight(task) {
+  function blockTimeLabel(t) {
     var _a6;
-    const s = (_a6 = task.startMin) !== null && _a6 !== void 0 ? _a6 : get2(startMin);
-    const end = Math.min(get2(endMin), s + task.durationMin);
-    return Math.max(8, (end - Math.max(get2(startMin), s)) * PX_PER_MIN);
-  }
-  function fmtClock(min) {
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    const hh = (h + 11) % 12 + 1;
-    const mm = m.toString().padStart(2, "0");
-    return `${hh}:${mm}`;
+    const s = (_a6 = t.startMin) !== null && _a6 !== void 0 ? _a6 : 0;
+    return `${formatClockShort(s)}\u2013${formatClockShort(s + t.durationMin)}`;
   }
   function bodyText(task) {
     return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
@@ -15470,51 +15461,69 @@ function MiniTimeline($$anchor, $$props) {
   each(node, 17, () => get2(hourMarks), index, ($$anchor2, h) => {
     var div_1 = root_13();
     let styles_1;
-    var span = child(div_1);
-    var text2 = child(span, true);
-    reset(span);
+    var div_2 = sibling(child(div_1), 2);
+    var text2 = child(div_2, true);
+    reset(div_2);
     reset(div_1);
-    template_effect(() => {
-      styles_1 = set_style(div_1, "", styles_1, { top: `${(get2(h) * 60 - get2(startMin)) * PX_PER_MIN}px` });
-      set_text(text2, get2(h));
-    });
-    append($$anchor2, div_1);
-  });
-  var node_1 = sibling(node, 2);
-  each(node_1, 17, () => $$props.tasks, (task) => task.lineNumber, ($$anchor2, task) => {
-    const color = user_derived(() => colorFor(get2(task), $$props.colorMap));
-    const top = user_derived(() => blockTop(get2(task)));
-    const height = user_derived(() => blockHeight(get2(task)));
-    var button = root_23();
-    let styles_2;
-    var span_1 = child(button);
-    var text_1 = child(span_1, true);
-    reset(span_1);
-    reset(button);
     template_effect(
-      ($0, $1, $2) => {
-        var _a6, _b4, _c2;
-        set_class(button, 1, "dp-md-timeline-block" + (get2(task).checked ? " is-done" : ""));
-        set_attribute2(button, "title", `${$0 != null ? $0 : ""} \xB7 ${$1 != null ? $1 : ""}`);
-        styles_2 = set_style(button, "", styles_2, {
-          top: `${(_a6 = get2(top)) != null ? _a6 : ""}px`,
-          height: `${(_b4 = get2(height)) != null ? _b4 : ""}px`,
-          background: (_c2 = get2(color)) != null ? _c2 : "var(--background-modifier-border)"
-        });
-        set_text(text_1, $2);
+      ($0, $1) => {
+        styles_1 = set_style(div_1, "", styles_1, $0);
+        set_text(text2, $1);
       },
       [
         () => {
           var _a6;
-          return fmtClock((_a6 = get2(task).startMin) != null ? _a6 : 0);
+          return { top: `${(_a6 = hourTopPx(get2(h))) != null ? _a6 : ""}px` };
         },
-        () => bodyText(get2(task)),
-        () => bodyText(get2(task))
+        () => formatClockShort(get2(h) * 60)
       ]
     );
-    delegated("click", button, () => $$props.onClickTask(get2(task)));
+    append($$anchor2, div_1);
+  });
+  var div_3 = sibling(node, 2);
+  each(div_3, 21, () => get2(layout), (b) => b.task.lineNumber, ($$anchor2, b) => {
+    const color = user_derived(() => colorFor(get2(b).task, $$props.colorMap));
+    var button = root_23();
+    let styles_2;
+    var span = child(button);
+    var text_1 = child(span, true);
+    reset(span);
+    var span_1 = sibling(span, 2);
+    var text_2 = child(span_1, true);
+    reset(span_1);
+    reset(button);
+    template_effect(
+      ($0, $1, $2, $3, $4) => {
+        set_class(button, 1, "dp-md-timeline-block" + (get2(b).task.checked ? " is-done" : ""));
+        set_attribute2(button, "title", `${$0 != null ? $0 : ""} \xB7 ${$1 != null ? $1 : ""}`);
+        styles_2 = set_style(button, "", styles_2, $2);
+        set_text(text_1, $3);
+        set_text(text_2, $4);
+      },
+      [
+        () => blockTimeLabel(get2(b).task),
+        () => bodyText(get2(b).task),
+        () => {
+          var _a6, _b4, _c2, _d;
+          return {
+            top: `${(_a6 = get2(b).topPx) != null ? _a6 : ""}px`,
+            height: `${Math.max(8, get2(b).heightPx)}px`,
+            left: `${(_b4 = get2(b).leftPct) != null ? _b4 : ""}%`,
+            width: `calc(${(_c2 = get2(b).widthPct) != null ? _c2 : ""}% - 2px)`,
+            "--dp-md-color": (_d = get2(color)) != null ? _d : "var(--color-accent)"
+          };
+        },
+        () => {
+          var _a6;
+          return formatClockShort((_a6 = get2(b).task.startMin) != null ? _a6 : 0);
+        },
+        () => bodyText(get2(b).task)
+      ]
+    );
+    delegated("click", button, () => $$props.onClickTask(get2(b).task));
     append($$anchor2, button);
   });
+  reset(div_3);
   reset(div);
   template_effect(() => {
     var _a6;
