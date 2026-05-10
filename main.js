@@ -2797,7 +2797,7 @@ function layoutTimeline(scheduled, rangeStartMin, pxPerMin, maxColumns) {
 function rightExtensionCols(t, idx, columns) {
   const tStart = t.startMin;
   const tEnd = tStart + t.durationMin;
-  let ext = 1;
+  let ext = 0;
   for (let j = idx + 1; j < columns.length; j++) {
     if (columnCollides(columns[j], tStart, tEnd))
       break;

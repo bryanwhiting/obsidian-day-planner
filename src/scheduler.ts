@@ -168,8 +168,10 @@ export function layoutTimeline(
   return blocks;
 }
 
-// How many columns starting at `idx` this block can span without colliding
-// with any other column's block in time. Always ≥ 1 (its own column).
+// Count of EXTRA columns to the right of `idx` this block can claim
+// without colliding with any other column's block in time. Excludes the
+// own column — pairs with `leftExtensionCols` so the call site can compute
+// `span = leftExt + 1 + rightExt` without double-counting `idx`.
 function rightExtensionCols(
   t: ParsedTask,
   idx: number,
@@ -177,7 +179,7 @@ function rightExtensionCols(
 ): number {
   const tStart = t.startMin!;
   const tEnd = tStart + t.durationMin;
-  let ext = 1;
+  let ext = 0;
   for (let j = idx + 1; j < columns.length; j++) {
     if (columnCollides(columns[j], tStart, tEnd)) break;
     ext++;
