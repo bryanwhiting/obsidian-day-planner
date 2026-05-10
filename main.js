@@ -529,6 +529,35 @@ function setDurationTag(rawLine, newDurationMin, prefixes) {
     return rawLine.replace(re, newTag);
   return appendTag(rawLine, newTag);
 }
+function sumSubtaskDurations(subtaskRawLines, prefixes) {
+  let total = 0;
+  for (const line of subtaskRawLines) {
+    const d = parseDuration(line, prefixes);
+    if (d !== null)
+      total += d;
+  }
+  return total;
+}
+function applyComputedParentDurations(content, prefixes) {
+  const tasks = parseFileTasks("", content, prefixes, 0);
+  let lines = null;
+  for (const t of tasks) {
+    if (t.hasExplicitDuration)
+      continue;
+    const sum = sumSubtaskDurations(
+      t.subtasks.map((s) => s.rawLine),
+      prefixes
+    );
+    if (sum <= 0)
+      continue;
+    if (!lines)
+      lines = content.split("\n");
+    if (lines[t.lineNumber] !== t.rawLine)
+      continue;
+    lines[t.lineNumber] = setDurationTag(t.rawLine, sum, prefixes);
+  }
+  return lines ? lines.join("\n") : content;
+}
 function formatActualTime(totalMin, prefixes) {
   const safe = Math.max(1, Math.round(totalMin));
   const h = Math.floor(safe / 60);
@@ -2525,7 +2554,7 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
   }
   const basename = resolved.path.split("/").pop().replace(/\.md$/i, "");
   const rawTemplate = await readCombinedTemplate(app, fallback, date);
-  const initialContent = expandDateTemplate(
+  const expanded = expandDateTemplate(
     rawTemplate,
     basename,
     app,
@@ -2533,6 +2562,7 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
     fallback.folder,
     (_a = fallback.dateLinkFormat) != null ? _a : ""
   );
+  const initialContent = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify)
     new import_obsidian3.Notice(`Created ${resolved.path}`);
@@ -2566,7 +2596,8 @@ async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
     folder,
     (_d = fallback.dateLinkFormat) != null ? _d : ""
   );
-  await app.vault.modify(file, expanded);
+  const finalContent = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
+  await app.vault.modify(file, finalContent);
 }
 function stripSlashes(s) {
   return s.replace(/^\/+|\/+$/g, "");
@@ -3254,7 +3285,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: this.plugin.settings.dateLinkFormat
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes
     };
     const dailyResolved = await resolveDailyNote(
       this.app,
@@ -3428,7 +3460,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: this.plugin.settings.dateLinkFormat
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -3573,7 +3606,8 @@ var TodayView = class extends import_obsidian4.ItemView {
           folder: this.plugin.settings.dailyNoteFolderFallback,
           format: this.plugin.settings.dailyNoteFormatFallback,
           template: this.plugin.settings.dailyNoteTemplate,
-          templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay
+          templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
+          prefixes: this.plugin.settings.prefixes
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -3817,7 +3851,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       onSave: (title, description, durationMin, project, _checked, tags, extras) => {
         var _a, _b;
         const proj = project === void 0 || project === "" ? null : project;
-        const dur = durationMin != null ? durationMin : defaultDurationMin;
+        const subtaskSum = durationMin === null && (extras == null ? void 0 : extras.subtaskRawLines) ? sumSubtaskDurations(
+          extras.subtaskRawLines,
+          this.plugin.settings.prefixes
+        ) : 0;
+        const dur = durationMin != null ? durationMin : subtaskSum > 0 ? subtaskSum : defaultDurationMin;
         let newLine = buildLine(title, description, dur, proj);
         if (tags && tags.length > 0) {
           newLine = setTaskContextTags(
@@ -4033,7 +4071,9 @@ var TodayView = class extends import_obsidian4.ItemView {
         source: "timeline",
         grabOffsetY: ev.clientY - rect.top,
         durationMin: block.task.durationMin,
-        bodyText: this.cleanBody(block.task.body)
+        bodyText: this.cleanBody(block.task.body),
+        hasExplicitDuration: block.task.hasExplicitDuration,
+        subtaskRawLines: block.task.subtasks.map((s) => s.rawLine)
       };
       el.addClass("is-dragging");
       this.suppressNativeDragImage(ev);
@@ -4348,7 +4388,9 @@ var TodayView = class extends import_obsidian4.ItemView {
           source: "unscheduled",
           grabOffsetY: ev.clientY - rect.top,
           durationMin: task.durationMin,
-          bodyText: this.cleanBody(task.body)
+          bodyText: this.cleanBody(task.body),
+          hasExplicitDuration: task.hasExplicitDuration,
+          subtaskRawLines: task.subtasks.map((s) => s.rawLine)
         };
         card.addClass("is-dragging");
         this.suppressNativeDragImage(ev);
@@ -4396,9 +4438,13 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   async handleDropOnTimeline(payload, newStartMin) {
     const prefixes = this.plugin.settings.prefixes;
+    const subtaskSum = payload.source === "unscheduled" && !payload.hasExplicitDuration ? sumSubtaskDurations(payload.subtaskRawLines, prefixes) : 0;
     await this.editLine(payload, (line) => {
       let next = setTimeTag(line, newStartMin, prefixes);
       next = removeOrderTag(next, prefixes);
+      if (subtaskSum > 0 && parseDuration(next, prefixes) === null) {
+        next = setDurationTag(next, subtaskSum, prefixes);
+      }
       return next;
     });
   }
@@ -4986,7 +5032,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: this.plugin.settings.dateLinkFormat
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -5032,7 +5079,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: this.plugin.settings.dateLinkFormat
+      dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -5405,7 +5453,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
       templatesByDay: settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: settings.dateLinkFormat
+      dateLinkFormat: settings.dateLinkFormat,
+      prefixes: settings.prefixes
     };
     const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback);
     await this.app.vault.process(
@@ -6777,7 +6826,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       this.opts.onSave(
         title,
         resolveDescription(),
-        this.opts.mode === "new" || this.durationChanged ? this.selectedDurationMin : null,
+        this.durationChanged ? this.selectedDurationMin : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null,
         resolveTags(),
@@ -8386,7 +8435,8 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
           format: this.settings.dailyNoteFormatFallback,
           template: this.settings.dailyNoteTemplate,
           templatesByDay: this.settings.dailyNoteTemplatesByDay,
-          dateLinkFormat: this.settings.dateLinkFormat
+          dateLinkFormat: this.settings.dateLinkFormat,
+          prefixes: this.settings.prefixes
         });
       })
     );
@@ -8449,7 +8499,8 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
       format: this.settings.dailyNoteFormatFallback,
       template: this.settings.dailyNoteTemplate,
       templatesByDay: this.settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: this.settings.dateLinkFormat
+      dateLinkFormat: this.settings.dateLinkFormat,
+      prefixes: this.settings.prefixes
     };
     const file = await ensureDailyNote(this.app, target, fallback, false);
     const leaf = this.app.workspace.getLeaf(false);

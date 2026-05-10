@@ -289,6 +289,48 @@ export function setDurationTag(
   return appendTag(rawLine, newTag);
 }
 
+// Sums #d/ durations across the given subtask lines. Subtasks without a
+// duration tag are skipped. Returns 0 when nothing contributes — callers
+// treat that as "no subtask-derived duration" and fall back to whatever
+// they would have used otherwise (default duration, modal value, etc.).
+export function sumSubtaskDurations(
+  subtaskRawLines: string[],
+  prefixes: TagPrefixes,
+): number {
+  let total = 0;
+  for (const line of subtaskRawLines) {
+    const d = parseDuration(line, prefixes);
+    if (d !== null) total += d;
+  }
+  return total;
+}
+
+// Walks the file content for top-level tasks lacking a #d/ tag whose
+// subtasks contribute durations, and rewrites each parent line with
+// #d/<sum>. Used when a daily note is first created from a template (and
+// when a new task is appended) so the calendar layout reflects the
+// subtask breakdown the user planned. Parent lines with an explicit
+// #d/ tag are left alone.
+export function applyComputedParentDurations(
+  content: string,
+  prefixes: TagPrefixes,
+): string {
+  const tasks = parseFileTasks("", content, prefixes, 0);
+  let lines: string[] | null = null;
+  for (const t of tasks) {
+    if (t.hasExplicitDuration) continue;
+    const sum = sumSubtaskDurations(
+      t.subtasks.map((s) => s.rawLine),
+      prefixes,
+    );
+    if (sum <= 0) continue;
+    if (!lines) lines = content.split("\n");
+    if (lines[t.lineNumber] !== t.rawLine) continue;
+    lines[t.lineNumber] = setDurationTag(t.rawLine, sum, prefixes);
+  }
+  return lines ? lines.join("\n") : content;
+}
+
 export function parseActualTime(
   body: string,
   prefixes: TagPrefixes,

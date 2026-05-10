@@ -28,6 +28,7 @@ import {
   removeOrderTag,
   setDurationTag,
   removeDurationTag,
+  sumSubtaskDurations,
   setProjectTag,
   setTaskContextTags,
   removeProjectTag,
@@ -100,6 +101,11 @@ interface DragPayload {
   grabOffsetY: number;
   durationMin: number;
   bodyText: string;
+  // Used when an unscheduled card without an explicit #d/ tag is dropped
+  // onto the timeline — the drop handler fills the parent's duration
+  // from the sum of these subtask lines (skipping any without a #d/).
+  hasExplicitDuration: boolean;
+  subtaskRawLines: string[];
 }
 
 interface HabitDisplay {
@@ -418,6 +424,7 @@ export class TodayView extends ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes,
     };
 
     const dailyResolved = await resolveDailyNote(
@@ -620,6 +627,7 @@ export class TodayView extends ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes,
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -792,6 +800,7 @@ export class TodayView extends ItemView {
           format: this.plugin.settings.dailyNoteFormatFallback,
           template: this.plugin.settings.dailyNoteTemplate,
           templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
+          prefixes: this.plugin.settings.prefixes,
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -1082,7 +1091,19 @@ export class TodayView extends ItemView {
       onSave: (title, description, durationMin, project, _checked, tags, extras) => {
         const proj =
           project === undefined || project === "" ? null : project;
-        const dur = durationMin ?? defaultDurationMin;
+        // When the user didn't touch the duration field, prefer the sum of
+        // any subtask #d/ tags before falling back to the system default —
+        // a parent without an explicit duration whose subtasks are timed
+        // should adopt the subtask total.
+        const subtaskSum =
+          durationMin === null && extras?.subtaskRawLines
+            ? sumSubtaskDurations(
+                extras.subtaskRawLines,
+                this.plugin.settings.prefixes,
+              )
+            : 0;
+        const dur =
+          durationMin ?? (subtaskSum > 0 ? subtaskSum : defaultDurationMin);
         let newLine = buildLine(title, description, dur, proj);
         if (tags && tags.length > 0) {
           newLine = setTaskContextTags(
@@ -1344,6 +1365,8 @@ export class TodayView extends ItemView {
         grabOffsetY: ev.clientY - rect.top,
         durationMin: block.task.durationMin,
         bodyText: this.cleanBody(block.task.body),
+        hasExplicitDuration: block.task.hasExplicitDuration,
+        subtaskRawLines: block.task.subtasks.map((s) => s.rawLine),
       };
       el.addClass("is-dragging");
       this.suppressNativeDragImage(ev);
@@ -1701,6 +1724,8 @@ export class TodayView extends ItemView {
           grabOffsetY: ev.clientY - rect.top,
           durationMin: task.durationMin,
           bodyText: this.cleanBody(task.body),
+          hasExplicitDuration: task.hasExplicitDuration,
+          subtaskRawLines: task.subtasks.map((s) => s.rawLine),
         };
         card.addClass("is-dragging");
         this.suppressNativeDragImage(ev);
@@ -1747,9 +1772,21 @@ export class TodayView extends ItemView {
     newStartMin: number,
   ): Promise<void> {
     const prefixes = this.plugin.settings.prefixes;
+    // When an unscheduled card whose parent has no #d/ tag is dropped onto
+    // the timeline, adopt the sum of its subtask durations as the parent's
+    // duration so the calendar block reflects what the user planned in
+    // subtasks. Once written, the parent has an explicit duration and the
+    // computation won't run again on subsequent drags.
+    const subtaskSum =
+      payload.source === "unscheduled" && !payload.hasExplicitDuration
+        ? sumSubtaskDurations(payload.subtaskRawLines, prefixes)
+        : 0;
     await this.editLine(payload, (line) => {
       let next = setTimeTag(line, newStartMin, prefixes);
       next = removeOrderTag(next, prefixes);
+      if (subtaskSum > 0 && parseDuration(next, prefixes) === null) {
+        next = setDurationTag(next, subtaskSum, prefixes);
+      }
       return next;
     });
   }
@@ -2439,6 +2476,7 @@ export class TodayView extends ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -2497,6 +2535,7 @@ export class TodayView extends ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
+      prefixes: this.plugin.settings.prefixes,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -2966,6 +3005,7 @@ export class TodayView extends ItemView {
       template: settings.dailyNoteTemplate,
       templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat,
+      prefixes: settings.prefixes,
     };
     const target = file
       ? file
@@ -4752,9 +4792,7 @@ class TaskEditModal extends Modal {
       this.opts.onSave(
         title,
         resolveDescription(),
-        this.opts.mode === "new" || this.durationChanged
-          ? this.selectedDurationMin
-          : null,
+        this.durationChanged ? this.selectedDurationMin : null,
         resolveProject(),
         this.checkedChanged ? this.checked : null,
         resolveTags(),

@@ -3,6 +3,10 @@ import {
   WEEKDAY_NAMES,
   type DailyNoteWeekdayTemplates,
 } from "./settings";
+import {
+  applyComputedParentDurations,
+  type TagPrefixes,
+} from "./parser";
 
 interface DailyNotesOptions {
   format?: string;
@@ -26,6 +30,11 @@ export interface DailyNoteFallback {
   // Moment.js format used for the visible alias on date links written by the
   // template parser. Empty/absent → no alias; the link uses just the basename.
   dateLinkFormat?: string;
+  // Tag prefixes used to detect/rewrite #d/ tags. When present, parent
+  // tasks in the rendered template that lack a #d/ tag and whose subtasks
+  // carry #d/ tags get their duration computed as the subtask sum and
+  // written onto the parent line before the file is created.
+  prefixes?: TagPrefixes;
 }
 
 export async function resolveDailyNote(
@@ -65,7 +74,7 @@ export async function ensureDailyNote(
     .pop()!
     .replace(/\.md$/i, "");
   const rawTemplate = await readCombinedTemplate(app, fallback, date);
-  const initialContent = expandDateTemplate(
+  const expanded = expandDateTemplate(
     rawTemplate,
     basename,
     app,
@@ -73,6 +82,9 @@ export async function ensureDailyNote(
     fallback.folder,
     fallback.dateLinkFormat ?? "",
   );
+  const initialContent = fallback.prefixes
+    ? applyComputedParentDurations(expanded, fallback.prefixes)
+    : expanded;
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify) new Notice(`Created ${resolved.path}`);
   return file;
@@ -112,7 +124,10 @@ export async function applyDailyNoteTemplateIfEmpty(
     folder,
     fallback.dateLinkFormat ?? "",
   );
-  await app.vault.modify(file, expanded);
+  const finalContent = fallback.prefixes
+    ? applyComputedParentDurations(expanded, fallback.prefixes)
+    : expanded;
+  await app.vault.modify(file, finalContent);
 }
 
 function stripSlashes(s: string): string {
