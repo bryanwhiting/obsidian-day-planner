@@ -1505,11 +1505,17 @@ export class TodaySettingTab extends PluginSettingTab {
 
     const intentionDesc = document.createDocumentFragment();
     intentionDesc.append(
-      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your intention for the day and shown next to the daily-note path in the dashboard header. Enter the bare tag without the leading ",
+      "Today will search for either the Obsidian property ",
+      makeCode("intention"),
+      " (configurable) or the hashtag ",
+      makeCode("#intention"),
+      " in the daily note, and show the result next to the daily-note path in the dashboard header. The frontmatter property takes priority when both are set. Enter the bare tag without the leading ",
       makeCode("#"),
       " — e.g. ",
       makeCode("intention"),
-      " matches ",
+      " matches both the property ",
+      makeCode("intention: be present"),
+      " and the inline ",
       makeCode("#intention be present"),
       ". If multiple ",
       makeCode("#intention"),
@@ -1531,7 +1537,11 @@ export class TodaySettingTab extends PluginSettingTab {
 
     const quoteDesc = document.createDocumentFragment();
     quoteDesc.append(
-      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your quote for the day and shown on its own row in the dashboard header beneath the intention. Pairs with the ",
+      "Today will search for either the Obsidian property ",
+      makeCode("quote"),
+      " (configurable) or the hashtag ",
+      makeCode("#quote"),
+      " in the daily note, and show the result on its own row in the dashboard header beneath the intention. The frontmatter property takes priority when both are set. Pairs with the ",
       makeCode("<@quote>"),
       " template placeholder — e.g. ",
       makeCode("#quote <@quote>"),

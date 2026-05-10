@@ -191,6 +191,41 @@ export function parseTaggedLine(
   return null;
 }
 
+// Reads the frontmatter property whose name matches `tagName` (with any
+// leading `#` stripped) and returns it as a non-empty trimmed string. Lists
+// return their first non-empty entry. Numbers/booleans are stringified.
+// Returns null when the property is missing, empty, or not a value we can
+// represent inline.
+export function parseFrontmatterField(
+  frontmatter: Record<string, unknown> | null | undefined,
+  tagName: string,
+): string | null {
+  if (!frontmatter) return null;
+  const key = tagName.replace(/^#+/, "").trim();
+  if (!key) return null;
+  const v = frontmatter[key];
+  if (v == null) return null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    return t.length ? t : null;
+  }
+  if (typeof v === "number" || typeof v === "boolean") {
+    return String(v);
+  }
+  if (Array.isArray(v)) {
+    for (const item of v) {
+      if (typeof item === "string") {
+        const t = item.trim();
+        if (t.length) return t;
+      } else if (typeof item === "number" || typeof item === "boolean") {
+        return String(item);
+      }
+    }
+    return null;
+  }
+  return null;
+}
+
 export function formatExerciseLine(summaries: ExerciseSummary[]): string {
   return summaries.map(formatExerciseSummary).join(" • ");
 }

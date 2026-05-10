@@ -455,6 +455,36 @@ function parseTaggedLine(content, tagName) {
   }
   return null;
 }
+function parseFrontmatterField(frontmatter, tagName) {
+  if (!frontmatter)
+    return null;
+  const key = tagName.replace(/^#+/, "").trim();
+  if (!key)
+    return null;
+  const v = frontmatter[key];
+  if (v == null)
+    return null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    return t.length ? t : null;
+  }
+  if (typeof v === "number" || typeof v === "boolean") {
+    return String(v);
+  }
+  if (Array.isArray(v)) {
+    for (const item of v) {
+      if (typeof item === "string") {
+        const t = item.trim();
+        if (t.length)
+          return t;
+      } else if (typeof item === "number" || typeof item === "boolean") {
+        return String(item);
+      }
+    }
+    return null;
+  }
+  return null;
+}
 function formatExerciseLine(summaries) {
   return summaries.map(formatExerciseSummary).join(" \u2022 ");
 }
@@ -2231,11 +2261,17 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
     const intentionDesc = document.createDocumentFragment();
     intentionDesc.append(
-      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your intention for the day and shown next to the daily-note path in the dashboard header. Enter the bare tag without the leading ",
+      "Today will search for either the Obsidian property ",
+      makeCode("intention"),
+      " (configurable) or the hashtag ",
+      makeCode("#intention"),
+      " in the daily note, and show the result next to the daily-note path in the dashboard header. The frontmatter property takes priority when both are set. Enter the bare tag without the leading ",
       makeCode("#"),
       " \u2014 e.g. ",
       makeCode("intention"),
-      " matches ",
+      " matches both the property ",
+      makeCode("intention: be present"),
+      " and the inline ",
       makeCode("#intention be present"),
       ". If multiple ",
       makeCode("#intention"),
@@ -2249,7 +2285,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
     const quoteDesc = document.createDocumentFragment();
     quoteDesc.append(
-      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your quote for the day and shown on its own row in the dashboard header beneath the intention. Pairs with the ",
+      "Today will search for either the Obsidian property ",
+      makeCode("quote"),
+      " (configurable) or the hashtag ",
+      makeCode("#quote"),
+      " in the daily note, and show the result on its own row in the dashboard header beneath the intention. The frontmatter property takes priority when both are set. Pairs with the ",
       makeCode("<@quote>"),
       " template placeholder \u2014 e.g. ",
       makeCode("#quote <@quote>"),
@@ -3554,7 +3594,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.scheduleRender();
   }
   async render() {
-    var _a;
+    var _a, _b, _c, _d, _e;
     const root = this.containerEl.children[1];
     if (this.pomodoroState && !this.pomodoroHidden) {
       const handled = await this.renderPomodoro(root);
@@ -3603,10 +3643,11 @@ var TodayView = class extends import_obsidian4.ItemView {
       this.plugin.settings.defaultDurationMin
     ) : [];
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
-    const intention = displayFile ? parseTaggedLine(fileContent, this.plugin.settings.intentionTag) : null;
-    const quote = displayFile ? parseTaggedLine(fileContent, this.plugin.settings.quoteTag) : null;
+    const frontmatter = displayFile ? (_b = (_a = this.app.metadataCache.getFileCache(displayFile)) == null ? void 0 : _a.frontmatter) != null ? _b : null : null;
+    const intention = displayFile ? (_c = parseFrontmatterField(frontmatter, this.plugin.settings.intentionTag)) != null ? _c : parseTaggedLine(fileContent, this.plugin.settings.intentionTag) : null;
+    const quote = displayFile ? (_d = parseFrontmatterField(frontmatter, this.plugin.settings.quoteTag)) != null ? _d : parseTaggedLine(fileContent, this.plugin.settings.quoteTag) : null;
     const activeFile = this.app.workspace.getActiveFile();
-    this.lastActiveFilePath = (_a = activeFile == null ? void 0 : activeFile.path) != null ? _a : null;
+    this.lastActiveFilePath = (_e = activeFile == null ? void 0 : activeFile.path) != null ? _e : null;
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
     this.renderDateNav(root, displayFile);
     const colorMap = resolveProjectColors(

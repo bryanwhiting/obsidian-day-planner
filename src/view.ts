@@ -19,6 +19,7 @@ import {
   parseFileTasks,
   parseExercises,
   parseTaggedLine,
+  parseFrontmatterField,
   parseTime,
   parseDuration,
   formatExerciseLine,
@@ -462,11 +463,16 @@ export class TodayView extends ItemView {
         )
       : [];
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
+    const frontmatter = displayFile
+      ? this.app.metadataCache.getFileCache(displayFile)?.frontmatter ?? null
+      : null;
     const intention = displayFile
-      ? parseTaggedLine(fileContent, this.plugin.settings.intentionTag)
+      ? parseFrontmatterField(frontmatter, this.plugin.settings.intentionTag) ??
+        parseTaggedLine(fileContent, this.plugin.settings.intentionTag)
       : null;
     const quote = displayFile
-      ? parseTaggedLine(fileContent, this.plugin.settings.quoteTag)
+      ? parseFrontmatterField(frontmatter, this.plugin.settings.quoteTag) ??
+        parseTaggedLine(fileContent, this.plugin.settings.quoteTag)
       : null;
 
     const activeFile = this.app.workspace.getActiveFile();
