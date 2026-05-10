@@ -2,6 +2,8 @@
 
 ## 2026-05-10
 
+- [feat]: **Project colors are now drag-and-drop reorderable in settings.** Each row in Settings → Projects → Project colors gains a left-side grip handle (`grip-vertical` Lucide icon) — drag it onto another row to reorder. Drop indicator (a 2px accent-colored line) appears above or below the target row depending on which half of the row the cursor is over. Source row dims to 0.4 opacity while dragging. On drop, splices the `projectColors` array, saves settings, and re-renders. Files: `src/settings.ts` (`renderProjectColorsSection` — handle + dragstart/dragover/drop/dragend wiring with a closure-scoped `dragSrcIdx`), `src/styles.src.css` (`.dp-project-color-drag` handle + `.is-dragging` / `.is-drop-above` / `.is-drop-below` row states). The user asked: "in the settings, let me re-order the projects. (drag n drop)"
+
 - [feat]: **Weekday templates now slot into the base via a `<@dow_template>` placeholder** instead of appending to the end. Put `<@dow_template>` wherever the day-of-week content should land in the base daily-note template (e.g. `_day.md`), and the matching weekday file (e.g. `monday.md`) is substituted there at note-creation time. Bases without the placeholder no longer get weekday content appended — users opt in by editing the base. Empty weekday entries collapse the placeholder to "". Files: `src/dailyNote.ts` (`readCombinedTemplate` rewritten as a placeholder substitution; interface doc updated), `src/settings.ts` (interface doc + the user-facing "Per-weekday templates" copy now explains the placeholder model). The user asked: "instead of just appending the day's tasks, let's create `<@dow_template>` and insert the day's template right there."
 
 ## 2026-05-09

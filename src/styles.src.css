@@ -2277,6 +2277,56 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    position: relative;
+  }
+
+  .dp-project-color-row.is-dragging {
+    opacity: 0.4;
+  }
+
+  .dp-project-color-row.is-drop-above::before,
+  .dp-project-color-row.is-drop-below::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--color-accent);
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
+  .dp-project-color-row.is-drop-above::before {
+    top: -4px;
+  }
+
+  .dp-project-color-row.is-drop-below::after {
+    bottom: -4px;
+  }
+
+  .dp-project-color-drag {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 24px;
+    color: var(--color-ink-faint);
+    cursor: grab;
+    user-select: none;
+  }
+
+  .dp-project-color-drag:hover {
+    color: var(--color-ink-muted);
+  }
+
+  .dp-project-color-drag:active {
+    cursor: grabbing;
+  }
+
+  .dp-project-color-drag .svg-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .dp-project-color-name-wrap {

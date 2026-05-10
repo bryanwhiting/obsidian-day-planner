@@ -2138,9 +2138,66 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       })
     );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    let dragSrcIdx = null;
+    list.addEventListener("dragover", (ev) => {
+      if (dragSrcIdx === null)
+        return;
+      ev.preventDefault();
+      if (ev.dataTransfer)
+        ev.dataTransfer.dropEffect = "move";
+    });
     this.plugin.settings.projectColors.forEach((entry, idx) => {
       var _a;
       const row = list.createDiv({ cls: "dp-project-color-row" });
+      const handle = row.createDiv({ cls: "dp-project-color-drag" });
+      (0, import_obsidian2.setIcon)(handle, "grip-vertical");
+      handle.setAttr("draggable", "true");
+      handle.setAttr("aria-label", "Drag to reorder");
+      handle.addEventListener("dragstart", (ev) => {
+        dragSrcIdx = idx;
+        row.addClass("is-dragging");
+        if (ev.dataTransfer) {
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", String(idx));
+        }
+      });
+      handle.addEventListener("dragend", () => {
+        dragSrcIdx = null;
+        row.removeClass("is-dragging");
+        list.querySelectorAll(".is-drop-above, .is-drop-below").forEach((el) => el.removeClasses(["is-drop-above", "is-drop-below"]));
+      });
+      row.addEventListener("dragover", (ev) => {
+        if (dragSrcIdx === null || dragSrcIdx === idx)
+          return;
+        ev.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const after = ev.clientY > rect.top + rect.height / 2;
+        row.toggleClass("is-drop-above", !after);
+        row.toggleClass("is-drop-below", after);
+      });
+      row.addEventListener("dragleave", (ev) => {
+        const related = ev.relatedTarget;
+        if (!related || !row.contains(related)) {
+          row.removeClasses(["is-drop-above", "is-drop-below"]);
+        }
+      });
+      row.addEventListener("drop", async (ev) => {
+        if (dragSrcIdx === null || dragSrcIdx === idx)
+          return;
+        ev.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const after = ev.clientY > rect.top + rect.height / 2;
+        const src = dragSrcIdx;
+        let dest = after ? idx + 1 : idx;
+        if (src < dest)
+          dest -= 1;
+        const arr = this.plugin.settings.projectColors;
+        const [moved] = arr.splice(src, 1);
+        arr.splice(dest, 0, moved);
+        dragSrcIdx = null;
+        await this.plugin.saveSettings();
+        this.display();
+      });
       const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
       nameWrap.createSpan({
         cls: "dp-project-color-prefix",
