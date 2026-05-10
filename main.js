@@ -1211,6 +1211,7 @@ var DEFAULT_SETTINGS = {
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
   dailyNoteTemplatesByDay: { ...DEFAULT_WEEKDAY_TEMPLATES },
+  quotesFile: "daily/_quotes.md",
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
@@ -1572,6 +1573,32 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
   }
   renderTemplatingSection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Templating").setHeading();
+    const placeholders = containerEl.createEl("p", {
+      cls: "setting-item-description"
+    });
+    placeholders.append(
+      "Template placeholders are expanded when a daily note is created from a template. ",
+      makeCode("<@today>"),
+      ", ",
+      makeCode("<@yesterday>"),
+      ", ",
+      makeCode("<@tomorrow>"),
+      ", and ",
+      makeCode("<@Nd>"),
+      " (e.g. ",
+      makeCode("<@2d>"),
+      ", ",
+      makeCode("<@7d>"),
+      ") are replaced with a link to the matching daily note. The bare form is anchored to wall-clock today; append ",
+      makeCode("-rel"),
+      " (e.g. ",
+      makeCode("<@today-rel>"),
+      ", ",
+      makeCode("<@yesterday-rel>"),
+      ") to anchor to the file's own date instead \u2014 so a backfilled or future note resolves these against its own filename rather than the day it was created. ",
+      makeCode("<@quote>"),
+      " is replaced with a random line from the configured quotes file (see below)."
+    );
     new import_obsidian2.Setting(containerEl).setName("Daily note format fallback").setDesc(
       "Used if the core Daily Notes plugin isn't enabled. Tokens: YYYY MM DD."
     ).addText(
@@ -1605,6 +1632,25 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       new FileSuggest(this.app, t.inputEl, async (file) => {
         t.setValue(file.path);
         this.plugin.settings.dailyNoteTemplate = file.path;
+        await this.plugin.saveSettings();
+      });
+    });
+    const quotesDesc = document.createDocumentFragment();
+    quotesDesc.append(
+      "Vault path to a markdown file holding one quote per line \u2014 each carriage return starts a new quote. When the template contains ",
+      makeCode("<@quote>"),
+      ", a random line from this file is substituted at note-creation time. Default: ",
+      makeCode("daily/_quotes.md"),
+      ". Leave blank to disable the placeholder."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Quotes file").setDesc(quotesDesc).addText((t) => {
+      t.setPlaceholder("daily/_quotes.md").setValue(this.plugin.settings.quotesFile).onChange(async (v) => {
+        this.plugin.settings.quotesFile = v.trim();
+        await this.plugin.saveSettings();
+      });
+      new FileSuggest(this.app, t.inputEl, async (file) => {
+        t.setValue(file.path);
+        this.plugin.settings.quotesFile = file.path;
         await this.plugin.saveSettings();
       });
     });
@@ -2554,13 +2600,15 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
   }
   const basename = resolved.path.split("/").pop().replace(/\.md$/i, "");
   const rawTemplate = await readCombinedTemplate(app, fallback, date);
+  const quote = await pickRandomQuote(app, fallback.quotesFile);
   const expanded = expandDateTemplate(
     rawTemplate,
     basename,
     app,
     fallback.format,
     fallback.folder,
-    (_a = fallback.dateLinkFormat) != null ? _a : ""
+    (_a = fallback.dateLinkFormat) != null ? _a : "",
+    quote
   );
   const initialContent = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
   const file = await app.vault.create(resolved.path, initialContent);
@@ -2588,13 +2636,15 @@ async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
   const template = await readCombinedTemplate(app, fallback, refDate);
   if (!template)
     return;
+  const quote = await pickRandomQuote(app, fallback.quotesFile);
   const expanded = expandDateTemplate(
     template,
     file.basename,
     app,
     format,
     folder,
-    (_d = fallback.dateLinkFormat) != null ? _d : ""
+    (_d = fallback.dateLinkFormat) != null ? _d : "",
+    quote
   );
   const finalContent = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
   await app.vault.modify(file, finalContent);
@@ -2694,12 +2744,14 @@ function resolveDateKeyword(kw, refDate) {
   }
   return null;
 }
-function expandDateTemplate(content, fileBasename, app, fileFormat, folder, displayFormat) {
+function expandDateTemplate(content, fileBasename, app, fileFormat, folder, displayFormat, quote = "") {
   if (!content)
     return content;
   return content.replace(
     /<@([A-Za-z0-9]+)(-rel)?>/g,
     (match, kw, rel) => {
+      if (kw === "quote" && !rel)
+        return quote;
       let ref;
       if (rel) {
         const parsed = parseFilenameDate(fileBasename, fileFormat);
@@ -2715,6 +2767,21 @@ function expandDateTemplate(content, fileBasename, app, fileFormat, folder, disp
       return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
     }
   );
+}
+async function pickRandomQuote(app, quotesPath) {
+  const raw = (quotesPath != null ? quotesPath : "").trim();
+  if (!raw)
+    return "";
+  const withExt = raw.toLowerCase().endsWith(".md") ? raw : `${raw}.md`;
+  const path = (0, import_obsidian3.normalizePath)(withExt);
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof import_obsidian3.TFile))
+    return "";
+  const content = await app.vault.read(file);
+  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length === 0)
+    return "";
+  return lines[Math.floor(Math.random() * lines.length)];
 }
 function parseFilenameDate(basename, fileFormat) {
   const fmt = (fileFormat || "YYYY-MM-DD").trim();
@@ -3286,7 +3353,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
-      prefixes: this.plugin.settings.prefixes
+      prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile
     };
     const dailyResolved = await resolveDailyNote(
       this.app,
@@ -3461,7 +3529,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
-      prefixes: this.plugin.settings.prefixes
+      prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -3607,7 +3676,8 @@ var TodayView = class extends import_obsidian4.ItemView {
           format: this.plugin.settings.dailyNoteFormatFallback,
           template: this.plugin.settings.dailyNoteTemplate,
           templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
-          prefixes: this.plugin.settings.prefixes
+          prefixes: this.plugin.settings.prefixes,
+          quotesFile: this.plugin.settings.quotesFile
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -5033,7 +5103,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
-      prefixes: this.plugin.settings.prefixes
+      prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -5080,7 +5151,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       template: this.plugin.settings.dailyNoteTemplate,
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
-      prefixes: this.plugin.settings.prefixes
+      prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -5454,7 +5526,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       template: settings.dailyNoteTemplate,
       templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat,
-      prefixes: settings.prefixes
+      prefixes: settings.prefixes,
+      quotesFile: settings.quotesFile
     };
     const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback);
     await this.app.vault.process(
@@ -7866,7 +7939,8 @@ var HabitsStatsView = class extends import_obsidian5.ItemView {
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
       templatesByDay: settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: settings.dateLinkFormat
+      dateLinkFormat: settings.dateLinkFormat,
+      quotesFile: settings.quotesFile
     };
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });
     heading.createEl("h3", { text: "Habit stats" });
@@ -8500,7 +8574,8 @@ var TodayPlugin = class extends import_obsidian6.Plugin {
       template: this.settings.dailyNoteTemplate,
       templatesByDay: this.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.settings.dateLinkFormat,
-      prefixes: this.settings.prefixes
+      prefixes: this.settings.prefixes,
+      quotesFile: this.settings.quotesFile
     };
     const file = await ensureDailyNote(this.app, target, fallback, false);
     const leaf = this.app.workspace.getLeaf(false);

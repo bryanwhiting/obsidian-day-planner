@@ -425,6 +425,7 @@ export class TodayView extends ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile,
     };
 
     const dailyResolved = await resolveDailyNote(
@@ -628,6 +629,7 @@ export class TodayView extends ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile,
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -801,6 +803,7 @@ export class TodayView extends ItemView {
           template: this.plugin.settings.dailyNoteTemplate,
           templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
           prefixes: this.plugin.settings.prefixes,
+          quotesFile: this.plugin.settings.quotesFile,
         };
         await ensureDailyNote(this.app, this.selectedDate, fallback);
         this.scheduleRender();
@@ -2477,6 +2480,7 @@ export class TodayView extends ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -2536,6 +2540,7 @@ export class TodayView extends ItemView {
       templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
+      quotesFile: this.plugin.settings.quotesFile,
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
@@ -3006,6 +3011,7 @@ export class TodayView extends ItemView {
       templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat,
       prefixes: settings.prefixes,
+      quotesFile: settings.quotesFile,
     };
     const target = file
       ? file

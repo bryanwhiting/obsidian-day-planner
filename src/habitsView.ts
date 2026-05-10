@@ -127,6 +127,7 @@ export class HabitsStatsView extends ItemView {
       template: settings.dailyNoteTemplate,
       templatesByDay: settings.dailyNoteTemplatesByDay,
       dateLinkFormat: settings.dateLinkFormat,
+      quotesFile: settings.quotesFile,
     };
 
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });

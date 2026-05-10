@@ -91,6 +91,10 @@ export interface TodaySettings {
   // Per-weekday templates appended to the base `dailyNoteTemplate` when a
   // daily note is created on that day of the week. Empty values are skipped.
   dailyNoteTemplatesByDay: DailyNoteWeekdayTemplates;
+  // Vault path to a markdown file holding one quote per line. When the daily
+  // note template contains `<@quote>`, a random line from this file is
+  // substituted at note-creation time. Empty disables the placeholder.
+  quotesFile: string;
   defaultDurationMin: number;
   quickDurationsMin: number[];
   projectColors: ProjectColor[];
@@ -157,6 +161,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   dailyNoteFolderFallback: "daily",
   dailyNoteTemplate: "",
   dailyNoteTemplatesByDay: { ...DEFAULT_WEEKDAY_TEMPLATES },
+  quotesFile: "daily/_quotes.md",
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
@@ -649,6 +654,33 @@ export class TodaySettingTab extends PluginSettingTab {
   private renderTemplatingSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Templating").setHeading();
 
+    const placeholders = containerEl.createEl("p", {
+      cls: "setting-item-description",
+    });
+    placeholders.append(
+      "Template placeholders are expanded when a daily note is created from a template. ",
+      makeCode("<@today>"),
+      ", ",
+      makeCode("<@yesterday>"),
+      ", ",
+      makeCode("<@tomorrow>"),
+      ", and ",
+      makeCode("<@Nd>"),
+      " (e.g. ",
+      makeCode("<@2d>"),
+      ", ",
+      makeCode("<@7d>"),
+      ") are replaced with a link to the matching daily note. The bare form is anchored to wall-clock today; append ",
+      makeCode("-rel"),
+      " (e.g. ",
+      makeCode("<@today-rel>"),
+      ", ",
+      makeCode("<@yesterday-rel>"),
+      ") to anchor to the file's own date instead — so a backfilled or future note resolves these against its own filename rather than the day it was created. ",
+      makeCode("<@quote>"),
+      " is replaced with a random line from the configured quotes file (see below).",
+    );
+
     new Setting(containerEl)
       .setName("Daily note format fallback")
       .setDesc(
@@ -697,6 +729,31 @@ export class TodaySettingTab extends PluginSettingTab {
         new FileSuggest(this.app, t.inputEl, async (file) => {
           t.setValue(file.path);
           this.plugin.settings.dailyNoteTemplate = file.path;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    const quotesDesc = document.createDocumentFragment();
+    quotesDesc.append(
+      "Vault path to a markdown file holding one quote per line — each carriage return starts a new quote. When the template contains ",
+      makeCode("<@quote>"),
+      ", a random line from this file is substituted at note-creation time. Default: ",
+      makeCode("daily/_quotes.md"),
+      ". Leave blank to disable the placeholder.",
+    );
+    new Setting(containerEl)
+      .setName("Quotes file")
+      .setDesc(quotesDesc)
+      .addText((t) => {
+        t.setPlaceholder("daily/_quotes.md")
+          .setValue(this.plugin.settings.quotesFile)
+          .onChange(async (v) => {
+            this.plugin.settings.quotesFile = v.trim();
+            await this.plugin.saveSettings();
+          });
+        new FileSuggest(this.app, t.inputEl, async (file) => {
+          t.setValue(file.path);
+          this.plugin.settings.quotesFile = file.path;
           await this.plugin.saveSettings();
         });
       });

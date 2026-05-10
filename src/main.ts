@@ -190,6 +190,7 @@ export default class TodayPlugin extends Plugin {
       templatesByDay: this.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.settings.dateLinkFormat,
       prefixes: this.settings.prefixes,
+      quotesFile: this.settings.quotesFile,
     };
     const file = await ensureDailyNote(this.app, target, fallback, false);
     const leaf = this.app.workspace.getLeaf(false);

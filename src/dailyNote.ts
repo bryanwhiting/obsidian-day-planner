@@ -35,6 +35,10 @@ export interface DailyNoteFallback {
   // carry #d/ tags get their duration computed as the subtask sum and
   // written onto the parent line before the file is created.
   prefixes?: TagPrefixes;
+  // Vault path to a quotes file (one quote per line). When set and the
+  // template contains `<@quote>`, a random non-empty line is substituted
+  // into newly created notes. Empty/missing → `<@quote>` expands to "".
+  quotesFile?: string;
 }
 
 export async function resolveDailyNote(
@@ -74,6 +78,7 @@ export async function ensureDailyNote(
     .pop()!
     .replace(/\.md$/i, "");
   const rawTemplate = await readCombinedTemplate(app, fallback, date);
+  const quote = await pickRandomQuote(app, fallback.quotesFile);
   const expanded = expandDateTemplate(
     rawTemplate,
     basename,
@@ -81,6 +86,7 @@ export async function ensureDailyNote(
     fallback.format,
     fallback.folder,
     fallback.dateLinkFormat ?? "",
+    quote,
   );
   const initialContent = fallback.prefixes
     ? applyComputedParentDurations(expanded, fallback.prefixes)
@@ -116,6 +122,7 @@ export async function applyDailyNoteTemplateIfEmpty(
   const refDate = parsed ?? new Date();
   const template = await readCombinedTemplate(app, fallback, refDate);
   if (!template) return;
+  const quote = await pickRandomQuote(app, fallback.quotesFile);
   const expanded = expandDateTemplate(
     template,
     file.basename,
@@ -123,6 +130,7 @@ export async function applyDailyNoteTemplateIfEmpty(
     format,
     folder,
     fallback.dateLinkFormat ?? "",
+    quote,
   );
   const finalContent = fallback.prefixes
     ? applyComputedParentDurations(expanded, fallback.prefixes)
@@ -257,14 +265,17 @@ export function resolveDateKeyword(kw: string, refDate: Date): Date | null {
   return null;
 }
 
-// Substitutes <@today>, <@tomorrow>, <@yesterday>, <@Nd> placeholders inside
-// `content` with daily-note links. The bare form is anchored to wall-clock
-// today; the `-rel` suffix (e.g. <@today-rel>, <@yesterday-rel>) anchors to
-// the date parsed out of `fileBasename` via `fileFormat`. So a template
-// applied to 2026-03-04.md says <@yesterday-rel> = 03-03 even when the
-// real-world date is something else, while <@today> always tracks the actual
-// day the note is created — that's what lets the same template stay
-// meaningful both for backfilled and pre-created daily notes.
+// Substitutes <@today>, <@tomorrow>, <@yesterday>, <@Nd>, and <@quote>
+// placeholders inside `content`. Date placeholders become daily-note links:
+// the bare form is anchored to wall-clock today; the `-rel` suffix
+// (e.g. <@today-rel>, <@yesterday-rel>) anchors to the date parsed out of
+// `fileBasename` via `fileFormat`. So a template applied to 2026-03-04.md
+// says <@yesterday-rel> = 03-03 even when the real-world date is something
+// else, while <@today> always tracks the actual day the note is created —
+// that's what lets the same template stay meaningful both for backfilled
+// and pre-created daily notes. <@quote> is replaced with `quote` (caller
+// pre-picks a random line from the configured quotes file); when `quote`
+// is empty the placeholder collapses to an empty string.
 export function expandDateTemplate(
   content: string,
   fileBasename: string,
@@ -272,11 +283,13 @@ export function expandDateTemplate(
   fileFormat: string,
   folder: string,
   displayFormat: string,
+  quote = "",
 ): string {
   if (!content) return content;
   return content.replace(
     /<@([A-Za-z0-9]+)(-rel)?>/g,
     (match, kw: string, rel: string | undefined) => {
+      if (kw === "quote" && !rel) return quote;
       let ref: Date;
       if (rel) {
         const parsed = parseFilenameDate(fileBasename, fileFormat);
@@ -290,6 +303,29 @@ export function expandDateTemplate(
       return buildDateLinkInsert(app, date, fileFormat, folder, displayFormat);
     },
   );
+}
+
+// Reads `quotesPath` and returns a random non-empty line. Each carriage
+// return separates one quote, so multi-line quotes aren't supported. Returns
+// "" when the path is blank, the file is missing, or every line is empty —
+// the `<@quote>` placeholder collapses cleanly in that case.
+async function pickRandomQuote(
+  app: App,
+  quotesPath: string | undefined,
+): Promise<string> {
+  const raw = (quotesPath ?? "").trim();
+  if (!raw) return "";
+  const withExt = raw.toLowerCase().endsWith(".md") ? raw : `${raw}.md`;
+  const path = normalizePath(withExt);
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof TFile)) return "";
+  const content = await app.vault.read(file);
+  const lines = content
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return "";
+  return lines[Math.floor(Math.random() * lines.length)];
 }
 
 // Parses `basename` against `fileFormat` (a moment.js pattern, e.g.
