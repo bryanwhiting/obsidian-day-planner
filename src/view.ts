@@ -162,6 +162,7 @@ export class TodayView extends ItemView {
   private calendarOpen: boolean = false;
   private summariesCollapsed: boolean = false;
   private habitsCollapsed: boolean = false;
+  private hintsVisible: boolean = false;
   private unscheduledCollapsed: boolean = Platform.isMobile;
   private overrideFilePath: string | null = null;
   private hasRendered: boolean = false;
@@ -243,6 +244,19 @@ export class TodayView extends ItemView {
       return;
 
     const inPomo = this.pomodoroState !== null && !this.pomodoroHidden;
+
+    if (ev.key === "?") {
+      ev.preventDefault();
+      this.hintsVisible = !this.hintsVisible;
+      this.scheduleRender();
+      return;
+    }
+    if (ev.key === "Escape" && this.hintsVisible) {
+      ev.preventDefault();
+      this.hintsVisible = false;
+      this.scheduleRender();
+      return;
+    }
 
     if (ev.key === "p") {
       ev.preventDefault();
@@ -541,7 +555,24 @@ export class TodayView extends ItemView {
   }
 
   private renderTimelineHints(root: HTMLElement): void {
-    const hints = root.createDiv({ cls: "dp-timeline-hints" });
+    if (!this.hintsVisible) return;
+    const overlay = root.createDiv({ cls: "dp-hints-overlay" });
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) {
+        this.hintsVisible = false;
+        this.scheduleRender();
+      }
+    });
+    const hints = overlay.createDiv({ cls: "dp-timeline-hints is-visible" });
+    const closeBtn = hints.createEl("button", {
+      cls: "dp-hints-close",
+      attr: { "aria-label": "Close" },
+      text: "×",
+    });
+    closeBtn.addEventListener("click", () => {
+      this.hintsVisible = false;
+      this.scheduleRender();
+    });
     const addHint = (key: string, label: string): void => {
       const item = hints.createSpan({ cls: "dp-pomo-hint" });
       item.createEl("kbd", { cls: "dp-pomo-kbd", text: key });
@@ -554,6 +585,7 @@ export class TodayView extends ItemView {
     addHint("b", "both");
     if (this.pomodoroState !== null) addHint("t", "focus");
     addHint("p", this.isPopout() ? "return" : "pop out");
+    addHint("?", "toggle hints");
   }
 
   private renderDateNav(parent: HTMLElement, displayFile: TFile | null): void {
@@ -3487,18 +3519,37 @@ export class TodayView extends ItemView {
       this.exitPomodoro();
     });
 
-    const hints = wrap.createDiv({ cls: "dp-pomo-hints" });
-    const addHint = (key: string, label: string): void => {
-      const item = hints.createSpan({ cls: "dp-pomo-hint" });
-      item.createEl("kbd", { cls: "dp-pomo-kbd", text: key });
-      item.createSpan({ cls: "dp-pomo-hint-label", text: label });
-    };
-    addHint("space", state.paused ? "start" : "pause");
-    addHint("enter", nextSub ? "done sub-task" : "complete");
-    if (this.pomodoroSubtaskHistory.length > 0) addHint("z", "undo");
-    addHint("t", "timeline");
-    addHint("p", this.isPopout() ? "return" : "pop out");
-    addHint("x", "close");
+    if (this.hintsVisible) {
+      const overlay = wrap.createDiv({ cls: "dp-hints-overlay" });
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) {
+          this.hintsVisible = false;
+          this.scheduleRender();
+        }
+      });
+      const hints = overlay.createDiv({ cls: "dp-pomo-hints is-visible" });
+      const closeBtn = hints.createEl("button", {
+        cls: "dp-hints-close",
+        attr: { "aria-label": "Close" },
+        text: "×",
+      });
+      closeBtn.addEventListener("click", () => {
+        this.hintsVisible = false;
+        this.scheduleRender();
+      });
+      const addHint = (key: string, label: string): void => {
+        const item = hints.createSpan({ cls: "dp-pomo-hint" });
+        item.createEl("kbd", { cls: "dp-pomo-kbd", text: key });
+        item.createSpan({ cls: "dp-pomo-hint-label", text: label });
+      };
+      addHint("space", state.paused ? "start" : "pause");
+      addHint("enter", nextSub ? "done sub-task" : "complete");
+      if (this.pomodoroSubtaskHistory.length > 0) addHint("z", "undo");
+      addHint("t", "timeline");
+      addHint("p", this.isPopout() ? "return" : "pop out");
+      addHint("x", "close");
+      addHint("?", "toggle hints");
+    }
 
     // Re-focusing every tick would steal focus from anything the user clicks
     // on elsewhere in Obsidian. Only grab focus when it's already within our

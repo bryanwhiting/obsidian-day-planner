@@ -4,6 +4,7 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __defNormalProp = (obj, key2, value) => key2 in obj ? __defProp(obj, key2, { enumerable: true, configurable: true, writable: true, value }) : obj[key2] = value;
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -13,9 +14,9 @@ var __export = (target, all) => {
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    for (let key2 of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key2) && key2 !== except)
+        __defProp(to, key2, { get: () => from[key2], enumerable: !(desc = __getOwnPropDesc(from, key2)) || desc.enumerable });
   }
   return to;
 };
@@ -28,6 +29,32 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var __publicField = (obj, key2, value) => {
+  __defNormalProp(obj, typeof key2 !== "symbol" ? key2 + "" : key2, value);
+  return value;
+};
+var __accessCheck = (obj, member, msg) => {
+  if (!member.has(obj))
+    throw TypeError("Cannot " + msg);
+};
+var __privateGet = (obj, member, getter) => {
+  __accessCheck(obj, member, "read from private field");
+  return getter ? getter.call(obj) : member.get(obj);
+};
+var __privateAdd = (obj, member, value) => {
+  if (member.has(obj))
+    throw TypeError("Cannot add the same private member more than once");
+  member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
+};
+var __privateSet = (obj, member, value, setter) => {
+  __accessCheck(obj, member, "write to private field");
+  setter ? setter.call(obj, value) : member.set(obj, value);
+  return value;
+};
+var __privateMethod = (obj, member, method) => {
+  __accessCheck(obj, member, "access private method");
+  return method;
+};
 
 // node_modules/mobile-drag-drop/index.min.js
 var require_index_min = __commonJS({
@@ -318,7 +345,7 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian8 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
@@ -413,13 +440,13 @@ function formatSets(sets) {
     return String(sets.reduce((a, s) => a + s.reps, 0));
   }
   const buckets = /* @__PURE__ */ new Map();
-  for (const set of sets) {
-    const key = set.weight === null ? "" : String(set.weight);
-    const cur = buckets.get(key);
+  for (const set2 of sets) {
+    const key2 = set2.weight === null ? "" : String(set2.weight);
+    const cur = buckets.get(key2);
     if (cur)
-      cur.reps += set.reps;
+      cur.reps += set2.reps;
     else
-      buckets.set(key, { reps: set.reps, weight: set.weight });
+      buckets.set(key2, { reps: set2.reps, weight: set2.weight });
   }
   const parts = [];
   for (const { reps, weight } of buckets.values()) {
@@ -429,39 +456,39 @@ function formatSets(sets) {
 }
 function formatExerciseSummary(summary) {
   const done = formatSets(summary.sets.filter((s) => s.done));
-  const pending = formatSets(summary.sets.filter((s) => !s.done));
-  if (done && pending)
-    return `${summary.name} ${done} (${pending})`;
+  const pending2 = formatSets(summary.sets.filter((s) => !s.done));
+  if (done && pending2)
+    return `${summary.name} ${done} (${pending2})`;
   if (done)
     return `${summary.name} ${done}`;
-  if (pending)
-    return `${summary.name} (${pending})`;
+  if (pending2)
+    return `${summary.name} (${pending2})`;
   return summary.name;
 }
 function parseTaggedLine(content, tagName) {
-  const tag = tagName.replace(/^#+/, "").trim();
-  if (!tag)
+  const tag2 = tagName.replace(/^#+/, "").trim();
+  if (!tag2)
     return null;
-  const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const esc = tag2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`#${esc}(?![A-Za-z0-9_/])\\s*([^\\n]*)`);
   for (const line of content.split("\n")) {
     const m = re.exec(line);
     if (!m)
       continue;
-    const text = m[1].trim();
-    if (text.length === 0)
+    const text2 = m[1].trim();
+    if (text2.length === 0)
       continue;
-    return text;
+    return text2;
   }
   return null;
 }
 function parseFrontmatterField(frontmatter, tagName) {
   if (!frontmatter)
     return null;
-  const key = tagName.replace(/^#+/, "").trim();
-  if (!key)
+  const key2 = tagName.replace(/^#+/, "").trim();
+  if (!key2)
     return null;
-  const v = frontmatter[key];
+  const v = frontmatter[key2];
   if (v == null)
     return null;
   if (typeof v === "string") {
@@ -528,10 +555,10 @@ function parseTaskContexts(body, prefixes) {
   const seen = /* @__PURE__ */ new Set();
   const out = [];
   for (const m of body.matchAll(re)) {
-    const tag = m[1];
-    if (!seen.has(tag)) {
-      seen.add(tag);
-      out.push(tag);
+    const tag2 = m[1];
+    if (!seen.has(tag2)) {
+      seen.add(tag2);
+      out.push(tag2);
     }
   }
   return out;
@@ -540,8 +567,8 @@ function parseDescription(body) {
   const m = DESCRIPTION_RE.exec(body);
   if (!m)
     return null;
-  const text = m[1].trim();
-  return text.length > 0 ? text : null;
+  const text2 = m[1].trim();
+  return text2.length > 0 ? text2 : null;
 }
 function formatDuration(totalMin, prefixes) {
   const safe = Math.max(1, Math.round(totalMin));
@@ -764,10 +791,10 @@ function generateTaskId(length) {
   }
   return id;
 }
-function appendTag(rawLine, tag) {
+function appendTag(rawLine, tag2) {
   const trimmed = rawLine.replace(/[ \t]+$/, "");
   const sep = trimmed.endsWith(" ") ? "" : " ";
-  return trimmed + sep + tag;
+  return trimmed + sep + tag2;
 }
 function snapToInterval(min, intervalMin) {
   return Math.round(min / intervalMin) * intervalMin;
@@ -857,8 +884,8 @@ function setTaskDescription(rawLine, newDescription, prefixes) {
   const trimmed = newDescription.trim();
   const hasDesc = DESCRIPTION_RE.test(body);
   if (hasDesc) {
-    const next = trimmed ? body.replace(DESCRIPTION_RE, `{${trimmed}}`) : body.replace(DESCRIPTION_RE, "").replace(/[ \t]+/g, " ").trim();
-    return `${indent}- [${checkbox}] ${next}`;
+    const next2 = trimmed ? body.replace(DESCRIPTION_RE, `{${trimmed}}`) : body.replace(DESCRIPTION_RE, "").replace(/[ \t]+/g, " ").trim();
+    return `${indent}- [${checkbox}] ${next2}`;
   }
   if (!trimmed)
     return rawLine;
@@ -956,14 +983,14 @@ var DEFAULT_PALETTE = [
   "#B25DA8"
 ];
 function resolveProjectColors(tasks, userMappings, palette = DEFAULT_PALETTE) {
-  var _a, _b;
+  var _a5, _b3;
   const result = /* @__PURE__ */ new Map();
   const userMap = /* @__PURE__ */ new Map();
   for (const m of userMappings) {
-    const key = (_a = m.project) == null ? void 0 : _a.trim();
-    const color = (_b = m.color) == null ? void 0 : _b.trim();
-    if (key && color)
-      userMap.set(key.toLowerCase(), color);
+    const key2 = (_a5 = m.project) == null ? void 0 : _a5.trim();
+    const color = (_b3 = m.color) == null ? void 0 : _b3.trim();
+    if (key2 && color)
+      userMap.set(key2.toLowerCase(), color);
   }
   const projectsFromTasks = [];
   const subKeysFromTasks = [];
@@ -1010,7 +1037,7 @@ function resolveProjectColors(tasks, userMappings, palette = DEFAULT_PALETTE) {
   return result;
 }
 function getTaskColor(project, subproject, colorMap) {
-  var _a;
+  var _a5;
   if (!project)
     return null;
   if (subproject) {
@@ -1018,7 +1045,7 @@ function getTaskColor(project, subproject, colorMap) {
     if (sub)
       return sub;
   }
-  return (_a = colorMap.get(project)) != null ? _a : null;
+  return (_a5 = colorMap.get(project)) != null ? _a5 : null;
 }
 function contrastingTextColor(hex) {
   const c = parseHex(hex);
@@ -1167,12 +1194,12 @@ var TagMigrationModal = class extends import_obsidian.Modal {
     skip.type = "button";
     skip.addEventListener("click", () => this.close());
     if (this.matches.length > 0) {
-      const apply = actions.createEl("button", {
+      const apply2 = actions.createEl("button", {
         cls: "dp-edit-save-btn mod-cta",
         text: `Migrate ${this.totalReplacements} ${this.totalReplacements === 1 ? "tag" : "tags"}`
       });
-      apply.type = "button";
-      apply.addEventListener("click", () => void this.apply(apply));
+      apply2.type = "button";
+      apply2.addEventListener("click", () => void this.apply(apply2));
     }
   }
   async apply(applyBtn) {
@@ -1186,9 +1213,9 @@ var TagMigrationModal = class extends import_obsidian.Modal {
       let fileChanges = 0;
       await this.app.vault.process(m.file, (content) => {
         return content.replace(re, (_full, oldPrefix) => {
-          var _a;
+          var _a5;
           fileChanges++;
-          const newPrefix = (_a = map.get(oldPrefix)) != null ? _a : oldPrefix;
+          const newPrefix = (_a5 = map.get(oldPrefix)) != null ? _a5 : oldPrefix;
           return `#${newPrefix}/`;
         });
       });
@@ -1206,8 +1233,8 @@ var TagMigrationModal = class extends import_obsidian.Modal {
     this.contentEl.empty();
   }
 };
-function keyLabel(key) {
-  switch (key) {
+function keyLabel(key2) {
+  switch (key2) {
     case "duration":
       return "Duration";
     case "time":
@@ -1295,7 +1322,8 @@ var DEFAULT_SETTINGS = {
   habitsStatsWindow: 10,
   copySubtasksOnAutocomplete: false,
   inboxPath: "{daily}/_inbox.md",
-  confirmCollectMigration: true
+  confirmCollectMigration: true,
+  multiDayCount: 7
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1444,11 +1472,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       "taskCreated"
     ];
     const changes = [];
-    for (const key of keys) {
-      const oldP = snap[key];
-      const newP = current[key];
+    for (const key2 of keys) {
+      const oldP = snap[key2];
+      const newP = current[key2];
       if (oldP && newP && oldP !== newP) {
-        changes.push({ key, oldPrefix: oldP, newPrefix: newP });
+        changes.push({ key: key2, oldPrefix: oldP, newPrefix: newP });
       }
     }
     if (changes.length > 0) {
@@ -2056,7 +2084,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
     this.plugin.settings.projectColors.forEach((entry, idx) => {
-      var _a;
+      var _a5;
       const row = list.createDiv({ cls: "dp-project-color-row" });
       const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
       nameWrap.createSpan({
@@ -2070,11 +2098,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       nameInput.value = entry.project;
       const stripPrefix = (s) => s.replace(new RegExp(`^#?${prefix}/`, "i"), "");
       nameInput.addEventListener("input", () => {
-        var _a2;
+        var _a6;
         const original = nameInput.value;
         const stripped = stripPrefix(original);
         if (stripped !== original) {
-          const pos = Math.max(0, (_a2 = nameInput.selectionStart) != null ? _a2 : 0);
+          const pos = Math.max(0, (_a6 = nameInput.selectionStart) != null ? _a6 : 0);
           nameInput.value = stripped;
           const newPos = Math.max(0, pos - (original.length - stripped.length));
           nameInput.setSelectionRange(newPos, newPos);
@@ -2121,7 +2149,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           spellcheck: "false"
         }
       });
-      iconInput.value = (_a = entry.icon) != null ? _a : "";
+      iconInput.value = (_a5 = entry.icon) != null ? _a5 : "";
       iconInput.addEventListener("change", async () => {
         const v = iconInput.value.trim();
         this.plugin.settings.projectColors[idx].icon = v || void 0;
@@ -2163,7 +2191,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
     this.plugin.settings.contextTags.forEach((entry, idx) => {
-      var _a;
+      var _a5;
       const row = list.createDiv({ cls: "dp-project-color-row" });
       const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
       nameWrap.createSpan({ cls: "dp-project-color-prefix", text: "#" });
@@ -2173,9 +2201,9 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       });
       nameInput.value = entry.tag;
       nameInput.addEventListener("input", () => {
-        var _a2;
+        var _a6;
         if (nameInput.value.startsWith("#")) {
-          const pos = Math.max(0, ((_a2 = nameInput.selectionStart) != null ? _a2 : 1) - 1);
+          const pos = Math.max(0, ((_a6 = nameInput.selectionStart) != null ? _a6 : 1) - 1);
           nameInput.value = nameInput.value.replace(/^#+/, "");
           nameInput.setSelectionRange(pos, pos);
         }
@@ -2221,7 +2249,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
           spellcheck: "false"
         }
       });
-      iconInput.value = (_a = entry.icon) != null ? _a : "";
+      iconInput.value = (_a5 = entry.icon) != null ? _a5 : "";
       iconInput.addEventListener("change", async () => {
         this.plugin.settings.contextTags[idx].icon = iconInput.value.trim();
         await this.plugin.saveSettings();
@@ -2387,15 +2415,15 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
 };
-function clampInt(v, lo, hi, fallback) {
+function clampInt(v, lo, hi, fallback2) {
   const n = parseInt(v, 10);
   if (isNaN(n))
-    return fallback;
+    return fallback2;
   return Math.max(lo, Math.min(hi, n));
 }
-function makeCode(text) {
+function makeCode(text2) {
   const el = document.createElement("code");
-  el.textContent = text;
+  el.textContent = text2;
   return el;
 }
 function buildDurationDesc() {
@@ -2502,10 +2530,10 @@ function buildProjectPrefixDesc() {
   );
   return f;
 }
-function makeAnchor(href, text) {
+function makeAnchor(href, text2) {
   const a = document.createElement("a");
   a.href = href;
-  a.textContent = text;
+  a.textContent = text2;
   a.target = "_blank";
   a.rel = "noopener";
   return a;
@@ -2533,10 +2561,10 @@ var FileSuggest = class extends import_obsidian2.AbstractInputSuggest {
     return matches.sort((a, b) => a.path.localeCompare(b.path)).slice(0, 50);
   }
   renderSuggestion(file, el) {
-    var _a;
+    var _a5;
     el.addClass("dp-file-suggestion");
     el.createDiv({ cls: "dp-file-suggestion-name", text: file.basename });
-    const parent = (_a = file.parent) == null ? void 0 : _a.path;
+    const parent = (_a5 = file.parent) == null ? void 0 : _a5.path;
     if (parent && parent !== "/") {
       el.createDiv({ cls: "dp-file-suggestion-path", text: parent });
     }
@@ -2560,9 +2588,9 @@ var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
     const walk = (folder) => {
       if (folder.path !== "/")
         folders.push(folder);
-      for (const child of folder.children) {
-        if (child instanceof import_obsidian2.TFolder)
-          walk(child);
+      for (const child2 of folder.children) {
+        if (child2 instanceof import_obsidian2.TFolder)
+          walk(child2);
       }
     };
     walk(this.app.vault.getRoot());
@@ -2570,10 +2598,10 @@ var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
     return matches.sort((a, b) => a.path.localeCompare(b.path)).slice(0, 50);
   }
   renderSuggestion(folder, el) {
-    var _a;
+    var _a5;
     el.addClass("dp-file-suggestion");
     el.createDiv({ cls: "dp-file-suggestion-name", text: folder.name });
-    const parent = (_a = folder.parent) == null ? void 0 : _a.path;
+    const parent = (_a5 = folder.parent) == null ? void 0 : _a5.path;
     if (parent && parent !== "/") {
       el.createDiv({ cls: "dp-file-suggestion-path", text: parent });
     }
@@ -2724,11 +2752,11 @@ function groupOverlaps(scheduled) {
 
 // src/dailyNote.ts
 var import_obsidian3 = require("obsidian");
-async function resolveDailyNote(app, date, fallback) {
-  var _a;
+async function resolveDailyNote(app, date, fallback2) {
+  var _a5;
   const opts = readDailyNotesOptions(app);
-  const format = (opts.format || fallback.format).trim();
-  const folder = ((_a = opts.folder) != null ? _a : fallback.folder).trim();
+  const format = (opts.format || fallback2.format).trim();
+  const folder = ((_a5 = opts.folder) != null ? _a5 : fallback2.folder).trim();
   const fileName = formatDate(date, format) + ".md";
   const path = (0, import_obsidian3.normalizePath)(folder ? `${folder}/${fileName}` : fileName);
   const file = app.vault.getAbstractFileByPath(path);
@@ -2737,9 +2765,9 @@ async function resolveDailyNote(app, date, fallback) {
     file: file instanceof import_obsidian3.TFile ? file : null
   };
 }
-async function ensureDailyNote(app, date, fallback, notify = true) {
-  var _a;
-  const resolved = await resolveDailyNote(app, date, fallback);
+async function ensureDailyNote(app, date, fallback2, notify = true) {
+  var _a5;
+  const resolved = await resolveDailyNote(app, date, fallback2);
   if (resolved.file)
     return resolved.file;
   const folder = resolved.path.includes("/") ? resolved.path.slice(0, resolved.path.lastIndexOf("/")) : "";
@@ -2749,35 +2777,35 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
       await app.vault.createFolder(folder);
   }
   const basename = resolved.path.split("/").pop().replace(/\.md$/i, "");
-  const rawTemplate = await readCombinedTemplate(app, fallback, date);
-  const quote = await pickRandomQuote(app, fallback.quotesFile);
+  const rawTemplate = await readCombinedTemplate(app, fallback2, date);
+  const quote = await pickRandomQuote(app, fallback2.quotesFile);
   const expanded = expandDateTemplate(
     rawTemplate,
     basename,
     app,
-    fallback.format,
-    fallback.folder,
-    (_a = fallback.dateLinkFormat) != null ? _a : "",
+    fallback2.format,
+    fallback2.folder,
+    (_a5 = fallback2.dateLinkFormat) != null ? _a5 : "",
     quote
   );
-  const withDurations = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
-  const initialContent = fallback.addCreatedTag && fallback.prefixes ? addFrontmatterTag(
+  const withDurations = fallback2.prefixes ? applyComputedParentDurations(expanded, fallback2.prefixes) : expanded;
+  const initialContent = fallback2.addCreatedTag && fallback2.prefixes ? addFrontmatterTag(
     withDurations,
-    `${fallback.prefixes.taskCreated}/${todayDateStr()}`
+    `${fallback2.prefixes.taskCreated}/${todayDateStr()}`
   ) : withDurations;
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify)
     new import_obsidian3.Notice(`Created ${resolved.path}`);
   return file;
 }
-async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
-  var _a, _b, _c, _d;
+async function applyDailyNoteTemplateIfEmpty(app, file, fallback2) {
+  var _a5, _b3, _c2, _d;
   if (file.extension !== "md")
     return;
   const opts = readDailyNotesOptions(app);
-  const folder = stripSlashes(((_a = opts.folder) != null ? _a : fallback.folder).trim());
-  const format = (opts.format || fallback.format).trim() || "YYYY-MM-DD";
-  const fileFolder = stripSlashes((_c = (_b = file.parent) == null ? void 0 : _b.path) != null ? _c : "");
+  const folder = stripSlashes(((_a5 = opts.folder) != null ? _a5 : fallback2.folder).trim());
+  const format = (opts.format || fallback2.format).trim() || "YYYY-MM-DD";
+  const fileFolder = stripSlashes((_c2 = (_b3 = file.parent) == null ? void 0 : _b3.path) != null ? _c2 : "");
   if (fileFolder !== folder)
     return;
   if (!parseFilenameDate(file.basename, format))
@@ -2787,23 +2815,23 @@ async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
     return;
   const parsed = parseFilenameDate(file.basename, format);
   const refDate = parsed != null ? parsed : new Date();
-  const template = await readCombinedTemplate(app, fallback, refDate);
+  const template = await readCombinedTemplate(app, fallback2, refDate);
   if (!template)
     return;
-  const quote = await pickRandomQuote(app, fallback.quotesFile);
+  const quote = await pickRandomQuote(app, fallback2.quotesFile);
   const expanded = expandDateTemplate(
     template,
     file.basename,
     app,
     format,
     folder,
-    (_d = fallback.dateLinkFormat) != null ? _d : "",
+    (_d = fallback2.dateLinkFormat) != null ? _d : "",
     quote
   );
-  const withDurations = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
-  const finalContent = fallback.addCreatedTag && fallback.prefixes ? addFrontmatterTag(
+  const withDurations = fallback2.prefixes ? applyComputedParentDurations(expanded, fallback2.prefixes) : expanded;
+  const finalContent = fallback2.addCreatedTag && fallback2.prefixes ? addFrontmatterTag(
     withDurations,
-    `${fallback.prefixes.taskCreated}/${todayDateStr()}`
+    `${fallback2.prefixes.taskCreated}/${todayDateStr()}`
   ) : withDurations;
   await app.vault.modify(file, finalContent);
 }
@@ -2823,9 +2851,9 @@ async function readTemplateContent(app, templatePath) {
   }
   return app.vault.read(file);
 }
-async function readCombinedTemplate(app, fallback, date) {
-  const base = await readTemplateContent(app, fallback.template);
-  const byDay = fallback.templatesByDay;
+async function readCombinedTemplate(app, fallback2, date) {
+  const base = await readTemplateContent(app, fallback2.template);
+  const byDay = fallback2.templatesByDay;
   if (!byDay)
     return base;
   const dayKey = WEEKDAY_NAMES[date.getDay()];
@@ -2843,10 +2871,10 @@ async function readCombinedTemplate(app, fallback, date) {
 ${dayContent}`;
 }
 function readDailyNotesOptions(app) {
-  var _a, _b, _c;
+  var _a5, _b3, _c2;
   const internal = app.internalPlugins;
-  const plugin = (_a = internal == null ? void 0 : internal.getPluginById) == null ? void 0 : _a.call(internal, "daily-notes");
-  return (_c = (_b = plugin == null ? void 0 : plugin.instance) == null ? void 0 : _b.options) != null ? _c : {};
+  const plugin = (_a5 = internal == null ? void 0 : internal.getPluginById) == null ? void 0 : _a5.call(internal, "daily-notes");
+  return (_c2 = (_b3 = plugin == null ? void 0 : plugin.instance) == null ? void 0 : _b3.options) != null ? _c2 : {};
 }
 function formatDate(d, format) {
   const pad = (n, w = 2) => n.toString().padStart(w, "0");
@@ -2859,20 +2887,20 @@ function formatDate(d, format) {
     ss: pad(d.getSeconds())
   };
   return format.replace(/YYYY|MM|DD|HH|mm|ss/g, (m) => {
-    var _a;
-    return (_a = replacements[m]) != null ? _a : m;
+    var _a5;
+    return (_a5 = replacements[m]) != null ? _a5 : m;
   });
 }
 function addDays(d, n) {
-  const next = new Date(d);
-  next.setDate(next.getDate() + n);
-  return next;
+  const next2 = new Date(d);
+  next2.setDate(next2.getDate() + n);
+  return next2;
 }
 function addMonths(d, n) {
-  const next = new Date(d);
-  next.setDate(1);
-  next.setMonth(next.getMonth() + n);
-  return next;
+  const next2 = new Date(d);
+  next2.setDate(1);
+  next2.setMonth(next2.getMonth() + n);
+  return next2;
 }
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -2946,11 +2974,11 @@ function parseFilenameDate(basename, fileFormat) {
   const m = (0, import_obsidian3.moment)(basename, fmt, true);
   return m.isValid() ? m.toDate() : null;
 }
-function getDailyNoteOptions(app, fallback) {
-  var _a;
+function getDailyNoteOptions(app, fallback2) {
+  var _a5;
   const opts = readDailyNotesOptions(app);
-  const format = (opts.format || fallback.format || "YYYY-MM-DD").trim();
-  const folder = stripSlashes(((_a = opts.folder) != null ? _a : fallback.folder).trim());
+  const format = (opts.format || fallback2.format || "YYYY-MM-DD").trim();
+  const folder = stripSlashes(((_a5 = opts.folder) != null ? _a5 : fallback2.folder).trim());
   return { folder, format };
 }
 function parseDailyNoteDateStr(basename, format) {
@@ -2958,10 +2986,10 @@ function parseDailyNoteDateStr(basename, format) {
   return d ? toIsoDateStr(d) : null;
 }
 function listDailyNotes(app, options) {
-  var _a, _b;
+  var _a5, _b3;
   const out = [];
   for (const file of app.vault.getMarkdownFiles()) {
-    const fileFolder = stripSlashes((_b = (_a = file.parent) == null ? void 0 : _a.path) != null ? _b : "");
+    const fileFolder = stripSlashes((_b3 = (_a5 = file.parent) == null ? void 0 : _a5.path) != null ? _b3 : "");
     if (fileFolder !== options.folder)
       continue;
     const date = parseDailyNoteDateStr(file.basename, options.format);
@@ -2974,13 +3002,13 @@ function listDailyNotes(app, options) {
 function todayDateStr() {
   return toIsoDateStr(new Date());
 }
-function addFrontmatterTag(content, tag) {
+function addFrontmatterTag(content, tag2) {
   const fmRe = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
   const match = content.match(fmRe);
   if (!match) {
     return `---
 tags:
-  - ${tag}
+  - ${tag2}
 ---
 
 ${content}`;
@@ -2997,7 +3025,7 @@ ${content}`;
     }
   }
   if (tagsIdx < 0) {
-    const insert = ["tags:", `  - ${tag}`];
+    const insert = ["tags:", `  - ${tag2}`];
     const newBody2 = [...insert, ...lines].join("\n");
     return `---
 ${newBody2}
@@ -3020,23 +3048,23 @@ ${newBody2}
         break;
       }
     }
-    if (bullets.includes(tag))
+    if (bullets.includes(tag2))
       return content;
     if (value === "[]")
       lines[tagsIdx] = "tags:";
-    lines.splice(lastBulletIdx + 1, 0, `  - ${tag}`);
+    lines.splice(lastBulletIdx + 1, 0, `  - ${tag2}`);
   } else if (value.startsWith("[") && value.endsWith("]")) {
     const inner = value.slice(1, -1).trim();
     const items = inner === "" ? [] : inner.split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter((s) => s.length > 0);
-    if (items.includes(tag))
+    if (items.includes(tag2))
       return content;
-    items.push(tag);
+    items.push(tag2);
     lines[tagsIdx] = `tags: [${items.join(", ")}]`;
   } else {
     const items = value.split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter((s) => s.length > 0);
-    if (items.includes(tag))
+    if (items.includes(tag2))
       return content;
-    items.push(tag);
+    items.push(tag2);
     lines[tagsIdx] = `tags: [${items.join(", ")}]`;
   }
   const newBody = lines.join("\n");
@@ -3136,13 +3164,13 @@ function buildDateSuggestions(query, today = new Date()) {
   return out;
 }
 function buildDateLinkInsert(app, date, fileFormat, folder, displayFormat) {
-  var _a, _b;
+  var _a5, _b3;
   const m = (0, import_obsidian3.moment)(date);
   const fileBasename = m.format(fileFormat || "YYYY-MM-DD");
   const cleanFolder = (folder || "").replace(/^\/+|\/+$/g, "");
   const linkPath = cleanFolder ? `${cleanFolder}/${fileBasename}` : fileBasename;
   const display = (displayFormat || "").trim() ? m.format(displayFormat.trim()) : "";
-  const useMd = ((_b = (_a = app.vault).getConfig) == null ? void 0 : _b.call(_a, "useMarkdownLinks")) === true;
+  const useMd = ((_b3 = (_a5 = app.vault).getConfig) == null ? void 0 : _b3.call(_a5, "useMarkdownLinks")) === true;
   if (useMd) {
     const url = encodeURI(`${linkPath}.md`);
     const label = display || fileBasename;
@@ -3161,8 +3189,8 @@ function buildPeopleSuggestions(app, folder, query, limit = 12) {
     return [];
   const folderLc = cleanFolder.toLowerCase();
   const files = app.vault.getMarkdownFiles().filter((f) => {
-    var _a;
-    const dir = (((_a = f.parent) == null ? void 0 : _a.path) || "").toLowerCase();
+    var _a5;
+    const dir = (((_a5 = f.parent) == null ? void 0 : _a5.path) || "").toLowerCase();
     return dir === folderLc || dir.startsWith(folderLc + "/");
   });
   const q = query.trim().toLowerCase();
@@ -3173,18 +3201,18 @@ function buildPeopleSuggestions(app, folder, query, limit = 12) {
     )
   ] : files.slice().sort((a, b) => a.basename.localeCompare(b.basename));
   return ranked.slice(0, limit).map((f) => {
-    var _a;
+    var _a5;
     return {
       basename: f.basename,
       path: f.path,
-      folder: ((_a = f.parent) == null ? void 0 : _a.path) || ""
+      folder: ((_a5 = f.parent) == null ? void 0 : _a5.path) || ""
     };
   });
 }
 function buildPersonLinkInsert(app, path) {
-  var _a, _b;
+  var _a5, _b3;
   const basename = (path.split("/").pop() || path).replace(/\.md$/i, "");
-  const useMd = ((_b = (_a = app.vault).getConfig) == null ? void 0 : _b.call(_a, "useMarkdownLinks")) === true;
+  const useMd = ((_b3 = (_a5 = app.vault).getConfig) == null ? void 0 : _b3.call(_a5, "useMarkdownLinks")) === true;
   if (useMd) {
     const url = encodeURI(path);
     return `[${basename}](${url})`;
@@ -3194,10 +3222,10 @@ function buildPersonLinkInsert(app, path) {
 
 // src/taskMove.ts
 var import_obsidian4 = require("obsidian");
-async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fallback, options = {}) {
-  var _a;
+async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fallback2, options = {}) {
+  var _a5;
   const notify = options.notify !== false;
-  const targetFile = (_a = options.targetFile) != null ? _a : await ensureDailyNote(app, targetDate, fallback);
+  const targetFile = (_a5 = options.targetFile) != null ? _a5 : await ensureDailyNote(app, targetDate, fallback2);
   if (targetFile.path === sourceFile.path) {
     if (notify)
       new import_obsidian4.Notice("Source and target are the same file.");
@@ -3252,7 +3280,7 @@ function buildHabitLogTagRegex(prefix, slug) {
   );
 }
 function parseExerciseGoals(content, exercisePrefix) {
-  var _a;
+  var _a5;
   const re = new RegExp(
     `#${escapeRegex2(exercisePrefix)}-(day|week|month)\\/([\\w-]+)\\/(\\d+(?:[._]\\d+)?)(?![\\w-])(.*)$`
   );
@@ -3267,17 +3295,17 @@ function parseExerciseGoals(content, exercisePrefix) {
     const target = parseFloat(m[3].replace("_", "."));
     if (!Number.isFinite(target) || target <= 0)
       continue;
-    const label = ((_a = m[4]) != null ? _a : "").trim();
-    const key = `${period}/${name}`;
-    if (seen.has(key))
+    const label = ((_a5 = m[4]) != null ? _a5 : "").trim();
+    const key2 = `${period}/${name}`;
+    if (seen.has(key2))
       continue;
-    seen.add(key);
+    seen.add(key2);
     goals.push({ period, name, target, label });
   }
   return goals;
 }
 function parseHabitsFile(content, prefix) {
-  var _a;
+  var _a5;
   const re = new RegExp(
     `#${escapeRegex2(prefix)}-(day|week|month)\\/(${SLUG_PATTERN})(?:\\/(${NUM_PATTERN}))?(?![\\w\\-/])(.*)$`
   );
@@ -3290,13 +3318,13 @@ function parseHabitsFile(content, prefix) {
     const period = m[1];
     const slug = m[2];
     const targetRaw = m[3];
-    const label = ((_a = m[4]) != null ? _a : "").trim();
+    const label = ((_a5 = m[4]) != null ? _a5 : "").trim();
     const parsed = targetRaw ? parseNum(targetRaw) : 1;
     const target = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-    const key = `${period}/${slug}`;
-    if (seen.has(key))
+    const key2 = `${period}/${slug}`;
+    if (seen.has(key2))
       continue;
-    seen.add(key);
+    seen.add(key2);
     habits.push({ period, slug, target, label });
   }
   return habits;
@@ -3392,8 +3420,8 @@ var HabitsScanner = class {
     this.cache.set(file.path, { mtime: file.stat.mtime, content });
     return content;
   }
-  async readDateContent(date, fallback) {
-    const resolved = await resolveDailyNote(this.app, date, fallback);
+  async readDateContent(date, fallback2) {
+    const resolved = await resolveDailyNote(this.app, date, fallback2);
     if (!resolved.file)
       return "";
     return this.getContent(resolved.file);
@@ -3421,6 +3449,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     this.calendarOpen = false;
     this.summariesCollapsed = false;
     this.habitsCollapsed = false;
+    this.hintsVisible = false;
     this.unscheduledCollapsed = import_obsidian5.Platform.isMobile;
     this.overrideFilePath = null;
     this.hasRendered = false;
@@ -3453,8 +3482,8 @@ var TodayView = class extends import_obsidian5.ItemView {
     );
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        var _a, _b;
-        const path = (_b = (_a = this.app.workspace.getActiveFile()) == null ? void 0 : _a.path) != null ? _b : null;
+        var _a5, _b3;
+        const path = (_b3 = (_a5 = this.app.workspace.getActiveFile()) == null ? void 0 : _a5.path) != null ? _b3 : null;
         if (path !== this.lastActiveFilePath)
           this.scheduleRender();
       })
@@ -3479,6 +3508,18 @@ var TodayView = class extends import_obsidian5.ItemView {
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
       return;
     const inPomo = this.pomodoroState !== null && !this.pomodoroHidden;
+    if (ev.key === "?") {
+      ev.preventDefault();
+      this.hintsVisible = !this.hintsVisible;
+      this.scheduleRender();
+      return;
+    }
+    if (ev.key === "Escape" && this.hintsVisible) {
+      ev.preventDefault();
+      this.hintsVisible = false;
+      this.scheduleRender();
+      return;
+    }
     if (ev.key === "p") {
       ev.preventDefault();
       if (this.isPopout())
@@ -3548,46 +3589,46 @@ var TodayView = class extends import_obsidian5.ItemView {
   }
   toggleBothCollapsed() {
     const allCollapsed = this.summariesCollapsed && this.habitsCollapsed;
-    const next = !allCollapsed;
-    this.summariesCollapsed = next;
-    this.habitsCollapsed = next;
+    const next2 = !allCollapsed;
+    this.summariesCollapsed = next2;
+    this.habitsCollapsed = next2;
   }
   togglePomodoroPause() {
-    var _a;
-    const state = this.pomodoroState;
-    if (!state)
+    var _a5;
+    const state2 = this.pomodoroState;
+    if (!state2)
       return;
     const workMs = this.plugin.settings.pomodoroWorkMin * 6e4;
     const breakMs = this.plugin.settings.pomodoroBreakMin * 6e4;
-    const phaseMs = state.phase === "work" ? workMs : breakMs;
-    const expired = state.paused && state.pausedRemainingMs !== null && state.pausedRemainingMs <= 0;
+    const phaseMs = state2.phase === "work" ? workMs : breakMs;
+    const expired = state2.paused && state2.pausedRemainingMs !== null && state2.pausedRemainingMs <= 0;
     if (expired) {
       this.bankWorkProgress();
-      state.phase = state.phase === "work" ? "rest" : "work";
-      state.startedAt = Date.now();
-      state.paused = false;
-      state.pausedRemainingMs = null;
-      state.workPhaseBankedMs = 0;
-    } else if (state.paused) {
-      const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
-      state.startedAt = Date.now() - (phaseMs - remain);
-      state.paused = false;
-      state.pausedRemainingMs = null;
+      state2.phase = state2.phase === "work" ? "rest" : "work";
+      state2.startedAt = Date.now();
+      state2.paused = false;
+      state2.pausedRemainingMs = null;
+      state2.workPhaseBankedMs = 0;
+    } else if (state2.paused) {
+      const remain = (_a5 = state2.pausedRemainingMs) != null ? _a5 : phaseMs;
+      state2.startedAt = Date.now() - (phaseMs - remain);
+      state2.paused = false;
+      state2.pausedRemainingMs = null;
     } else {
       this.bankWorkProgress();
-      const elapsed = Date.now() - state.startedAt;
-      state.paused = true;
-      state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
+      const elapsed = Date.now() - state2.startedAt;
+      state2.paused = true;
+      state2.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
     }
     this.scheduleRender();
   }
   // Enter-key behavior: check off the next unfinished subtask if there is one,
   // otherwise mark the parent task done and exit focus mode.
   async advancePomodoroComplete() {
-    const state = this.pomodoroState;
-    if (!state)
+    const state2 = this.pomodoroState;
+    if (!state2)
       return;
-    const file = this.app.vault.getAbstractFileByPath(state.filePath);
+    const file = this.app.vault.getAbstractFileByPath(state2.filePath);
     if (!(file instanceof import_obsidian5.TFile))
       return;
     const content = await this.app.vault.read(file);
@@ -3597,13 +3638,13 @@ var TodayView = class extends import_obsidian5.ItemView {
       this.plugin.settings.prefixes,
       this.plugin.settings.defaultDurationMin
     );
-    let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
-    if (!task || this.cleanBody(task.body) !== state.taskBodySnapshot) {
+    let task = tasks.find((t) => t.lineNumber === state2.taskLineNumber);
+    if (!task || this.cleanBody(task.body) !== state2.taskBodySnapshot) {
       task = tasks.find(
-        (t) => this.cleanBody(t.body) === state.taskBodySnapshot
+        (t) => this.cleanBody(t.body) === state2.taskBodySnapshot
       );
       if (task)
-        state.taskLineNumber = task.lineNumber;
+        state2.taskLineNumber = task.lineNumber;
     }
     if (!task) {
       this.exitPomodoro();
@@ -3625,10 +3666,10 @@ var TodayView = class extends import_obsidian5.ItemView {
     const lineNumber = this.pomodoroSubtaskHistory.pop();
     if (lineNumber === void 0)
       return;
-    const state = this.pomodoroState;
-    if (!state)
+    const state2 = this.pomodoroState;
+    if (!state2)
       return;
-    const file = this.app.vault.getAbstractFileByPath(state.filePath);
+    const file = this.app.vault.getAbstractFileByPath(state2.filePath);
     if (!(file instanceof import_obsidian5.TFile))
       return;
     await this.applyLineChecked(file, lineNumber, false);
@@ -3651,22 +3692,22 @@ var TodayView = class extends import_obsidian5.ItemView {
     this.scheduleRender();
   }
   async render() {
-    var _a, _b, _c, _d, _e;
-    const root = this.containerEl.children[1];
+    var _a5, _b3, _c2, _d, _e;
+    const root2 = this.containerEl.children[1];
     if (this.pomodoroState && !this.pomodoroHidden) {
-      const handled = await this.renderPomodoro(root);
+      const handled = await this.renderPomodoro(root2);
       if (handled)
         return;
     }
-    const prevRootScroll = root.scrollTop;
+    const prevRootScroll = root2.scrollTop;
     const prevTimelineScrolls = Array.from(
-      root.querySelectorAll(".dp-timeline-wrap")
+      root2.querySelectorAll(".dp-timeline-wrap")
     ).map((el) => el.scrollTop);
-    root.empty();
-    root.addClass("today-root");
-    if (!root.hasAttribute("tabindex"))
-      root.setAttribute("tabindex", "-1");
-    const fallback = {
+    root2.empty();
+    root2.addClass("today-root");
+    if (!root2.hasAttribute("tabindex"))
+      root2.setAttribute("tabindex", "-1");
+    const fallback2 = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
@@ -3679,7 +3720,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     const dailyResolved = await resolveDailyNote(
       this.app,
       this.selectedDate,
-      fallback
+      fallback2
     );
     let displayFile = dailyResolved.file;
     let displayPath = dailyResolved.path;
@@ -3700,13 +3741,13 @@ var TodayView = class extends import_obsidian5.ItemView {
       this.plugin.settings.defaultDurationMin
     ) : [];
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
-    const frontmatter = displayFile ? (_b = (_a = this.app.metadataCache.getFileCache(displayFile)) == null ? void 0 : _a.frontmatter) != null ? _b : null : null;
-    const intention = displayFile ? (_c = parseFrontmatterField(frontmatter, this.plugin.settings.intentionTag)) != null ? _c : parseTaggedLine(fileContent, this.plugin.settings.intentionTag) : null;
+    const frontmatter = displayFile ? (_b3 = (_a5 = this.app.metadataCache.getFileCache(displayFile)) == null ? void 0 : _a5.frontmatter) != null ? _b3 : null : null;
+    const intention = displayFile ? (_c2 = parseFrontmatterField(frontmatter, this.plugin.settings.intentionTag)) != null ? _c2 : parseTaggedLine(fileContent, this.plugin.settings.intentionTag) : null;
     const quote = displayFile ? (_d = parseFrontmatterField(frontmatter, this.plugin.settings.quoteTag)) != null ? _d : parseTaggedLine(fileContent, this.plugin.settings.quoteTag) : null;
     const activeFile = this.app.workspace.getActiveFile();
     this.lastActiveFilePath = (_e = activeFile == null ? void 0 : activeFile.path) != null ? _e : null;
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
-    this.renderDateNav(root, displayFile);
+    this.renderDateNav(root2, displayFile);
     const colorMap = resolveProjectColors(
       tasks.filter(
         (t) => t.project !== null
@@ -3716,10 +3757,10 @@ var TodayView = class extends import_obsidian5.ItemView {
     const habitDisplays = await this.loadHabitDisplays(
       this.selectedDate,
       fileContent,
-      fallback
+      fallback2
     );
     this.renderSection(
-      root,
+      root2,
       this.formatDateLabel(this.selectedDate),
       "",
       displayFile,
@@ -3733,9 +3774,9 @@ var TodayView = class extends import_obsidian5.ItemView {
       intention,
       quote
     );
-    this.renderTimelineHints(root);
-    root.scrollTop = prevRootScroll;
-    const newTimelines = root.querySelectorAll(".dp-timeline-wrap");
+    this.renderTimelineHints(root2);
+    root2.scrollTop = prevRootScroll;
+    const newTimelines = root2.querySelectorAll(".dp-timeline-wrap");
     newTimelines.forEach((el, i) => {
       const prev = prevTimelineScrolls[i];
       if (prev !== void 0)
@@ -3743,11 +3784,29 @@ var TodayView = class extends import_obsidian5.ItemView {
     });
     this.hasRendered = true;
   }
-  renderTimelineHints(root) {
-    const hints = root.createDiv({ cls: "dp-timeline-hints" });
-    const addHint = (key, label) => {
+  renderTimelineHints(root2) {
+    if (!this.hintsVisible)
+      return;
+    const overlay = root2.createDiv({ cls: "dp-hints-overlay" });
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) {
+        this.hintsVisible = false;
+        this.scheduleRender();
+      }
+    });
+    const hints = overlay.createDiv({ cls: "dp-timeline-hints is-visible" });
+    const closeBtn = hints.createEl("button", {
+      cls: "dp-hints-close",
+      attr: { "aria-label": "Close" },
+      text: "\xD7"
+    });
+    closeBtn.addEventListener("click", () => {
+      this.hintsVisible = false;
+      this.scheduleRender();
+    });
+    const addHint = (key2, label) => {
       const item = hints.createSpan({ cls: "dp-pomo-hint" });
-      item.createEl("kbd", { cls: "dp-pomo-kbd", text: key });
+      item.createEl("kbd", { cls: "dp-pomo-kbd", text: key2 });
       item.createSpan({ cls: "dp-pomo-hint-label", text: label });
     };
     addHint("\u2190/\u2192", "day");
@@ -3758,6 +3817,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     if (this.pomodoroState !== null)
       addHint("t", "focus");
     addHint("p", this.isPopout() ? "return" : "pop out");
+    addHint("?", "toggle hints");
   }
   renderDateNav(parent, displayFile) {
     const nav = parent.createDiv({ cls: "dp-datenav" });
@@ -3831,16 +3891,16 @@ var TodayView = class extends import_obsidian5.ItemView {
       else
         void this.popOutLeaf();
     });
-    const next = nav.createEl("button", {
+    const next2 = nav.createEl("button", {
       cls: "dp-nav-btn dp-nav-arrow",
       attr: { "aria-label": "Next day" }
     });
-    (0, import_obsidian5.setIcon)(next, "chevron-right");
+    (0, import_obsidian5.setIcon)(next2, "chevron-right");
     prev.addEventListener(
       "click",
       () => void this.navigateTo(addDays(this.selectedDate, -1))
     );
-    next.addEventListener(
+    next2.addEventListener(
       "click",
       () => void this.navigateTo(addDays(this.selectedDate, 1))
     );
@@ -3858,7 +3918,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     this.selectedDate = target;
     this.calendarMonth = startOfMonth(target);
     this.overrideFilePath = null;
-    const fallback = {
+    const fallback2 = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
@@ -3868,10 +3928,10 @@ var TodayView = class extends import_obsidian5.ItemView {
       quotesFile: this.plugin.settings.quotesFile,
       addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
-    const resolved = await resolveDailyNote(this.app, target, fallback);
+    const resolved = await resolveDailyNote(this.app, target, fallback2);
     if (!resolved.file) {
       try {
-        await ensureDailyNote(this.app, target, fallback);
+        await ensureDailyNote(this.app, target, fallback2);
       } catch (e) {
         new import_obsidian5.Notice(`Today: failed to create note (${e.message})`);
       }
@@ -3880,19 +3940,19 @@ var TodayView = class extends import_obsidian5.ItemView {
   }
   renderCalendar(parent) {
     const cal = parent.createDiv({ cls: "dp-calendar" });
-    const head = cal.createDiv({ cls: "dp-cal-head" });
-    const prev = head.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
-    const monthLabel = head.createDiv({ cls: "dp-cal-month" });
+    const head2 = cal.createDiv({ cls: "dp-cal-head" });
+    const prev = head2.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
+    const monthLabel = head2.createDiv({ cls: "dp-cal-month" });
     monthLabel.textContent = this.calendarMonth.toLocaleDateString(void 0, {
       month: "long",
       year: "numeric"
     });
-    const next = head.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
+    const next2 = head2.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
     prev.addEventListener("click", () => {
       this.calendarMonth = addMonths(this.calendarMonth, -1);
       this.scheduleRender();
     });
-    next.addEventListener("click", () => {
+    next2.addEventListener("click", () => {
       this.calendarMonth = addMonths(this.calendarMonth, 1);
       this.scheduleRender();
     });
@@ -3951,8 +4011,8 @@ var TodayView = class extends import_obsidian5.ItemView {
   // header text. Fire-and-forget on purpose — the caller has already
   // appended the empty span, so the rendered children fill it asynchronously
   // without holding up the rest of the view render.
-  renderInlineMarkdown(text, el, sourcePath) {
-    void import_obsidian5.MarkdownRenderer.render(this.app, text, el, sourcePath, this).then(
+  renderInlineMarkdown(text2, el, sourcePath) {
+    void import_obsidian5.MarkdownRenderer.render(this.app, text2, el, sourcePath, this).then(
       () => {
         const p = el.querySelector(":scope > p");
         if (p) {
@@ -4034,7 +4094,7 @@ var TodayView = class extends import_obsidian5.ItemView {
         text: `Create ${path}`
       });
       create.addEventListener("click", async () => {
-        const fallback = {
+        const fallback2 = {
           folder: this.plugin.settings.dailyNoteFolderFallback,
           format: this.plugin.settings.dailyNoteFormatFallback,
           template: this.plugin.settings.dailyNoteTemplate,
@@ -4043,7 +4103,7 @@ var TodayView = class extends import_obsidian5.ItemView {
           quotesFile: this.plugin.settings.quotesFile,
           addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
         };
-        await ensureDailyNote(this.app, this.selectedDate, fallback);
+        await ensureDailyNote(this.app, this.selectedDate, fallback2);
         this.scheduleRender();
       });
       return;
@@ -4118,8 +4178,8 @@ var TodayView = class extends import_obsidian5.ItemView {
     }
     const blocksLayer = timeline.createDiv({ cls: "dp-blocks" });
     const layout = layoutTimeline(scheduled, startMin, settings.pxPerMin);
-    for (const block of layout)
-      this.renderBlock(blocksLayer, file, block, colorMap);
+    for (const block2 of layout)
+      this.renderBlock(blocksLayer, file, block2, colorMap);
     if (notes.length > 0) {
       const notesLayer = timeline.createDiv({ cls: "dp-notes-layer" });
       for (const note of notes) {
@@ -4195,9 +4255,9 @@ var TodayView = class extends import_obsidian5.ItemView {
     });
   }
   showDropIndicator(layer, snappedStartMin, durationMin, rangeStartMin, pxPerMin) {
-    var _a, _b;
+    var _a5, _b3;
     if (!this.dropIndicator || this.dropIndicator.parentElement !== layer) {
-      (_a = this.dropIndicator) == null ? void 0 : _a.detach();
+      (_a5 = this.dropIndicator) == null ? void 0 : _a5.detach();
       this.dropIndicator = layer.createDiv({ cls: "dp-drop-indicator" });
     }
     const ind = this.dropIndicator;
@@ -4210,7 +4270,7 @@ var TodayView = class extends import_obsidian5.ItemView {
         snappedStartMin + durationMin
       )}`
     });
-    if ((_b = this.dragPayload) == null ? void 0 : _b.bodyText) {
+    if ((_b3 = this.dragPayload) == null ? void 0 : _b3.bodyText) {
       ind.createDiv({
         cls: "dp-drop-indicator-text",
         text: this.dragPayload.bodyText
@@ -4218,8 +4278,8 @@ var TodayView = class extends import_obsidian5.ItemView {
     }
   }
   hideDropIndicator() {
-    var _a;
-    (_a = this.dropIndicator) == null ? void 0 : _a.detach();
+    var _a5;
+    (_a5 = this.dropIndicator) == null ? void 0 : _a5.detach();
     this.dropIndicator = null;
   }
   createTaskAtTime(file, startMin, defaultDurationMin) {
@@ -4283,7 +4343,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
       onSave: (title, description, durationMin, project, _checked, tags, extras) => {
-        var _a, _b;
+        var _a5, _b3;
         const proj = project === void 0 || project === "" ? null : project;
         const subtaskSum = durationMin === null && (extras == null ? void 0 : extras.subtaskRawLines) ? sumSubtaskDurations(
           extras.subtaskRawLines,
@@ -4306,8 +4366,8 @@ var TodayView = class extends import_obsidian5.ItemView {
         void this.appendTaskAfterLast(
           file,
           newLine,
-          (_a = extras == null ? void 0 : extras.subtaskRawLines) != null ? _a : [],
-          (_b = extras == null ? void 0 : extras.postAction) != null ? _b : "none"
+          (_a5 = extras == null ? void 0 : extras.subtaskRawLines) != null ? _a5 : [],
+          (_b3 = extras == null ? void 0 : extras.postAction) != null ? _b3 : "none"
         );
       }
     }).open();
@@ -4347,14 +4407,14 @@ var TodayView = class extends import_obsidian5.ItemView {
   // inherits the task's project / context color so notes group visually
   // with their project.
   renderNoteStrip(layer, file, note, topPx, colorMap) {
-    var _a, _b;
+    var _a5, _b3;
     const strip = layer.createDiv({ cls: "dp-note-strip" });
     if (note.checked)
       strip.addClass("is-done");
     strip.style.top = `${topPx}px`;
     const ctx = this.findContextTag(note);
     const projectColor = getTaskColor(note.project, note.subproject, colorMap);
-    const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
+    const color = (_b3 = (_a5 = ctx == null ? void 0 : ctx.color) != null ? _a5 : projectColor) != null ? _b3 : null;
     if (color)
       strip.style.setProperty("--dp-color", color);
     strip.createSpan({ cls: "dp-note-strip-dot" });
@@ -4373,36 +4433,36 @@ var TodayView = class extends import_obsidian5.ItemView {
       this.openTaskEditor(file, note);
     });
   }
-  renderBlock(layer, file, block, colorMap) {
-    var _a, _b;
+  renderBlock(layer, file, block2, colorMap) {
+    var _a5, _b3;
     const el = layer.createDiv({ cls: "dp-block" });
-    el.style.top = `${block.topPx}px`;
-    el.style.height = `${Math.max(18, block.heightPx)}px`;
-    el.style.left = `${block.leftPct}%`;
-    el.style.width = `${block.widthPct}%`;
-    if (block.task.checked)
+    el.style.top = `${block2.topPx}px`;
+    el.style.height = `${Math.max(18, block2.heightPx)}px`;
+    el.style.left = `${block2.leftPct}%`;
+    el.style.width = `${block2.widthPct}%`;
+    if (block2.task.checked)
       el.addClass("is-done");
-    if (!block.task.hasExplicitDuration)
+    if (!block2.task.hasExplicitDuration)
       el.addClass("is-implicit-duration");
-    if (block.task.durationMin < 25)
+    if (block2.task.durationMin < 25)
       el.addClass("is-compact");
-    const narrow = block.widthPct < 99.5;
+    const narrow = block2.widthPct < 99.5;
     if (narrow) {
       el.addClass("is-narrow");
-      if (block.task.durationMin <= 15)
+      if (block2.task.durationMin <= 15)
         el.addClass("is-narrow-mini");
-      else if (block.task.durationMin <= 30)
+      else if (block2.task.durationMin <= 30)
         el.addClass("is-narrow-2line");
     }
     if (import_obsidian5.Platform.isMobile)
       el.addClass("is-mobile-condensed");
-    const ctx = this.findContextTag(block.task);
+    const ctx = this.findContextTag(block2.task);
     const projectColor = getTaskColor(
-      block.task.project,
-      block.task.subproject,
+      block2.task.project,
+      block2.task.subproject,
       colorMap
     );
-    const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
+    const color = (_b3 = (_a5 = ctx == null ? void 0 : ctx.color) != null ? _a5 : projectColor) != null ? _b3 : null;
     if (color) {
       el.style.setProperty("--dp-color", color);
       el.style.setProperty("--dp-on-color", contrastingTextColor(color));
@@ -4416,50 +4476,50 @@ var TodayView = class extends import_obsidian5.ItemView {
       (0, import_obsidian5.setIcon)(ctxIcon, ctx.icon);
       ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
     }
-    if (!block.task.hasExplicitDuration) {
+    if (!block2.task.hasExplicitDuration) {
       const warn = meta.createSpan({ cls: "dp-warn" });
       (0, import_obsidian5.setIcon)(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
     }
-    const compactTime = block.task.startMin !== null && (import_obsidian5.Platform.isMobile || narrow && block.task.durationMin <= 30);
+    const compactTime = block2.task.startMin !== null && (import_obsidian5.Platform.isMobile || narrow && block2.task.durationMin <= 30);
     meta.createSpan({
       cls: "dp-block-time",
-      text: compactTime ? this.fmtClock(block.task.startMin) : this.formatBlockTime(block.task)
+      text: compactTime ? this.fmtClock(block2.task.startMin) : this.formatBlockTime(block2.task)
     });
     row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
-    if (block.task.project) {
+    if (block2.task.project) {
       const projWrap = row.createSpan({ cls: "dp-block-project-wrap" });
-      const projIcon = this.resolveProjectIcon(block.task.project);
+      const projIcon = this.resolveProjectIcon(block2.task.project);
       if (projIcon) {
         const ic = projWrap.createSpan({ cls: "dp-block-project-icon" });
         (0, import_obsidian5.setIcon)(ic, projIcon);
       }
-      projWrap.createSpan({ cls: "dp-block-project", text: block.task.project });
-      if (block.task.subproject) {
+      projWrap.createSpan({ cls: "dp-block-project", text: block2.task.project });
+      if (block2.task.subproject) {
         projWrap.createSpan({
           cls: "dp-block-subproject",
-          text: `/${block.task.subproject}`
+          text: `/${block2.task.subproject}`
         });
       }
       row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
     }
-    if (block.task.tags.length > 0) {
+    if (block2.task.tags.length > 0) {
       const tagsWrap = row.createSpan({ cls: "dp-block-tags" });
-      for (const tag of block.task.tags) {
-        tagsWrap.createSpan({ cls: "dp-block-tag", text: tag });
+      for (const tag2 of block2.task.tags) {
+        tagsWrap.createSpan({ cls: "dp-block-tag", text: tag2 });
       }
       row.createSpan({ cls: "dp-block-sep", text: "\xB7" });
     }
     const titleText = row.createSpan({
       cls: "dp-block-text",
-      text: this.cleanBody(block.task.body)
+      text: this.cleanBody(block2.task.body)
     });
     titleText.addEventListener("click", (ev) => {
       ev.stopPropagation();
       void this.applyLineChecked(
         file,
-        block.task.lineNumber,
-        !block.task.checked
+        block2.task.lineNumber,
+        !block2.task.checked
       );
     });
     titleText.addEventListener("pointerdown", (ev) => ev.stopPropagation());
@@ -4468,61 +4528,61 @@ var TodayView = class extends import_obsidian5.ItemView {
       ev.preventDefault();
       ev.stopPropagation();
     });
-    if (block.task.description && block.heightPx >= 36) {
+    if (block2.task.description && block2.heightPx >= 36) {
       el.createDiv({
         cls: "dp-block-description",
-        text: block.task.description
+        text: block2.task.description
       });
     }
-    if (block.task.subtasks.length > 0 && block.heightPx >= 44) {
+    if (block2.task.subtasks.length > 0 && block2.heightPx >= 44) {
       const subList = el.createDiv({ cls: "dp-block-subtasks" });
       const prefixes = this.plugin.settings.prefixes;
-      block.task.subtasks.forEach((sub) => {
+      block2.task.subtasks.forEach((sub) => {
         const subRow = subList.createDiv({ cls: "dp-block-subtask" });
         if (sub.checked)
           subRow.addClass("is-done");
-        const text = subRow.createSpan({ cls: "dp-block-subtask-text" });
+        const text2 = subRow.createSpan({ cls: "dp-block-subtask-text" });
         const subMin = parseTime(sub.text, prefixes);
         if (subMin !== null) {
-          text.createSpan({
+          text2.createSpan({
             cls: "dp-block-subtask-time",
             text: this.fmtClock(subMin)
           });
           const body = this.cleanBody(sub.text);
           if (body)
-            text.appendText(" " + body);
+            text2.appendText(" " + body);
         } else {
-          text.setText(this.cleanBody(sub.text));
+          text2.setText(this.cleanBody(sub.text));
         }
-        text.addEventListener("click", (ev) => {
+        text2.addEventListener("click", (ev) => {
           ev.stopPropagation();
           void this.applyLineChecked(file, sub.lineNumber, !sub.checked);
         });
-        text.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-        text.addEventListener("mousedown", (ev) => ev.stopPropagation());
-        text.addEventListener("dragstart", (ev) => {
+        text2.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+        text2.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        text2.addEventListener("dragstart", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
         });
       });
     }
     el.addEventListener("dragstart", (ev) => {
-      var _a2;
+      var _a6;
       const rect = el.getBoundingClientRect();
       this.dragPayload = {
         filePath: file.path,
-        lineNumber: block.task.lineNumber,
-        rawLine: block.task.rawLine,
+        lineNumber: block2.task.lineNumber,
+        rawLine: block2.task.rawLine,
         source: "timeline",
         grabOffsetY: ev.clientY - rect.top,
-        durationMin: block.task.durationMin,
-        bodyText: this.cleanBody(block.task.body),
-        hasExplicitDuration: block.task.hasExplicitDuration,
-        subtaskRawLines: block.task.subtasks.map((s) => s.rawLine)
+        durationMin: block2.task.durationMin,
+        bodyText: this.cleanBody(block2.task.body),
+        hasExplicitDuration: block2.task.hasExplicitDuration,
+        subtaskRawLines: block2.task.subtasks.map((s) => s.rawLine)
       };
       el.addClass("is-dragging");
       this.suppressNativeDragImage(ev);
-      (_a2 = ev.dataTransfer) == null ? void 0 : _a2.setData("text/plain", block.task.rawLine);
+      (_a6 = ev.dataTransfer) == null ? void 0 : _a6.setData("text/plain", block2.task.rawLine);
       if (ev.dataTransfer)
         ev.dataTransfer.effectAllowed = "move";
     });
@@ -4531,23 +4591,23 @@ var TodayView = class extends import_obsidian5.ItemView {
       this.dragPayload = null;
       this.hideDropIndicator();
     });
-    el.addEventListener("click", () => this.openTaskEditor(file, block.task));
+    el.addEventListener("click", () => this.openTaskEditor(file, block2.task));
     const handle = el.createDiv({ cls: "dp-resize-handle" });
     handle.addEventListener(
       "pointerdown",
-      (ev) => this.beginResize(ev, el, file, block)
+      (ev) => this.beginResize(ev, el, file, block2)
     );
-    if (block.task.startMin !== null) {
+    if (block2.task.startMin !== null) {
       const topHandle = el.createDiv({
         cls: "dp-resize-handle dp-resize-handle-top"
       });
       topHandle.addEventListener(
         "pointerdown",
-        (ev) => this.beginResizeTop(ev, el, file, block)
+        (ev) => this.beginResizeTop(ev, el, file, block2)
       );
     }
   }
-  beginResize(ev, blockEl, file, block) {
+  beginResize(ev, blockEl, file, block2) {
     ev.preventDefault();
     ev.stopPropagation();
     const handle = ev.currentTarget;
@@ -4556,7 +4616,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     const startHeightPx = blockEl.offsetHeight;
     const minDuration = settings.snapMin;
     const pxPerMin = settings.pxPerMin;
-    let pendingDuration = block.task.durationMin;
+    let pendingDuration = block2.task.durationMin;
     blockEl.draggable = false;
     blockEl.addClass("is-resizing");
     handle.setPointerCapture(ev.pointerId);
@@ -4570,8 +4630,8 @@ var TodayView = class extends import_obsidian5.ItemView {
       );
       blockEl.style.height = `${pendingDuration * pxPerMin}px`;
       const timeEl = blockEl.querySelector(".dp-block-time");
-      if (timeEl && block.task.startMin !== null) {
-        const start = block.task.startMin;
+      if (timeEl && block2.task.startMin !== null) {
+        const start = block2.task.startMin;
         timeEl.textContent = `${this.fmtClock(start)}\u2013${this.fmtClock(start + pendingDuration)} (${formatTotal(pendingDuration)})`;
       }
     };
@@ -4591,11 +4651,11 @@ var TodayView = class extends import_obsidian5.ItemView {
         0
       );
       const finalDuration = pendingDuration;
-      if (finalDuration === block.task.durationMin) {
+      if (finalDuration === block2.task.durationMin) {
         blockEl.draggable = true;
         return;
       }
-      void this.applyDurationChange(file, block.task, finalDuration).finally(
+      void this.applyDurationChange(file, block2.task, finalDuration).finally(
         () => {
           blockEl.draggable = true;
         }
@@ -4622,8 +4682,8 @@ var TodayView = class extends import_obsidian5.ItemView {
       (line) => setDurationTag(line, newDurationMin, prefixes)
     );
   }
-  beginResizeTop(ev, blockEl, file, block) {
-    if (block.task.startMin === null)
+  beginResizeTop(ev, blockEl, file, block2) {
+    if (block2.task.startMin === null)
       return;
     ev.preventDefault();
     ev.stopPropagation();
@@ -4632,8 +4692,8 @@ var TodayView = class extends import_obsidian5.ItemView {
     const startY = ev.clientY;
     const startTopPx = blockEl.offsetTop;
     const startHeightPx = blockEl.offsetHeight;
-    const startStartMin = block.task.startMin;
-    const startDurationMin = block.task.durationMin;
+    const startStartMin = block2.task.startMin;
+    const startDurationMin = block2.task.durationMin;
     const minDuration = settings.snapMin;
     const pxPerMin = settings.pxPerMin;
     let pendingStart = startStartMin;
@@ -4681,7 +4741,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       }
       void this.applyStartAndDurationChange(
         file,
-        block.task,
+        block2.task,
         pendingStart,
         pendingDuration
       ).finally(() => {
@@ -4707,9 +4767,9 @@ var TodayView = class extends import_obsidian5.ItemView {
         subtaskRawLines: task.subtasks.map((s) => s.rawLine)
       },
       (line) => {
-        let next = setTimeTag(line, newStartMin, prefixes);
-        next = setDurationTag(next, newDurationMin, prefixes);
-        return next;
+        let next2 = setTimeTag(line, newStartMin, prefixes);
+        next2 = setDurationTag(next2, newDurationMin, prefixes);
+        return next2;
       }
     );
   }
@@ -4728,9 +4788,9 @@ var TodayView = class extends import_obsidian5.ItemView {
     if (import_obsidian5.Platform.isMobile && this.unscheduledCollapsed) {
       list.addClass("is-collapsed");
     }
-    const head = list.createDiv({ cls: "dp-unscheduled-head" });
+    const head2 = list.createDiv({ cls: "dp-unscheduled-head" });
     if (import_obsidian5.Platform.isMobile) {
-      const toggleBtn = head.createEl("button", {
+      const toggleBtn = head2.createEl("button", {
         cls: "dp-unscheduled-toggle",
         attr: {
           "aria-label": this.unscheduledCollapsed ? "Expand unscheduled" : "Collapse unscheduled",
@@ -4747,14 +4807,14 @@ var TodayView = class extends import_obsidian5.ItemView {
         this.scheduleRender();
       });
     }
-    head.createSpan({ cls: "dp-unscheduled-title", text: "Unscheduled" });
+    head2.createSpan({ cls: "dp-unscheduled-title", text: "Unscheduled" });
     if (import_obsidian5.Platform.isMobile && unscheduled.length > 0) {
-      head.createSpan({
+      head2.createSpan({
         cls: "dp-unscheduled-count",
         text: String(unscheduled.length)
       });
     }
-    const addBtn = head.createEl("button", {
+    const addBtn = head2.createEl("button", {
       cls: "dp-unscheduled-add",
       attr: { "aria-label": "Add unscheduled task" }
     });
@@ -4771,7 +4831,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       body.createDiv({ cls: "dp-empty", text: "No unscheduled tasks." });
     }
     unscheduled.forEach((task, idx) => {
-      var _a, _b;
+      var _a5, _b3;
       const card = body.createDiv({ cls: "dp-card" });
       if (task.checked)
         card.addClass("is-done");
@@ -4779,7 +4839,7 @@ var TodayView = class extends import_obsidian5.ItemView {
         card.addClass("is-implicit-duration");
       const ctx = this.findContextTag(task);
       const projectColor = getTaskColor(task.project, task.subproject, colorMap);
-      const color = (_b = (_a = ctx == null ? void 0 : ctx.color) != null ? _a : projectColor) != null ? _b : null;
+      const color = (_b3 = (_a5 = ctx == null ? void 0 : ctx.color) != null ? _a5 : projectColor) != null ? _b3 : null;
       if (color) {
         card.style.setProperty("--dp-color", color);
         card.addClass("has-project-color");
@@ -4814,13 +4874,13 @@ var TodayView = class extends import_obsidian5.ItemView {
       }
       if (task.tags.length > 0) {
         const tagsWrap = card.createSpan({ cls: "dp-card-tags" });
-        for (const tag of task.tags) {
-          tagsWrap.createSpan({ cls: "dp-card-tag", text: tag });
+        for (const tag2 of task.tags) {
+          tagsWrap.createSpan({ cls: "dp-card-tag", text: tag2 });
         }
       }
       const textCol = card.createDiv({ cls: "dp-card-text-col" });
-      const text = textCol.createDiv({ cls: "dp-card-text" });
-      text.textContent = this.cleanBody(task.body);
+      const text2 = textCol.createDiv({ cls: "dp-card-text" });
+      text2.textContent = this.cleanBody(task.body);
       if (task.description) {
         textCol.createDiv({
           cls: "dp-card-description",
@@ -4828,7 +4888,7 @@ var TodayView = class extends import_obsidian5.ItemView {
         });
       }
       card.addEventListener("dragstart", (ev) => {
-        var _a2;
+        var _a6;
         const rect = card.getBoundingClientRect();
         this.dragPayload = {
           filePath: file.path,
@@ -4843,7 +4903,7 @@ var TodayView = class extends import_obsidian5.ItemView {
         };
         card.addClass("is-dragging");
         this.suppressNativeDragImage(ev);
-        (_a2 = ev.dataTransfer) == null ? void 0 : _a2.setData("text/plain", task.rawLine);
+        (_a6 = ev.dataTransfer) == null ? void 0 : _a6.setData("text/plain", task.rawLine);
         if (ev.dataTransfer)
           ev.dataTransfer.effectAllowed = "move";
       });
@@ -4853,8 +4913,8 @@ var TodayView = class extends import_obsidian5.ItemView {
         this.hideDropIndicator();
       });
       card.addEventListener("dragover", (ev) => {
-        var _a2;
-        if (((_a2 = this.dragPayload) == null ? void 0 : _a2.source) === "unscheduled")
+        var _a6;
+        if (((_a6 = this.dragPayload) == null ? void 0 : _a6.source) === "unscheduled")
           ev.preventDefault();
       });
       card.addEventListener("drop", (ev) => {
@@ -4873,8 +4933,8 @@ var TodayView = class extends import_obsidian5.ItemView {
       card.addEventListener("click", () => this.openTaskEditor(file, task));
     });
     list.addEventListener("dragover", (ev) => {
-      var _a;
-      if (((_a = this.dragPayload) == null ? void 0 : _a.source) === "timeline")
+      var _a5;
+      if (((_a5 = this.dragPayload) == null ? void 0 : _a5.source) === "timeline")
         ev.preventDefault();
     });
     list.addEventListener("drop", (ev) => {
@@ -4889,12 +4949,12 @@ var TodayView = class extends import_obsidian5.ItemView {
     const prefixes = this.plugin.settings.prefixes;
     const subtaskSum = payload.source === "unscheduled" && !payload.hasExplicitDuration ? sumSubtaskDurations(payload.subtaskRawLines, prefixes) : 0;
     await this.editLine(payload, (line) => {
-      let next = setTimeTag(line, newStartMin, prefixes);
-      next = removeOrderTag(next, prefixes);
-      if (subtaskSum > 0 && parseDuration(next, prefixes) === null) {
-        next = setDurationTag(next, subtaskSum, prefixes);
+      let next2 = setTimeTag(line, newStartMin, prefixes);
+      next2 = removeOrderTag(next2, prefixes);
+      if (subtaskSum > 0 && parseDuration(next2, prefixes) === null) {
+        next2 = setDurationTag(next2, subtaskSum, prefixes);
       }
-      return next;
+      return next2;
     });
   }
   async handleUnschedule(payload, unscheduled) {
@@ -4904,9 +4964,9 @@ var TodayView = class extends import_obsidian5.ItemView {
       0
     );
     await this.editLine(payload, (line) => {
-      let next = removeTimeTag(line, prefixes);
-      next = setOrderTag(next, maxOrder + 1, prefixes);
-      return next;
+      let next2 = removeTimeTag(line, prefixes);
+      next2 = setOrderTag(next2, maxOrder + 1, prefixes);
+      return next2;
     });
   }
   async handleReorderUnscheduled(file, unscheduled, payload, targetIdx) {
@@ -4952,10 +5012,10 @@ var TodayView = class extends import_obsidian5.ItemView {
         stale = true;
         return content;
       }
-      const next = transform(lines[idx]);
-      if (next === lines[idx])
+      const next2 = transform(lines[idx]);
+      if (next2 === lines[idx])
         return content;
-      lines[idx] = next;
+      lines[idx] = next2;
       return lines.join("\n");
     });
     if (stale) {
@@ -5095,7 +5155,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     table.createSpan({ cls: valueClasses.join(" "), text: formatTotal(mins) });
   }
   renderProjectTable(parent, tasks, colorMap) {
-    var _a;
+    var _a5;
     const projects = /* @__PURE__ */ new Map();
     let unassignedMin = 0;
     for (const t of tasks) {
@@ -5112,7 +5172,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       if (t.subproject) {
         agg.subs.set(
           t.subproject,
-          ((_a = agg.subs.get(t.subproject)) != null ? _a : 0) + t.durationMin
+          ((_a5 = agg.subs.get(t.subproject)) != null ? _a5 : 0) + t.durationMin
         );
       }
     }
@@ -5221,17 +5281,17 @@ var TodayView = class extends import_obsidian5.ItemView {
     return m === 0 ? `${h12}${ampm}` : `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
   }
   cleanBody(body) {
-    var _a, _b;
+    var _a5, _b3;
     const p = this.plugin.settings.prefixes;
     let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "").replace(new RegExp(`#${p.taskContext}\\/[\\w-]+`, "g"), "").replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
-      const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
-      if (!tag)
+      const tag2 = (_a5 = ctx.tag) == null ? void 0 : _a5.trim();
+      if (!tag2)
         continue;
-      const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const esc = tag2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
     }
-    const noteTag = (_b = this.plugin.settings.noteTag) == null ? void 0 : _b.trim();
+    const noteTag = (_b3 = this.plugin.settings.noteTag) == null ? void 0 : _b3.trim();
     if (noteTag) {
       const esc = noteTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       out = out.replace(new RegExp(`#${esc}(?![\\w/-])`, "gi"), "");
@@ -5241,37 +5301,37 @@ var TodayView = class extends import_obsidian5.ItemView {
   // Detects the configured note tag on a task body. Notes are events the
   // user wants pinned to a specific time without occupying a calendar block.
   isNoteTask(task) {
-    var _a;
-    const tag = (_a = this.plugin.settings.noteTag) == null ? void 0 : _a.trim();
-    if (!tag)
+    var _a5;
+    const tag2 = (_a5 = this.plugin.settings.noteTag) == null ? void 0 : _a5.trim();
+    if (!tag2)
       return false;
-    const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const esc = tag2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(`#${esc}(?![\\w/-])`, "i").test(task.body);
   }
   // Returns the first configured context tag whose `#<tag>` appears in the
   // task body, matching whole-tag (not as a prefix of another tag). Order
   // follows the user's settings list so they can prioritise.
   findContextTag(task) {
-    var _a;
+    var _a5;
     const tags = this.plugin.settings.contextTags;
     if (!tags || tags.length === 0)
       return null;
     for (const ctx of tags) {
-      const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
-      if (!tag)
+      const tag2 = (_a5 = ctx.tag) == null ? void 0 : _a5.trim();
+      if (!tag2)
         continue;
-      const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const esc = tag2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       if (new RegExp(`#${esc}(?![\\w/-])`, "i").test(task.body))
         return ctx;
     }
     return null;
   }
   resolveProjectIcon(project) {
-    var _a;
+    var _a5;
     if (!project)
       return null;
     for (const pc of this.plugin.settings.projectColors) {
-      if (pc.icon && ((_a = pc.project) == null ? void 0 : _a.toLowerCase()) === project.toLowerCase()) {
+      if (pc.icon && ((_a5 = pc.project) == null ? void 0 : _a5.toLowerCase()) === project.toLowerCase()) {
         return pc.icon;
       }
     }
@@ -5291,14 +5351,14 @@ var TodayView = class extends import_obsidian5.ItemView {
     return end;
   }
   openTaskEditor(file, task) {
-    var _a;
+    var _a5;
     const prefixes = this.plugin.settings.prefixes;
     const initialProjectFull = task.project ? task.subproject ? `${task.project}/${task.subproject}` : task.project : null;
     new TaskEditModal(this.app, {
       mode: "edit",
       modalTitle: "Edit task",
       initialTitle: this.cleanBody(task.body),
-      initialDescription: (_a = task.description) != null ? _a : "",
+      initialDescription: (_a5 = task.description) != null ? _a5 : "",
       initialDurationMin: task.durationMin,
       initialProject: initialProjectFull,
       initialChecked: task.checked,
@@ -5337,8 +5397,8 @@ var TodayView = class extends import_obsidian5.ItemView {
       onToggleSubtask: async (sub, checked) => {
         await this.applyLineChecked(file, sub.lineNumber, checked);
       },
-      onAddSubtask: async (text) => {
-        return await this.appendSubtask(file, task, text);
+      onAddSubtask: async (text2) => {
+        return await this.appendSubtask(file, task, text2);
       },
       onEditSubtask: async (sub, newText) => {
         await this.applySubtaskText(file, sub.lineNumber, newText);
@@ -5476,7 +5536,7 @@ var TodayView = class extends import_obsidian5.ItemView {
   // for `targetDate`. No-op if source and target are the same file.
   // Returns true on success.
   async moveTaskWholeToDate(file, task, targetDate) {
-    const fallback = {
+    const fallback2 = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
@@ -5491,7 +5551,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       file,
       task,
       targetDate,
-      fallback
+      fallback2
     );
   }
   // Carries the task title (with most tags) and any unfinished sub-tasks into
@@ -5501,8 +5561,8 @@ var TodayView = class extends import_obsidian5.ItemView {
   // same tag, so the two can be cross-referenced via search. The order tag
   // (#o/) is stripped on the new copy because positioning is per-day.
   async migrateIncompleteToDate(file, task, targetDate) {
-    var _a;
-    const fallback = {
+    var _a5;
+    const fallback2 = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
@@ -5512,7 +5572,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       quotesFile: this.plugin.settings.quotesFile,
       addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
-    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
+    const targetFile = await ensureDailyNote(this.app, targetDate, fallback2);
     if (targetFile.path === file.path) {
       new import_obsidian5.Notice("Source and target are the same file.");
       return false;
@@ -5524,7 +5584,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       prefixes,
       this.plugin.settings.defaultDurationMin
     );
-    let current = (_a = fresh.find((t) => t.lineNumber === task.lineNumber)) != null ? _a : fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
+    let current = (_a5 = fresh.find((t) => t.lineNumber === task.lineNumber)) != null ? _a5 : fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
     if (!current) {
       new import_obsidian5.Notice("Couldn't locate the task to migrate.");
       return false;
@@ -5566,13 +5626,13 @@ var TodayView = class extends import_obsidian5.ItemView {
   // Inserts a new sub-task line below the parent's existing sub-tasks (or
   // directly below the parent if none exist). Re-parses on each call so
   // line numbers stay correct across multiple additions in one session.
-  async appendSubtask(file, task, text) {
-    const trimmed = text.trim();
+  async appendSubtask(file, task, text2) {
+    const trimmed = text2.trim();
     if (!trimmed)
       return null;
     let inserted = null;
     await this.app.vault.process(file, (content) => {
-      var _a, _b;
+      var _a5, _b3;
       const lines = content.split("\n");
       const fresh = parseFileTasks(
         file.path,
@@ -5583,7 +5643,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       if (!fresh)
         return content;
       const insertAt = fresh.subtasks.length > 0 ? fresh.subtasks[fresh.subtasks.length - 1].lineNumber + 1 : fresh.lineNumber + 1;
-      const subIndent = fresh.subtasks.length > 0 ? (_b = (_a = /^(\s*)/.exec(fresh.subtasks[fresh.subtasks.length - 1].rawLine)) == null ? void 0 : _a[1]) != null ? _b : fresh.indent + "	" : fresh.indent + "	";
+      const subIndent = fresh.subtasks.length > 0 ? (_b3 = (_a5 = /^(\s*)/.exec(fresh.subtasks[fresh.subtasks.length - 1].rawLine)) == null ? void 0 : _a5[1]) != null ? _b3 : fresh.indent + "	" : fresh.indent + "	";
       const newLine = `${subIndent}- [ ] ${trimmed}`;
       lines.splice(insertAt, 0, newLine);
       inserted = {
@@ -5597,14 +5657,14 @@ var TodayView = class extends import_obsidian5.ItemView {
     return inserted;
   }
   collectProjectNames() {
-    var _a, _b;
+    var _a5, _b3;
     const prefix = `#${this.plugin.settings.prefixes.project}/`.toLowerCase();
     const names = /* @__PURE__ */ new Set();
     const cache = this.app.metadataCache;
-    const tags = (_b = (_a = cache.getTags) == null ? void 0 : _a.call(cache)) != null ? _b : {};
-    for (const tag of Object.keys(tags)) {
-      if (tag.toLowerCase().startsWith(prefix)) {
-        const name = tag.slice(prefix.length);
+    const tags = (_b3 = (_a5 = cache.getTags) == null ? void 0 : _a5.call(cache)) != null ? _b3 : {};
+    for (const tag2 of Object.keys(tags)) {
+      if (tag2.toLowerCase().startsWith(prefix)) {
+        const name = tag2.slice(prefix.length);
         if (name)
           names.add(name);
       }
@@ -5619,14 +5679,14 @@ var TodayView = class extends import_obsidian5.ItemView {
   // edit-modal tag picker so the user gets autocomplete on labels they've
   // already used elsewhere.
   collectContextTagNames() {
-    var _a, _b;
+    var _a5, _b3;
     const prefix = `#${this.plugin.settings.prefixes.taskContext}/`.toLowerCase();
     const names = /* @__PURE__ */ new Set();
     const cache = this.app.metadataCache;
-    const tags = (_b = (_a = cache.getTags) == null ? void 0 : _a.call(cache)) != null ? _b : {};
-    for (const tag of Object.keys(tags)) {
-      if (tag.toLowerCase().startsWith(prefix)) {
-        const name = tag.slice(prefix.length);
+    const tags = (_b3 = (_a5 = cache.getTags) == null ? void 0 : _a5.call(cache)) != null ? _b3 : {};
+    for (const tag2 of Object.keys(tags)) {
+      if (tag2.toLowerCase().startsWith(prefix)) {
+        const name = tag2.slice(prefix.length);
         if (name && /^[\w-]+$/.test(name))
           names.add(name);
       }
@@ -5640,7 +5700,7 @@ var TodayView = class extends import_obsidian5.ItemView {
   // have its project / duration / description / tags / sub-tasks pre-filled.
   // Reads via `cachedRead` so it's cheap on warm caches.
   async collectPriorTaskSuggestions() {
-    var _a;
+    var _a5;
     const settings = this.plugin.settings;
     const prefixes = settings.prefixes;
     const files = this.app.vault.getMarkdownFiles();
@@ -5664,20 +5724,20 @@ var TodayView = class extends import_obsidian5.ItemView {
         const title = this.cleanBody(t.body);
         if (!title)
           continue;
-        const key = title.toLowerCase();
-        if (seen.has(key))
+        const key2 = title.toLowerCase();
+        if (seen.has(key2))
           continue;
-        seen.add(key);
+        seen.add(key2);
         const project = t.project ? t.subproject ? `${t.project}/${t.subproject}` : t.project : null;
         const subtaskRawLines = t.subtasks.map((sub) => {
           const m = /^\s*-\s*\[[^\]]\]\s*(.*)$/.exec(sub.rawLine);
-          const text = m ? m[1] : sub.text;
-          return `	- [ ] ${text}`;
+          const text2 = m ? m[1] : sub.text;
+          return `	- [ ] ${text2}`;
         });
         out.push({
           title,
           project,
-          description: (_a = t.description) != null ? _a : "",
+          description: (_a5 = t.description) != null ? _a5 : "",
           durationMin: t.hasExplicitDuration ? t.durationMin : null,
           tags: [...t.tags],
           subtaskRawLines
@@ -5725,7 +5785,7 @@ var TodayView = class extends import_obsidian5.ItemView {
   // habits look only at the displayed note's content (already in hand);
   // weekly/monthly habits scan all daily notes in the corresponding period
   // around the displayed date via the shared scanner cache.
-  async loadHabitDisplays(displayDate, displayContent, fallback) {
+  async loadHabitDisplays(displayDate, displayContent, fallback2) {
     const settings = this.plugin.settings;
     const habitsFile = this.app.vault.getAbstractFileByPath(settings.habitsFile);
     if (!(habitsFile instanceof import_obsidian5.TFile))
@@ -5739,7 +5799,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     const readWindowFiles = async (start, end) => {
       const out2 = [];
       for (const d of enumerateDailyNoteDatesInRange(start, end)) {
-        const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+        const c = await this.plugin.habitsScanner.readDateContent(d, fallback2);
         if (c)
           out2.push(c);
       }
@@ -5878,7 +5938,7 @@ var TodayView = class extends import_obsidian5.ItemView {
   // note if missing.
   async applyHabitToggle(file, slug) {
     const settings = this.plugin.settings;
-    const fallback = {
+    const fallback2 = {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
@@ -5888,7 +5948,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       quotesFile: settings.quotesFile,
       addCreatedTag: settings.addCreatedTagToFrontmatter
     };
-    const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback);
+    const target = file ? file : await ensureDailyNote(this.app, this.selectedDate, fallback2);
     await this.app.vault.process(
       target,
       (content) => toggleHabitOnContent(content, settings.habitPrefix, slug)
@@ -5896,8 +5956,8 @@ var TodayView = class extends import_obsidian5.ItemView {
     this.plugin.habitsScanner.invalidate(target.path);
   }
   isPopout() {
-    var _a;
-    const win = (_a = this.containerEl.ownerDocument) == null ? void 0 : _a.defaultView;
+    var _a5;
+    const win = (_a5 = this.containerEl.ownerDocument) == null ? void 0 : _a5.defaultView;
     return !!win && win !== window;
   }
   async popOutLeaf() {
@@ -5907,12 +5967,12 @@ var TodayView = class extends import_obsidian5.ItemView {
   // selected date are transferred to the new view instance so the session
   // doesn't reset on the trip back.
   async returnLeafToMain() {
-    var _a;
+    var _a5;
     const pomo = this.pomodoroState;
     const selectedDate = this.selectedDate;
     let target = null;
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY)) {
-      const win = (_a = leaf.view.containerEl.ownerDocument) == null ? void 0 : _a.defaultView;
+      const win = (_a5 = leaf.view.containerEl.ownerDocument) == null ? void 0 : _a5.defaultView;
       if (win === window) {
         target = leaf;
         break;
@@ -5942,8 +6002,8 @@ var TodayView = class extends import_obsidian5.ItemView {
   }
   // Picks up an in-flight pomodoro session from a sibling TodayView instance
   // (used when bouncing between the main window and a popout).
-  adoptPomodoroState(state) {
-    this.pomodoroState = state;
+  adoptPomodoroState(state2) {
+    this.pomodoroState = state2;
     if (this.pomodoroTickHandle === null) {
       this.pomodoroTickHandle = window.setInterval(
         () => this.scheduleRender(),
@@ -5993,13 +6053,13 @@ var TodayView = class extends import_obsidian5.ItemView {
   // minutes to the currently active sub-task (or the parent task if none) so
   // the time the user just spent is preserved on the note.
   async exitPomodoroWithCommit() {
-    const state = this.pomodoroState;
-    if (!state)
+    const state2 = this.pomodoroState;
+    if (!state2)
       return;
     this.bankWorkProgress();
-    const minutes = Math.floor(state.actualMs / 6e4);
+    const minutes = Math.floor(state2.actualMs / 6e4);
     if (minutes > 0) {
-      const file = this.app.vault.getAbstractFileByPath(state.filePath);
+      const file = this.app.vault.getAbstractFileByPath(state2.filePath);
       if (file instanceof import_obsidian5.TFile) {
         try {
           const content = await this.app.vault.read(file);
@@ -6009,10 +6069,10 @@ var TodayView = class extends import_obsidian5.ItemView {
             this.plugin.settings.prefixes,
             this.plugin.settings.defaultDurationMin
           );
-          let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
+          let task = tasks.find((t) => t.lineNumber === state2.taskLineNumber);
           if (!task) {
             task = tasks.find(
-              (t) => this.cleanBody(t.body) === state.taskBodySnapshot
+              (t) => this.cleanBody(t.body) === state2.taskBodySnapshot
             );
           }
           if (task) {
@@ -6030,40 +6090,40 @@ var TodayView = class extends import_obsidian5.ItemView {
   // Returns ms elapsed in the current phase, clamped to the phase length.
   // Honors the paused/running anchor used elsewhere in the timer math.
   currentPhaseElapsedMs() {
-    var _a;
-    const state = this.pomodoroState;
-    if (!state)
+    var _a5;
+    const state2 = this.pomodoroState;
+    if (!state2)
       return 0;
-    const phaseMin = state.phase === "work" ? this.plugin.settings.pomodoroWorkMin : this.plugin.settings.pomodoroBreakMin;
+    const phaseMin = state2.phase === "work" ? this.plugin.settings.pomodoroWorkMin : this.plugin.settings.pomodoroBreakMin;
     const phaseMs = phaseMin * 6e4;
-    if (state.paused) {
-      const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
+    if (state2.paused) {
+      const remain = (_a5 = state2.pausedRemainingMs) != null ? _a5 : phaseMs;
       return Math.max(0, Math.min(phaseMs, phaseMs - remain));
     }
-    return Math.max(0, Math.min(phaseMs, Date.now() - state.startedAt));
+    return Math.max(0, Math.min(phaseMs, Date.now() - state2.startedAt));
   }
   // Folds any work-phase progress that has not yet been counted into actualMs.
   // Safe to call any time; only adds the delta since the last bank.
   bankWorkProgress() {
-    const state = this.pomodoroState;
-    if (!state || state.phase !== "work")
+    const state2 = this.pomodoroState;
+    if (!state2 || state2.phase !== "work")
       return;
     const phaseElapsed = this.currentPhaseElapsedMs();
-    const delta = phaseElapsed - state.workPhaseBankedMs;
+    const delta = phaseElapsed - state2.workPhaseBankedMs;
     if (delta > 0) {
-      state.actualMs += delta;
-      state.workPhaseBankedMs = phaseElapsed;
+      state2.actualMs += delta;
+      state2.workPhaseBankedMs = phaseElapsed;
     }
   }
   // Writes the accumulated whole minutes onto a task line (parent or sub-task)
   // and resets the in-memory accumulator. workPhaseBankedMs stays so we don't
   // double-count time already accounted for in this work phase.
   async commitActualTime(file, lineNumber) {
-    const state = this.pomodoroState;
-    if (!state)
+    const state2 = this.pomodoroState;
+    if (!state2)
       return;
     this.bankWorkProgress();
-    const minutes = Math.floor(state.actualMs / 6e4);
+    const minutes = Math.floor(state2.actualMs / 6e4);
     if (minutes <= 0)
       return;
     const prefixes = this.plugin.settings.prefixes;
@@ -6074,15 +6134,15 @@ var TodayView = class extends import_obsidian5.ItemView {
       lines[lineNumber] = addActualTimeTag(lines[lineNumber], minutes, prefixes);
       return lines.join("\n");
     });
-    state.actualMs = 0;
+    state2.actualMs = 0;
   }
   // Returns true if the pomodoro UI handled the render, false if the caller
   // should fall through to the normal timeline render (task gone, etc.).
-  async renderPomodoro(root) {
-    const state = this.pomodoroState;
-    if (!state)
+  async renderPomodoro(root2) {
+    const state2 = this.pomodoroState;
+    if (!state2)
       return false;
-    const file = this.app.vault.getAbstractFileByPath(state.filePath);
+    const file = this.app.vault.getAbstractFileByPath(state2.filePath);
     if (!(file instanceof import_obsidian5.TFile)) {
       this.exitPomodoro();
       return false;
@@ -6094,13 +6154,13 @@ var TodayView = class extends import_obsidian5.ItemView {
       this.plugin.settings.prefixes,
       this.plugin.settings.defaultDurationMin
     );
-    let task = tasks.find((t) => t.lineNumber === state.taskLineNumber);
-    if (!task || this.cleanBody(task.body) !== state.taskBodySnapshot) {
+    let task = tasks.find((t) => t.lineNumber === state2.taskLineNumber);
+    if (!task || this.cleanBody(task.body) !== state2.taskBodySnapshot) {
       task = tasks.find(
-        (t) => this.cleanBody(t.body) === state.taskBodySnapshot
+        (t) => this.cleanBody(t.body) === state2.taskBodySnapshot
       );
       if (task)
-        state.taskLineNumber = task.lineNumber;
+        state2.taskLineNumber = task.lineNumber;
     }
     if (!task) {
       this.exitPomodoro();
@@ -6108,34 +6168,34 @@ var TodayView = class extends import_obsidian5.ItemView {
     }
     const workMs = this.plugin.settings.pomodoroWorkMin * 6e4;
     const breakMs = this.plugin.settings.pomodoroBreakMin * 6e4;
-    const phaseMs = state.phase === "work" ? workMs : breakMs;
+    const phaseMs = state2.phase === "work" ? workMs : breakMs;
     let remainingMs;
-    if (state.paused && state.pausedRemainingMs !== null) {
-      remainingMs = state.pausedRemainingMs;
+    if (state2.paused && state2.pausedRemainingMs !== null) {
+      remainingMs = state2.pausedRemainingMs;
     } else {
-      remainingMs = phaseMs - (Date.now() - state.startedAt);
+      remainingMs = phaseMs - (Date.now() - state2.startedAt);
     }
-    if (remainingMs <= 0 && !state.paused) {
+    if (remainingMs <= 0 && !state2.paused) {
       this.bankWorkProgress();
       if (this.plugin.settings.pomodoroAutoCycle) {
-        const nextPhase = state.phase === "work" ? "rest" : "work";
+        const nextPhase = state2.phase === "work" ? "rest" : "work";
         new import_obsidian5.Notice(nextPhase === "rest" ? "Break time" : "Back to focus");
-        state.phase = nextPhase;
-        state.startedAt = Date.now();
-        state.workPhaseBankedMs = 0;
+        state2.phase = nextPhase;
+        state2.startedAt = Date.now();
+        state2.workPhaseBankedMs = 0;
         const nextMs = nextPhase === "work" ? workMs : breakMs;
         remainingMs = nextMs;
       } else {
         remainingMs = 0;
-        state.paused = true;
-        state.pausedRemainingMs = 0;
+        state2.paused = true;
+        state2.pausedRemainingMs = 0;
       }
     }
-    root.empty();
-    root.addClass("today-root");
-    if (!root.hasAttribute("tabindex"))
-      root.setAttribute("tabindex", "-1");
-    const wrap = root.createDiv({ cls: "dp-pomo" });
+    root2.empty();
+    root2.addClass("today-root");
+    if (!root2.hasAttribute("tabindex"))
+      root2.setAttribute("tabindex", "-1");
+    const wrap = root2.createDiv({ cls: "dp-pomo" });
     const topBar = wrap.createDiv({ cls: "dp-pomo-topbar" });
     const editTask = topBar.createEl("button", {
       cls: "dp-pomo-iconbtn",
@@ -6175,7 +6235,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     exit.addEventListener("click", () => void this.exitPomodoroWithCommit());
     wrap.createDiv({
       cls: "dp-pomo-phase",
-      text: state.phase === "work" ? "Focus" : "Break"
+      text: state2.phase === "work" ? "Focus" : "Break"
     });
     const totalSec = Math.max(0, Math.ceil(remainingMs / 1e3));
     const mm = Math.floor(totalSec / 60);
@@ -6212,8 +6272,8 @@ var TodayView = class extends import_obsidian5.ItemView {
       });
       addBtn.type = "button";
       addBtn.addEventListener("click", () => {
-        new SubtaskQuickAddModal(this.app, async (text) => {
-          const sub = await this.appendSubtask(file, task, text);
+        new SubtaskQuickAddModal(this.app, async (text2) => {
+          const sub = await this.appendSubtask(file, task, text2);
           if (sub)
             this.scheduleRender();
           return sub !== null;
@@ -6221,31 +6281,31 @@ var TodayView = class extends import_obsidian5.ItemView {
       });
     }
     const actions = wrap.createDiv({ cls: "dp-pomo-actions" });
-    const expired = remainingMs <= 0 && state.paused;
+    const expired = remainingMs <= 0 && state2.paused;
     const pauseBtn = actions.createEl("button", {
       cls: "dp-pomo-pause-btn",
-      text: expired ? state.phase === "work" ? "Start break" : "Start next pomo" : state.paused ? "Start" : "Pause"
+      text: expired ? state2.phase === "work" ? "Start break" : "Start next pomo" : state2.paused ? "Start" : "Pause"
     });
     pauseBtn.type = "button";
     pauseBtn.addEventListener("click", () => {
-      var _a;
+      var _a5;
       if (expired) {
         this.bankWorkProgress();
-        state.phase = state.phase === "work" ? "rest" : "work";
-        state.startedAt = Date.now();
-        state.paused = false;
-        state.pausedRemainingMs = null;
-        state.workPhaseBankedMs = 0;
-      } else if (state.paused) {
-        const remain = (_a = state.pausedRemainingMs) != null ? _a : phaseMs;
-        state.startedAt = Date.now() - (phaseMs - remain);
-        state.paused = false;
-        state.pausedRemainingMs = null;
+        state2.phase = state2.phase === "work" ? "rest" : "work";
+        state2.startedAt = Date.now();
+        state2.paused = false;
+        state2.pausedRemainingMs = null;
+        state2.workPhaseBankedMs = 0;
+      } else if (state2.paused) {
+        const remain = (_a5 = state2.pausedRemainingMs) != null ? _a5 : phaseMs;
+        state2.startedAt = Date.now() - (phaseMs - remain);
+        state2.paused = false;
+        state2.pausedRemainingMs = null;
       } else {
         this.bankWorkProgress();
-        const elapsed = Date.now() - state.startedAt;
-        state.paused = true;
-        state.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
+        const elapsed = Date.now() - state2.startedAt;
+        state2.paused = true;
+        state2.pausedRemainingMs = Math.max(0, phaseMs - elapsed);
       }
       this.scheduleRender();
     });
@@ -6260,25 +6320,44 @@ var TodayView = class extends import_obsidian5.ItemView {
       await this.applyLineChecked(file, task.lineNumber, true);
       this.exitPomodoro();
     });
-    const hints = wrap.createDiv({ cls: "dp-pomo-hints" });
-    const addHint = (key, label) => {
-      const item = hints.createSpan({ cls: "dp-pomo-hint" });
-      item.createEl("kbd", { cls: "dp-pomo-kbd", text: key });
-      item.createSpan({ cls: "dp-pomo-hint-label", text: label });
-    };
-    addHint("space", state.paused ? "start" : "pause");
-    addHint("enter", nextSub ? "done sub-task" : "complete");
-    if (this.pomodoroSubtaskHistory.length > 0)
-      addHint("z", "undo");
-    addHint("t", "timeline");
-    addHint("p", this.isPopout() ? "return" : "pop out");
-    addHint("x", "close");
-    const doc = root.ownerDocument;
+    if (this.hintsVisible) {
+      const overlay = wrap.createDiv({ cls: "dp-hints-overlay" });
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) {
+          this.hintsVisible = false;
+          this.scheduleRender();
+        }
+      });
+      const hints = overlay.createDiv({ cls: "dp-pomo-hints is-visible" });
+      const closeBtn = hints.createEl("button", {
+        cls: "dp-hints-close",
+        attr: { "aria-label": "Close" },
+        text: "\xD7"
+      });
+      closeBtn.addEventListener("click", () => {
+        this.hintsVisible = false;
+        this.scheduleRender();
+      });
+      const addHint = (key2, label) => {
+        const item = hints.createSpan({ cls: "dp-pomo-hint" });
+        item.createEl("kbd", { cls: "dp-pomo-kbd", text: key2 });
+        item.createSpan({ cls: "dp-pomo-hint-label", text: label });
+      };
+      addHint("space", state2.paused ? "start" : "pause");
+      addHint("enter", nextSub ? "done sub-task" : "complete");
+      if (this.pomodoroSubtaskHistory.length > 0)
+        addHint("z", "undo");
+      addHint("t", "timeline");
+      addHint("p", this.isPopout() ? "return" : "pop out");
+      addHint("x", "close");
+      addHint("?", "toggle hints");
+    }
+    const doc = root2.ownerDocument;
     const active = doc == null ? void 0 : doc.activeElement;
     const focusElsewhere = !!active && active !== (doc == null ? void 0 : doc.body) && !this.containerEl.contains(active);
     const isEditable = !!active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
-    if (!focusElsewhere && !isEditable && active !== root) {
-      root.focus({ preventScroll: true });
+    if (!focusElsewhere && !isEditable && active !== root2) {
+      root2.focus({ preventScroll: true });
     }
     return true;
   }
@@ -6333,20 +6412,20 @@ var TodayView = class extends import_obsidian5.ItemView {
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       for (let i = 0; i < orderedSubs.length; i++) {
-        const slot = slots[i];
-        if (slot < lines.length)
-          lines[slot] = orderedSubs[i].rawLine;
+        const slot2 = slots[i];
+        if (slot2 < lines.length)
+          lines[slot2] = orderedSubs[i].rawLine;
       }
       return lines.join("\n");
     });
   }
   async openLine(file, line, ch = 0) {
-    var _a, _b, _c;
+    var _a5, _b3, _c2;
     const leaf = this.app.workspace.getLeaf(false);
     await leaf.openFile(file);
     const view = leaf.view;
-    (_a = view.editor) == null ? void 0 : _a.setCursor({ line, ch });
-    (_c = (_b = view.editor) == null ? void 0 : _b.focus) == null ? void 0 : _c.call(_b);
+    (_a5 = view.editor) == null ? void 0 : _a5.setCursor({ line, ch });
+    (_c2 = (_b3 = view.editor) == null ? void 0 : _b3.focus) == null ? void 0 : _c2.call(_b3);
   }
   async openFile(file) {
     const leaf = this.app.workspace.getLeaf(false);
@@ -6358,23 +6437,23 @@ function renderPickerCalendar(parent, opts) {
   const draw = () => {
     parent.empty();
     const cal = parent.createDiv({ cls: "dp-calendar" });
-    const head = cal.createDiv({ cls: "dp-cal-head" });
-    const prev = head.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
+    const head2 = cal.createDiv({ cls: "dp-cal-head" });
+    const prev = head2.createEl("button", { cls: "dp-nav-btn", text: "\u25C0" });
     prev.type = "button";
-    const monthLabel = head.createDiv({ cls: "dp-cal-month" });
+    const monthLabel = head2.createDiv({ cls: "dp-cal-month" });
     monthLabel.textContent = month.toLocaleDateString(void 0, {
       month: "long",
       year: "numeric"
     });
-    const next = head.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
-    next.type = "button";
+    const next2 = head2.createEl("button", { cls: "dp-nav-btn", text: "\u25B6" });
+    next2.type = "button";
     prev.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       month = addMonths(month, -1);
       draw();
     });
-    next.addEventListener("click", (ev) => {
+    next2.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       month = addMonths(month, 1);
@@ -6555,8 +6634,8 @@ function attachTitleSuggest(input, wrap, rules) {
     }
   };
   const detect = () => {
-    var _a, _b;
-    const cursor = (_a = input.selectionStart) != null ? _a : input.value.length;
+    var _a5, _b3;
+    const cursor = (_a5 = input.selectionStart) != null ? _a5 : input.value.length;
     const before = input.value.slice(0, cursor);
     let best = null;
     for (const rule of live) {
@@ -6564,7 +6643,7 @@ function attachTitleSuggest(input, wrap, rules) {
       if (idx < 0)
         continue;
       const query = before.slice(idx + rule.trigger.length);
-      const accept = (_b = rule.acceptQuery) != null ? _b : (q) => !/[\s#]/.test(q);
+      const accept = (_b3 = rule.acceptQuery) != null ? _b3 : (q) => !/[\s#]/.test(q);
       if (!accept(query))
         continue;
       if (!best) {
@@ -6606,10 +6685,10 @@ function attachTitleSuggest(input, wrap, rules) {
     activeRule = null;
   };
   const commit = (value) => {
-    var _a;
+    var _a5;
     if (!activeRule || triggerStart < 0)
       return;
-    const cursor = (_a = input.selectionStart) != null ? _a : input.value.length;
+    const cursor = (_a5 = input.selectionStart) != null ? _a5 : input.value.length;
     const rule = activeRule;
     const start = triggerStart;
     hide();
@@ -6672,7 +6751,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     this.checked = opts.initialChecked;
   }
   onOpen() {
-    var _a, _b;
+    var _a5, _b3;
     this.modalEl.addClass("dp-title-modal");
     document.body.addClass("today-edit-open");
     this.titleEl.setText(this.opts.modalTitle);
@@ -6689,10 +6768,10 @@ var TaskEditModal = class extends import_obsidian5.Modal {
         }
       });
       pill.addEventListener("click", (ev) => {
-        var _a2, _b2, _c, _d;
+        var _a6, _b4, _c2, _d;
         ev.preventDefault();
-        const search = (_b2 = (_a2 = this.app.internalPlugins) == null ? void 0 : _a2.getPluginById) == null ? void 0 : _b2.call(_a2, "global-search");
-        (_d = (_c = search == null ? void 0 : search.instance) == null ? void 0 : _c.openGlobalSearch) == null ? void 0 : _d.call(_c, `tag:#${prefix}/${id}`);
+        const search = (_b4 = (_a6 = this.app.internalPlugins) == null ? void 0 : _a6.getPluginById) == null ? void 0 : _b4.call(_a6, "global-search");
+        (_d = (_c2 = search == null ? void 0 : search.instance) == null ? void 0 : _c2.openGlobalSearch) == null ? void 0 : _d.call(_c2, `tag:#${prefix}/${id}`);
         this.close();
       });
     }
@@ -6703,8 +6782,8 @@ var TaskEditModal = class extends import_obsidian5.Modal {
         const target = ev.target;
         if (!target)
           return;
-        const tag = target.tagName;
-        if (tag !== "INPUT" && tag !== "TEXTAREA")
+        const tag2 = target.tagName;
+        if (tag2 !== "INPUT" && tag2 !== "TEXTAREA")
           return;
         window.setTimeout(() => {
           target.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -6766,7 +6845,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
       cls: "dp-project-input",
       attr: { placeholder: "(none)", autocomplete: "off" }
     });
-    projInput.value = (_a = this.opts.initialProject) != null ? _a : "";
+    projInput.value = (_a5 = this.opts.initialProject) != null ? _a5 : "";
     attachProjectSuggest(projInput, projWrap, this.opts.projects);
     const clearBtn = projRow.createEl("button", {
       cls: "dp-project-clear",
@@ -6800,13 +6879,13 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     const renderTagChips = () => {
       tagsHost.empty();
       tagsHost.toggleClass("is-empty", currentTags.length === 0);
-      currentTags.forEach((tag, idx) => {
+      currentTags.forEach((tag2, idx) => {
         const chip = tagsHost.createSpan({ cls: "dp-tag-chip" });
-        chip.createSpan({ cls: "dp-tag-chip-text", text: tag });
+        chip.createSpan({ cls: "dp-tag-chip-text", text: tag2 });
         const x = chip.createEl("button", {
           cls: "dp-tag-chip-remove",
           text: "\xD7",
-          attr: { "aria-label": `Remove tag ${tag}` }
+          attr: { "aria-label": `Remove tag ${tag2}` }
         });
         x.type = "button";
         x.addEventListener("click", () => {
@@ -6952,10 +7031,10 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     };
     const refreshDurButtons = () => {
       buttons.forEach((b, i) => {
-        var _a2;
+        var _a6;
         b.toggleClass(
           "is-selected",
-          ((_a2 = this.opts.durations[i]) == null ? void 0 : _a2.min) === this.selectedDurationMin
+          ((_a6 = this.opts.durations[i]) == null ? void 0 : _a6.min) === this.selectedDurationMin
         );
       });
     };
@@ -7031,12 +7110,12 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     const summaryTime = summary.createDiv({ cls: "dp-edit-quick-summary-cell" });
     const summaryDur = summary.createDiv({ cls: "dp-edit-quick-summary-cell" });
     const insertTriggerAtCursor = (trigger) => {
-      var _a2;
+      var _a6;
       if (!trigger)
         return;
       if (document.activeElement !== input)
         input.focus();
-      const cursor = (_a2 = input.selectionStart) != null ? _a2 : input.value.length;
+      const cursor = (_a6 = input.selectionStart) != null ? _a6 : input.value.length;
       const before = input.value.slice(0, cursor);
       const after = input.value.slice(cursor);
       const needsLead = before.length > 0 && !/\s$/.test(before);
@@ -7113,8 +7192,8 @@ var TaskEditModal = class extends import_obsidian5.Modal {
           el.createSpan({ text: value });
         },
         commit: (display, start, cursor) => {
-          const tag = `#${this.opts.prefixes.time}/${timeDisplayToTagBody(display)} `;
-          replaceTriggerRange(start, cursor, tag);
+          const tag2 = `#${this.opts.prefixes.time}/${timeDisplayToTagBody(display)} `;
+          replaceTriggerRange(start, cursor, tag2);
         }
       },
       {
@@ -7165,8 +7244,8 @@ var TaskEditModal = class extends import_obsidian5.Modal {
               ...people.map((p) => p.path)
             ];
           },
-          renderItem: (el, key) => {
-            const person = personMap.get(key);
+          renderItem: (el, key2) => {
+            const person = personMap.get(key2);
             if (person) {
               el.createSpan({ text: person.basename });
               if (person.folder) {
@@ -7177,8 +7256,8 @@ var TaskEditModal = class extends import_obsidian5.Modal {
               }
               return;
             }
-            el.createSpan({ text: key });
-            const d = dateMap.get(key);
+            el.createSpan({ text: key2 });
+            const d = dateMap.get(key2);
             if (d && fmt.trim()) {
               el.createSpan({
                 cls: "dp-project-suggest-sub",
@@ -7186,14 +7265,14 @@ var TaskEditModal = class extends import_obsidian5.Modal {
               });
             }
           },
-          commit: (key, start, cursor) => {
-            const person = personMap.get(key);
+          commit: (key2, start, cursor) => {
+            const person = personMap.get(key2);
             if (person) {
               const link2 = buildPersonLinkInsert(this.app, person.path);
               replaceTriggerRange(start, cursor, link2 + " ");
               return;
             }
-            const d = dateMap.get(key);
+            const d = dateMap.get(key2);
             if (!d) {
               replaceTriggerRange(start, cursor, "");
               return;
@@ -7211,12 +7290,12 @@ var TaskEditModal = class extends import_obsidian5.Modal {
       })()
     ]);
     const resolveProject = () => {
-      var _a2;
+      var _a6;
       const raw = projInput.value.trim();
       if (this.opts.mode === "new") {
         return raw ? sanitizeProjectName(raw) || null : null;
       }
-      const initial = (_a2 = this.opts.initialProject) != null ? _a2 : "";
+      const initial = (_a6 = this.opts.initialProject) != null ? _a6 : "";
       if (raw === initial)
         return void 0;
       if (!raw)
@@ -7232,10 +7311,10 @@ var TaskEditModal = class extends import_obsidian5.Modal {
       return raw;
     };
     const resolveTags = () => {
-      const pending = sanitizeTag(tagInput.value);
+      const pending2 = sanitizeTag(tagInput.value);
       const final = [...currentTags];
-      if (pending && /^[\w-]+$/.test(pending) && !final.includes(pending)) {
-        final.push(pending);
+      if (pending2 && /^[\w-]+$/.test(pending2) && !final.includes(pending2)) {
+        final.push(pending2);
       }
       if (this.opts.mode === "new")
         return final;
@@ -7311,8 +7390,8 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     updateSubTotal = () => {
       const total = subs.reduce(
         (acc, s) => {
-          var _a2;
-          return acc + ((_a2 = parseDuration(s.text, prefixes)) != null ? _a2 : 0);
+          var _a6;
+          return acc + ((_a6 = parseDuration(s.text, prefixes)) != null ? _a6 : 0);
         },
         0
       );
@@ -7534,18 +7613,18 @@ var TaskEditModal = class extends import_obsidian5.Modal {
           if (done)
             return;
           done = true;
-          const next = editor.value.trim();
+          const next2 = editor.value.trim();
           editor.remove();
           const before = cleanBody(sub.text);
-          if (commit && next && next !== before) {
-            sub.rawLine = setTaskTitle(sub.rawLine, next, prefixes);
+          if (commit && next2 && next2 !== before) {
+            sub.rawLine = setTaskTitle(sub.rawLine, next2, prefixes);
             const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
             if (m)
               sub.text = m[1];
             textEl.setText(cleanBody(sub.text));
             updateSubTotal();
             if (this.opts.onEditSubtask) {
-              void this.opts.onEditSubtask(sub, next);
+              void this.opts.onEditSubtask(sub, next2);
             }
           }
           textEl.style.display = "";
@@ -7659,19 +7738,19 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     });
     addBtn.type = "button";
     const submitNewSubtask = async () => {
-      const text = addInput.value.trim();
-      if (!text)
+      const text2 = addInput.value.trim();
+      if (!text2)
         return;
       addInput.disabled = true;
       addBtn.disabled = true;
       let sub;
       if (this.opts.onAddSubtask) {
-        sub = await this.opts.onAddSubtask(text);
+        sub = await this.opts.onAddSubtask(text2);
       } else {
         sub = {
           lineNumber: pendingSubLineCounter--,
-          rawLine: `	- [ ] ${text}`,
-          text,
+          rawLine: `	- [ ] ${text2}`,
+          text: text2,
           checked: false
         };
       }
@@ -7716,11 +7795,11 @@ var TaskEditModal = class extends import_obsidian5.Modal {
       const triggerPopoverEl = () => titleWrap.querySelector(
         ".dp-project-suggest:not(.dp-task-suggest)"
       );
-      const isTriggerActive = (text) => {
+      const isTriggerActive = (text2) => {
         const tp = triggerPopoverEl();
         if (tp && tp.style.display !== "none")
           return true;
-        return triggerStrings.some((t) => text.includes(t));
+        return triggerStrings.some((t) => text2.includes(t));
       };
       const filterPrior = (q) => {
         const needle = q.trim().toLowerCase();
@@ -7798,11 +7877,11 @@ var TaskEditModal = class extends import_obsidian5.Modal {
         priorActiveIdx = -1;
       };
       const applyPriorPick = (sugg) => {
-        var _a2;
+        var _a6;
         input.value = sugg.title;
         input.setSelectionRange(sugg.title.length, sugg.title.length);
         descInput.value = sugg.description;
-        projInput.value = (_a2 = sugg.project) != null ? _a2 : "";
+        projInput.value = (_a6 = sugg.project) != null ? _a6 : "";
         if (sugg.durationMin !== null) {
           this.selectedDurationMin = sugg.durationMin;
           this.durationChanged = true;
@@ -7817,11 +7896,11 @@ var TaskEditModal = class extends import_obsidian5.Modal {
           subs.length = 0;
           for (const rawLine of sugg.subtaskRawLines) {
             const m = /^\s*-\s*\[[^\]]\]\s*(.*)$/.exec(rawLine);
-            const text = m ? m[1] : rawLine;
+            const text2 = m ? m[1] : rawLine;
             subs.push({
               lineNumber: pendingSubLineCounter--,
               rawLine,
-              text,
+              text: text2,
               checked: false
             });
           }
@@ -7923,7 +8002,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
     });
     let editModeMoveBtn = null;
     if (this.opts.mode === "edit") {
-      const moveChoices = (_b = this.opts.moveChoices) != null ? _b : [];
+      const moveChoices = (_b3 = this.opts.moveChoices) != null ? _b3 : [];
       const calendarPick = this.opts.moveCalendarPick;
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
@@ -8013,9 +8092,9 @@ var TaskEditModal = class extends import_obsidian5.Modal {
           }
         });
       };
-      const runWith = async (action) => {
+      const runWith = async (action2) => {
         setSubBtnsDisabled(true);
-        const moved = await action();
+        const moved = await action2();
         if (moved)
           this.close();
         else {
@@ -8128,7 +8207,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
       el.setSelectionRange(end, end);
     };
     const onModalKey = (ev) => {
-      var _a2;
+      var _a6;
       if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
         ev.preventDefault();
         submit();
@@ -8165,7 +8244,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
         const selected = buttons.find(
           (b) => b.classList.contains("is-selected")
         );
-        (_a2 = selected != null ? selected : buttons[0]) == null ? void 0 : _a2.focus();
+        (_a6 = selected != null ? selected : buttons[0]) == null ? void 0 : _a6.focus();
       } else if (k === "s") {
         ev.preventDefault();
         showBtn.click();
@@ -8218,12 +8297,12 @@ var SubtaskQuickAddModal = class extends import_obsidian5.Modal {
     const submit = async () => {
       if (submitting)
         return;
-      const text = input.value.trim();
-      if (!text)
+      const text2 = input.value.trim();
+      if (!text2)
         return;
       submitting = true;
       input.disabled = true;
-      const ok = await this.onSubmit(text);
+      const ok = await this.onSubmit(text2);
       input.disabled = false;
       submitting = false;
       if (ok) {
@@ -8248,11 +8327,11 @@ var SubtaskQuickAddModal = class extends import_obsidian5.Modal {
 var import_obsidian6 = require("obsidian");
 var TASK_LINE2 = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 async function collectUnfinished(plugin) {
-  const fallback = {
+  const fallback2 = {
     folder: plugin.settings.dailyNoteFolderFallback,
     format: plugin.settings.dailyNoteFormatFallback
   };
-  const dailyOptions = getDailyNoteOptions(plugin.app, fallback);
+  const dailyOptions = getDailyNoteOptions(plugin.app, fallback2);
   const inboxPath = resolveInboxPath(
     plugin.settings.inboxPath,
     dailyOptions.folder
@@ -8385,12 +8464,12 @@ var ConfirmModal = class extends import_obsidian6.Modal {
     });
     cancel.type = "button";
     cancel.addEventListener("click", () => this.close());
-    const apply = actions.createEl("button", {
+    const apply2 = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: `Migrate ${this.plan.totalCount} ${taskWord}`
     });
-    apply.type = "button";
-    apply.addEventListener("click", () => {
+    apply2.type = "button";
+    apply2.addEventListener("click", () => {
       this.settled = true;
       this.close();
       this.resolve(true);
@@ -8465,11 +8544,11 @@ function scanContent(content, date, prefixes, idLength) {
     const subtree = [t];
     let k = i + 1;
     while (k < taskLines.length) {
-      const next = taskLines[k];
-      if (next.indent.length <= t.indent.length)
+      const next2 = taskLines[k];
+      if (next2.indent.length <= t.indent.length)
         break;
-      if (!next.checked && !next.migrated)
-        subtree.push(next);
+      if (!next2.checked && !next2.migrated)
+        subtree.push(next2);
       k++;
     }
     appendBlockToPlan(subtree, t, date, prefixes, idLength, edits, inboxLines);
@@ -8487,7 +8566,7 @@ function isMigrationRoot(taskLines, i) {
   }
   return true;
 }
-function appendBlockToPlan(subtree, root, date, prefixes, idLength, edits, inboxLines) {
+function appendBlockToPlan(subtree, root2, date, prefixes, idLength, edits, inboxLines) {
   for (const line of subtree) {
     let id = parseTaskId(line.body, prefixes);
     let updatedSource = line.rawLine;
@@ -8496,7 +8575,7 @@ function appendBlockToPlan(subtree, root, date, prefixes, idLength, edits, inbox
       updatedSource = setTaskIdTag(updatedSource, id, prefixes);
     }
     const migratedSource = setTaskMigrated(updatedSource);
-    const rebasedIndent = stripIndentPrefix(line.indent, root.indent);
+    const rebasedIndent = stripIndentPrefix(line.indent, root2.indent);
     const sourceBodyMatch = TASK_LINE2.exec(updatedSource);
     const inboxBody = sourceBodyMatch ? sourceBodyMatch[3] : line.body;
     let inboxLine = `${rebasedIndent}- [ ] ${inboxBody}`;
@@ -8607,12 +8686,12 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
     }, 100);
   }
   async render() {
-    const root = this.containerEl.children[1];
-    root.empty();
-    root.addClass("today-root");
-    root.addClass("dp-habit-stats");
+    const root2 = this.containerEl.children[1];
+    root2.empty();
+    root2.addClass("today-root");
+    root2.addClass("dp-habit-stats");
     const settings = this.plugin.settings;
-    const fallback = {
+    const fallback2 = {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
       template: settings.dailyNoteTemplate,
@@ -8620,12 +8699,12 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
       dateLinkFormat: settings.dateLinkFormat,
       quotesFile: settings.quotesFile
     };
-    const heading = root.createDiv({ cls: "dp-habit-stats-header" });
+    const heading = root2.createDiv({ cls: "dp-habit-stats-header" });
     heading.createEl("h3", { text: "Habit stats" });
-    this.renderTabs(root);
+    this.renderTabs(root2);
     const { habits, goals } = await this.loadHabitsAndGoals();
     if (habits.length === 0 && goals.length === 0) {
-      root.createDiv({
+      root2.createDiv({
         cls: "dp-habit-stats-empty",
         text: `No habits found. Add tags like #${settings.habitPrefix}/day/<slug> to ${settings.habitsFile}.`
       });
@@ -8634,7 +8713,7 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
     const today = startOfDay(new Date());
     const window2 = settings.habitsStatsWindow;
     if (this.activeTab === "workouts") {
-      await this.renderWorkoutLog(root, today, window2, fallback);
+      await this.renderWorkoutLog(root2, today, window2, fallback2);
       return;
     }
     const dayBuckets = this.buildDayBuckets(today, window2);
@@ -8646,7 +8725,7 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
       dayBuckets,
       habits,
       goals,
-      fallback
+      fallback2
     );
     const weekSection = await this.buildSection(
       "Week",
@@ -8654,7 +8733,7 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
       weekBuckets,
       habits,
       goals,
-      fallback
+      fallback2
     );
     const monthSection = await this.buildSection(
       "Month",
@@ -8662,31 +8741,31 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
       monthBuckets,
       habits,
       goals,
-      fallback
+      fallback2
     );
-    this.renderSection(root, daySection);
-    this.renderSection(root, weekSection);
-    this.renderSection(root, monthSection);
+    this.renderSection(root2, daySection);
+    this.renderSection(root2, weekSection);
+    this.renderSection(root2, monthSection);
   }
   renderTabs(parent) {
     const tabsEl = parent.createDiv({ cls: "dp-habit-stats-tabs" });
-    const make = (key, label) => {
+    const make = (key2, label) => {
       const el = tabsEl.createEl("button", {
-        cls: "dp-habit-stats-tab" + (this.activeTab === key ? " is-active" : ""),
+        cls: "dp-habit-stats-tab" + (this.activeTab === key2 ? " is-active" : ""),
         text: label
       });
       el.onclick = () => {
-        if (this.activeTab === key)
+        if (this.activeTab === key2)
           return;
-        this.activeTab = key;
+        this.activeTab = key2;
         void this.render();
       };
     };
     make("habits", "Habits");
     make("workouts", "Workouts");
   }
-  async renderWorkoutLog(parent, today, window2, fallback) {
-    var _a, _b, _c, _d;
+  async renderWorkoutLog(parent, today, window2, fallback2) {
+    var _a5, _b3, _c2, _d;
     const settings = this.plugin.settings;
     const days = [];
     for (let i = window2 - 1; i >= 0; i--)
@@ -8694,18 +8773,18 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
     const repsByDate = /* @__PURE__ */ new Map();
     const totalsByName = /* @__PURE__ */ new Map();
     for (const d of days) {
-      const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+      const c = await this.plugin.habitsScanner.readDateContent(d, fallback2);
       const m = /* @__PURE__ */ new Map();
       if (c) {
         const summaries = parseExercises(c, settings.prefixes);
         for (const s of summaries) {
           let reps = 0;
-          for (const set of s.sets)
-            if (set.done)
-              reps += set.reps;
+          for (const set2 of s.sets)
+            if (set2.done)
+              reps += set2.reps;
           if (reps > 0) {
             m.set(s.name, reps);
-            totalsByName.set(s.name, ((_a = totalsByName.get(s.name)) != null ? _a : 0) + reps);
+            totalsByName.set(s.name, ((_a5 = totalsByName.get(s.name)) != null ? _a5 : 0) + reps);
           }
         }
       }
@@ -8742,7 +8821,7 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
       const tr = tbody.createEl("tr");
       tr.createEl("td", { cls: "dp-workout-log-name", text: name });
       for (const d of days) {
-        const reps = (_c = (_b = repsByDate.get(d.getTime())) == null ? void 0 : _b.get(name)) != null ? _c : 0;
+        const reps = (_c2 = (_b3 = repsByDate.get(d.getTime())) == null ? void 0 : _b3.get(name)) != null ? _c2 : 0;
         const td = tr.createEl("td", {
           cls: "dp-workout-log-cell" + (reps === 0 ? " is-empty" : "") + (d.getTime() === today.getTime() ? " is-current" : ""),
           text: reps > 0 ? reps.toString() : ""
@@ -8833,8 +8912,8 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
     }
     return out;
   }
-  async buildSection(name, period, buckets, allHabits, allGoals, fallback) {
-    var _a, _b, _c;
+  async buildSection(name, period, buckets, allHabits, allGoals, fallback2) {
+    var _a5, _b3, _c2;
     const settings = this.plugin.settings;
     const habits = allHabits.filter((h) => h.period === period);
     const goals = allGoals.filter((g) => g.period === period);
@@ -8847,7 +8926,7 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
     }
     const contentByTime = /* @__PURE__ */ new Map();
     for (const [t, d] of dateMap) {
-      const c = await this.plugin.habitsScanner.readDateContent(d, fallback);
+      const c = await this.plugin.habitsScanner.readDateContent(d, fallback2);
       if (c)
         contentByTime.set(t, c);
     }
@@ -8885,15 +8964,15 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
       const summaries = parseExercises(c, settings.prefixes);
       const doneByName = /* @__PURE__ */ new Map();
       for (const s of summaries) {
-        for (const set of s.sets) {
-          if (!set.done)
+        for (const set2 of s.sets) {
+          if (!set2.done)
             continue;
-          totalReps += set.reps;
+          totalReps += set2.reps;
           exerciseTotals.set(
             s.name,
-            ((_a = exerciseTotals.get(s.name)) != null ? _a : 0) + set.reps
+            ((_a5 = exerciseTotals.get(s.name)) != null ? _a5 : 0) + set2.reps
           );
-          doneByName.set(s.name, ((_b = doneByName.get(s.name)) != null ? _b : 0) + set.reps);
+          doneByName.set(s.name, ((_b3 = doneByName.get(s.name)) != null ? _b3 : 0) + set2.reps);
         }
       }
       if (doneByName.size > 0)
@@ -8909,7 +8988,7 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
           const m = doneRepsByDate.get(startOfDay(d).getTime());
           if (!m)
             continue;
-          reps += (_c = m.get(g.name)) != null ? _c : 0;
+          reps += (_c2 = m.get(g.name)) != null ? _c2 : 0;
         }
         const met = reps >= g.target;
         cells.push({ bucket: b, reps, target: g.target, met });
@@ -9063,14 +9142,14 @@ function buildMonthBands(buckets) {
   const out = [];
   let current = null;
   for (const b of buckets) {
-    const key = `${b.start.getFullYear()}-${b.start.getMonth()}`;
-    if (current && current.key === key) {
+    const key2 = `${b.start.getFullYear()}-${b.start.getMonth()}`;
+    if (current && current.key === key2) {
       current.span++;
     } else {
       if (current)
         out.push({ label: current.label, span: current.span });
       const label = b.start.toLocaleDateString(void 0, { month: "short" });
-      current = { key, label, span: 1 };
+      current = { key: key2, label, span: 1 };
     }
   }
   if (current)
@@ -9124,14 +9203,5420 @@ function formatMonthRange(start, endExclusive) {
   return `${startStr} \u2013 ${endStr}`;
 }
 
-// src/main.ts
+// src/multiDayView.ts
 var import_obsidian9 = require("obsidian");
+
+// node_modules/esm-env/dev-fallback.js
+var _a, _b;
+var node_env = (_b = (_a = globalThis.process) == null ? void 0 : _a.env) == null ? void 0 : _b.NODE_ENV;
+var dev_fallback_default = node_env && !node_env.toLowerCase().startsWith("prod");
+
+// node_modules/svelte/src/internal/shared/utils.js
+var is_array = Array.isArray;
+var index_of = Array.prototype.indexOf;
+var includes = Array.prototype.includes;
+var array_from = Array.from;
+var object_keys = Object.keys;
+var define_property = Object.defineProperty;
+var get_descriptor = Object.getOwnPropertyDescriptor;
+var object_prototype = Object.prototype;
+var array_prototype = Array.prototype;
+var get_prototype_of = Object.getPrototypeOf;
+var is_extensible = Object.isExtensible;
+var noop = () => {
+};
+function run_all(arr) {
+  for (var i = 0; i < arr.length; i++) {
+    arr[i]();
+  }
+}
+function deferred() {
+  var resolve;
+  var reject;
+  var promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+// node_modules/svelte/src/internal/client/constants.js
+var DERIVED = 1 << 1;
+var EFFECT = 1 << 2;
+var RENDER_EFFECT = 1 << 3;
+var MANAGED_EFFECT = 1 << 24;
+var BLOCK_EFFECT = 1 << 4;
+var BRANCH_EFFECT = 1 << 5;
+var ROOT_EFFECT = 1 << 6;
+var BOUNDARY_EFFECT = 1 << 7;
+var CONNECTED = 1 << 9;
+var CLEAN = 1 << 10;
+var DIRTY = 1 << 11;
+var MAYBE_DIRTY = 1 << 12;
+var INERT = 1 << 13;
+var DESTROYED = 1 << 14;
+var REACTION_RAN = 1 << 15;
+var DESTROYING = 1 << 25;
+var EFFECT_TRANSPARENT = 1 << 16;
+var EAGER_EFFECT = 1 << 17;
+var HEAD_EFFECT = 1 << 18;
+var EFFECT_PRESERVED = 1 << 19;
+var USER_EFFECT = 1 << 20;
+var EFFECT_OFFSCREEN = 1 << 25;
+var WAS_MARKED = 1 << 16;
+var REACTION_IS_UPDATING = 1 << 21;
+var ASYNC = 1 << 22;
+var ERROR_VALUE = 1 << 23;
+var STATE_SYMBOL = Symbol("$state");
+var LEGACY_PROPS = Symbol("legacy props");
+var LOADING_ATTR_SYMBOL = Symbol("");
+var PROXY_PATH_SYMBOL = Symbol("proxy path");
+var HMR_ANCHOR = Symbol("hmr anchor");
+var STALE_REACTION = new class StaleReactionError extends Error {
+  constructor() {
+    super(...arguments);
+    __publicField(this, "name", "StaleReactionError");
+    __publicField(this, "message", "The reaction that called `getAbortSignal()` was re-run or destroyed");
+  }
+}();
+var _a2;
+var IS_XHTML = (
+  // We gotta write it like this because after downleveling the pure comment may end up in the wrong location
+  !!((_a2 = globalThis.document) == null ? void 0 : _a2.contentType) && /* @__PURE__ */ globalThis.document.contentType.includes("xml")
+);
+var TEXT_NODE = 3;
+var COMMENT_NODE = 8;
+
+// node_modules/svelte/src/internal/shared/errors.js
+function invariant_violation(message) {
+  if (dev_fallback_default) {
+    const error = new Error(`invariant_violation
+An invariant violation occurred, meaning Svelte's internal assumptions were flawed. This is a bug in Svelte, not your app \u2014 please open an issue at https://github.com/sveltejs/svelte, citing the following message: "${message}"
+https://svelte.dev/e/invariant_violation`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/invariant_violation`);
+  }
+}
+
+// node_modules/svelte/src/internal/client/errors.js
+function async_derived_orphan() {
+  if (dev_fallback_default) {
+    const error = new Error(`async_derived_orphan
+Cannot create a \`$derived(...)\` with an \`await\` expression outside of an effect tree
+https://svelte.dev/e/async_derived_orphan`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/async_derived_orphan`);
+  }
+}
+function derived_references_self() {
+  if (dev_fallback_default) {
+    const error = new Error(`derived_references_self
+A derived value cannot reference itself recursively
+https://svelte.dev/e/derived_references_self`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/derived_references_self`);
+  }
+}
+function effect_in_teardown(rune) {
+  if (dev_fallback_default) {
+    const error = new Error(`effect_in_teardown
+\`${rune}\` cannot be used inside an effect cleanup function
+https://svelte.dev/e/effect_in_teardown`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/effect_in_teardown`);
+  }
+}
+function effect_in_unowned_derived() {
+  if (dev_fallback_default) {
+    const error = new Error(`effect_in_unowned_derived
+Effect cannot be created inside a \`$derived\` value that was not itself created inside an effect
+https://svelte.dev/e/effect_in_unowned_derived`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/effect_in_unowned_derived`);
+  }
+}
+function effect_orphan(rune) {
+  if (dev_fallback_default) {
+    const error = new Error(`effect_orphan
+\`${rune}\` can only be used inside an effect (e.g. during component initialisation)
+https://svelte.dev/e/effect_orphan`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/effect_orphan`);
+  }
+}
+function effect_update_depth_exceeded() {
+  if (dev_fallback_default) {
+    const error = new Error(`effect_update_depth_exceeded
+Maximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state
+https://svelte.dev/e/effect_update_depth_exceeded`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/effect_update_depth_exceeded`);
+  }
+}
+function hydration_failed() {
+  if (dev_fallback_default) {
+    const error = new Error(`hydration_failed
+Failed to hydrate the application
+https://svelte.dev/e/hydration_failed`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/hydration_failed`);
+  }
+}
+function props_invalid_value(key2) {
+  if (dev_fallback_default) {
+    const error = new Error(`props_invalid_value
+Cannot do \`bind:${key2}={undefined}\` when \`${key2}\` has a fallback value
+https://svelte.dev/e/props_invalid_value`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/props_invalid_value`);
+  }
+}
+function rune_outside_svelte(rune) {
+  if (dev_fallback_default) {
+    const error = new Error(`rune_outside_svelte
+The \`${rune}\` rune is only available inside \`.svelte\` and \`.svelte.js/ts\` files
+https://svelte.dev/e/rune_outside_svelte`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/rune_outside_svelte`);
+  }
+}
+function state_descriptors_fixed() {
+  if (dev_fallback_default) {
+    const error = new Error(`state_descriptors_fixed
+Property descriptors defined on \`$state\` objects must contain \`value\` and always be \`enumerable\`, \`configurable\` and \`writable\`.
+https://svelte.dev/e/state_descriptors_fixed`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/state_descriptors_fixed`);
+  }
+}
+function state_prototype_fixed() {
+  if (dev_fallback_default) {
+    const error = new Error(`state_prototype_fixed
+Cannot set prototype of \`$state\` object
+https://svelte.dev/e/state_prototype_fixed`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/state_prototype_fixed`);
+  }
+}
+function state_unsafe_mutation() {
+  if (dev_fallback_default) {
+    const error = new Error(`state_unsafe_mutation
+Updating state inside \`$derived(...)\`, \`$inspect(...)\` or a template expression is forbidden. If the value should not be reactive, declare it without \`$state\`
+https://svelte.dev/e/state_unsafe_mutation`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/state_unsafe_mutation`);
+  }
+}
+function svelte_boundary_reset_onerror() {
+  if (dev_fallback_default) {
+    const error = new Error(`svelte_boundary_reset_onerror
+A \`<svelte:boundary>\` \`reset\` function cannot be called while an error is still being handled
+https://svelte.dev/e/svelte_boundary_reset_onerror`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/svelte_boundary_reset_onerror`);
+  }
+}
+
+// node_modules/svelte/src/constants.js
+var EACH_INDEX_REACTIVE = 1 << 1;
+var EACH_IS_CONTROLLED = 1 << 2;
+var EACH_IS_ANIMATED = 1 << 3;
+var EACH_ITEM_IMMUTABLE = 1 << 4;
+var PROPS_IS_IMMUTABLE = 1;
+var PROPS_IS_RUNES = 1 << 1;
+var PROPS_IS_UPDATED = 1 << 2;
+var PROPS_IS_BINDABLE = 1 << 3;
+var PROPS_IS_LAZY_INITIAL = 1 << 4;
+var TRANSITION_OUT = 1 << 1;
+var TRANSITION_GLOBAL = 1 << 2;
+var TEMPLATE_FRAGMENT = 1;
+var TEMPLATE_USE_IMPORT_NODE = 1 << 1;
+var TEMPLATE_USE_SVG = 1 << 2;
+var TEMPLATE_USE_MATHML = 1 << 3;
+var HYDRATION_START = "[";
+var HYDRATION_START_ELSE = "[!";
+var HYDRATION_START_FAILED = "[?";
+var HYDRATION_END = "]";
+var HYDRATION_ERROR = {};
+var ELEMENT_PRESERVE_ATTRIBUTE_CASE = 1 << 1;
+var ELEMENT_IS_INPUT = 1 << 2;
+var UNINITIALIZED = Symbol();
+var FILENAME = Symbol("filename");
+var HMR = Symbol("hmr");
+var NAMESPACE_HTML = "http://www.w3.org/1999/xhtml";
+
+// node_modules/svelte/src/internal/client/warnings.js
+var bold = "font-weight: bold";
+var normal = "font-weight: normal";
+function await_reactivity_loss(name) {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] await_reactivity_loss
+%cDetected reactivity loss when reading \`${name}\`. This happens when state is read in an async function after an earlier \`await\`
+https://svelte.dev/e/await_reactivity_loss`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/await_reactivity_loss`);
+  }
+}
+function await_waterfall(name, location) {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] await_waterfall
+%cAn async derived, \`${name}\` (${location}) was not read immediately after it resolved. This often indicates an unnecessary waterfall, which can slow down your app
+https://svelte.dev/e/await_waterfall`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/await_waterfall`);
+  }
+}
+function derived_inert() {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] derived_inert
+%cReading a derived belonging to a now-destroyed effect may result in stale values
+https://svelte.dev/e/derived_inert`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/derived_inert`);
+  }
+}
+function hydration_mismatch(location) {
+  if (dev_fallback_default) {
+    console.warn(
+      `%c[svelte] hydration_mismatch
+%c${location ? `Hydration failed because the initial UI does not match what was rendered on the server. The error occurred near ${location}` : "Hydration failed because the initial UI does not match what was rendered on the server"}
+https://svelte.dev/e/hydration_mismatch`,
+      bold,
+      normal
+    );
+  } else {
+    console.warn(`https://svelte.dev/e/hydration_mismatch`);
+  }
+}
+function lifecycle_double_unmount() {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] lifecycle_double_unmount
+%cTried to unmount a component that was not mounted
+https://svelte.dev/e/lifecycle_double_unmount`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/lifecycle_double_unmount`);
+  }
+}
+function state_proxy_equality_mismatch(operator) {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] state_proxy_equality_mismatch
+%cReactive \`$state(...)\` proxies and the values they proxy have different identities. Because of this, comparisons with \`${operator}\` will produce unexpected results
+https://svelte.dev/e/state_proxy_equality_mismatch`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/state_proxy_equality_mismatch`);
+  }
+}
+function state_proxy_unmount() {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] state_proxy_unmount
+%cTried to unmount a state proxy, rather than a component
+https://svelte.dev/e/state_proxy_unmount`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/state_proxy_unmount`);
+  }
+}
+function svelte_boundary_reset_noop() {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] svelte_boundary_reset_noop
+%cA \`<svelte:boundary>\` \`reset\` function only resets the boundary the first time it is called
+https://svelte.dev/e/svelte_boundary_reset_noop`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/svelte_boundary_reset_noop`);
+  }
+}
+
+// node_modules/svelte/src/internal/client/dom/hydration.js
+var hydrating = false;
+function set_hydrating(value) {
+  hydrating = value;
+}
+var hydrate_node;
+function set_hydrate_node(node) {
+  if (node === null) {
+    hydration_mismatch();
+    throw HYDRATION_ERROR;
+  }
+  return hydrate_node = node;
+}
+function hydrate_next() {
+  return set_hydrate_node(get_next_sibling(hydrate_node));
+}
+function reset(node) {
+  if (!hydrating)
+    return;
+  if (get_next_sibling(hydrate_node) !== null) {
+    hydration_mismatch();
+    throw HYDRATION_ERROR;
+  }
+  hydrate_node = node;
+}
+function next(count = 1) {
+  if (hydrating) {
+    var i = count;
+    var node = hydrate_node;
+    while (i--) {
+      node = /** @type {TemplateNode} */
+      get_next_sibling(node);
+    }
+    hydrate_node = node;
+  }
+}
+function skip_nodes(remove = true) {
+  var depth = 0;
+  var node = hydrate_node;
+  while (true) {
+    if (node.nodeType === COMMENT_NODE) {
+      var data = (
+        /** @type {Comment} */
+        node.data
+      );
+      if (data === HYDRATION_END) {
+        if (depth === 0)
+          return node;
+        depth -= 1;
+      } else if (data === HYDRATION_START || data === HYDRATION_START_ELSE || // "[1", "[2", etc. for if blocks
+      data[0] === "[" && !isNaN(Number(data.slice(1)))) {
+        depth += 1;
+      }
+    }
+    var next2 = (
+      /** @type {TemplateNode} */
+      get_next_sibling(node)
+    );
+    if (remove)
+      node.remove();
+    node = next2;
+  }
+}
+function read_hydration_instruction(node) {
+  if (!node || node.nodeType !== COMMENT_NODE) {
+    hydration_mismatch();
+    throw HYDRATION_ERROR;
+  }
+  return (
+    /** @type {Comment} */
+    node.data
+  );
+}
+
+// node_modules/svelte/src/internal/client/reactivity/equality.js
+function equals(value) {
+  return value === this.v;
+}
+function safe_not_equal(a, b) {
+  return a != a ? b == b : a !== b || a !== null && typeof a === "object" || typeof a === "function";
+}
+function safe_equals(value) {
+  return !safe_not_equal(value, this.v);
+}
+
+// node_modules/svelte/src/internal/flags/index.js
+var async_mode_flag = false;
+var legacy_mode_flag = false;
+var tracing_mode_flag = false;
+
+// node_modules/svelte/src/internal/client/dev/tracing.js
+var tracing_expressions = null;
+function tag(source2, label) {
+  source2.label = label;
+  tag_proxy(source2.v, label);
+  return source2;
+}
+function tag_proxy(value, label) {
+  var _a5;
+  (_a5 = value == null ? void 0 : value[PROXY_PATH_SYMBOL]) == null ? void 0 : _a5.call(value, label);
+  return value;
+}
+
+// node_modules/svelte/src/internal/shared/dev.js
+function get_error(label) {
+  const error = new Error();
+  const stack2 = get_stack();
+  if (stack2.length === 0) {
+    return null;
+  }
+  stack2.unshift("\n");
+  define_property(error, "stack", {
+    value: stack2.join("\n")
+  });
+  define_property(error, "name", {
+    value: label
+  });
+  return (
+    /** @type {Error & { stack: string }} */
+    error
+  );
+}
+function get_stack() {
+  const limit = Error.stackTraceLimit;
+  Error.stackTraceLimit = Infinity;
+  const stack2 = new Error().stack;
+  Error.stackTraceLimit = limit;
+  if (!stack2)
+    return [];
+  const lines = stack2.split("\n");
+  const new_lines = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const posixified = line.replaceAll("\\", "/");
+    if (line.trim() === "Error") {
+      continue;
+    }
+    if (line.includes("validate_each_keys")) {
+      return [];
+    }
+    if (posixified.includes("svelte/src/internal") || posixified.includes("node_modules/.vite")) {
+      continue;
+    }
+    new_lines.push(line);
+  }
+  return new_lines;
+}
+function invariant(condition, message) {
+  if (!dev_fallback_default) {
+    throw new Error("invariant(...) was not guarded by if (DEV)");
+  }
+  if (!condition)
+    invariant_violation(message);
+}
+
+// node_modules/svelte/src/internal/client/context.js
+var component_context = null;
+function set_component_context(context) {
+  component_context = context;
+}
+var dev_stack = null;
+function set_dev_stack(stack2) {
+  dev_stack = stack2;
+}
+var dev_current_component_function = null;
+function set_dev_current_component_function(fn) {
+  dev_current_component_function = fn;
+}
+function push(props, runes = false, fn) {
+  component_context = {
+    p: component_context,
+    i: false,
+    c: null,
+    e: null,
+    s: props,
+    x: null,
+    r: (
+      /** @type {Effect} */
+      active_effect
+    ),
+    l: legacy_mode_flag && !runes ? { s: null, u: null, $: [] } : null
+  };
+  if (dev_fallback_default) {
+    component_context.function = fn;
+    dev_current_component_function = fn;
+  }
+}
+function pop(component2) {
+  var _a5;
+  var context = (
+    /** @type {ComponentContext} */
+    component_context
+  );
+  var effects = context.e;
+  if (effects !== null) {
+    context.e = null;
+    for (var fn of effects) {
+      create_user_effect(fn);
+    }
+  }
+  if (component2 !== void 0) {
+    context.x = component2;
+  }
+  context.i = true;
+  component_context = context.p;
+  if (dev_fallback_default) {
+    dev_current_component_function = (_a5 = component_context == null ? void 0 : component_context.function) != null ? _a5 : null;
+  }
+  return component2 != null ? component2 : (
+    /** @type {T} */
+    {}
+  );
+}
+function is_runes() {
+  return !legacy_mode_flag || component_context !== null && component_context.l === null;
+}
+
+// node_modules/svelte/src/internal/client/dom/task.js
+var micro_tasks = [];
+function run_micro_tasks() {
+  var tasks = micro_tasks;
+  micro_tasks = [];
+  run_all(tasks);
+}
+function queue_micro_task(fn) {
+  if (micro_tasks.length === 0 && !is_flushing_sync) {
+    var tasks = micro_tasks;
+    queueMicrotask(() => {
+      if (tasks === micro_tasks)
+        run_micro_tasks();
+    });
+  }
+  micro_tasks.push(fn);
+}
+function flush_tasks() {
+  while (micro_tasks.length > 0) {
+    run_micro_tasks();
+  }
+}
+
+// node_modules/svelte/src/internal/client/error-handling.js
+var adjustments = /* @__PURE__ */ new WeakMap();
+function handle_error(error) {
+  var effect2 = active_effect;
+  if (effect2 === null) {
+    active_reaction.f |= ERROR_VALUE;
+    return error;
+  }
+  if (dev_fallback_default && error instanceof Error && !adjustments.has(error)) {
+    adjustments.set(error, get_adjustments(error, effect2));
+  }
+  if ((effect2.f & REACTION_RAN) === 0 && (effect2.f & EFFECT) === 0) {
+    if (dev_fallback_default && !effect2.parent && error instanceof Error) {
+      apply_adjustments(error);
+    }
+    throw error;
+  }
+  invoke_error_boundary(error, effect2);
+}
+function invoke_error_boundary(error, effect2) {
+  while (effect2 !== null) {
+    if ((effect2.f & BOUNDARY_EFFECT) !== 0) {
+      if ((effect2.f & REACTION_RAN) === 0) {
+        throw error;
+      }
+      try {
+        effect2.b.error(error);
+        return;
+      } catch (e) {
+        error = e;
+      }
+    }
+    effect2 = effect2.parent;
+  }
+  if (dev_fallback_default && error instanceof Error) {
+    apply_adjustments(error);
+  }
+  throw error;
+}
+function get_adjustments(error, effect2) {
+  var _a5, _b3, _c2;
+  const message_descriptor = get_descriptor(error, "message");
+  if (message_descriptor && !message_descriptor.configurable)
+    return;
+  var indent = is_firefox ? "  " : "	";
+  var component_stack = `
+${indent}in ${((_a5 = effect2.fn) == null ? void 0 : _a5.name) || "<unknown>"}`;
+  var context = effect2.ctx;
+  while (context !== null) {
+    component_stack += `
+${indent}in ${(_b3 = context.function) == null ? void 0 : _b3[FILENAME].split("/").pop()}`;
+    context = context.p;
+  }
+  return {
+    message: error.message + `
+${component_stack}
+`,
+    stack: (_c2 = error.stack) == null ? void 0 : _c2.split("\n").filter((line) => !line.includes("svelte/src/internal")).join("\n")
+  };
+}
+function apply_adjustments(error) {
+  const adjusted = adjustments.get(error);
+  if (adjusted) {
+    define_property(error, "message", {
+      value: adjusted.message
+    });
+    define_property(error, "stack", {
+      value: adjusted.stack
+    });
+  }
+}
+
+// node_modules/svelte/src/internal/client/reactivity/status.js
+var STATUS_MASK = ~(DIRTY | MAYBE_DIRTY | CLEAN);
+function set_signal_status(signal, status) {
+  signal.f = signal.f & STATUS_MASK | status;
+}
+function update_derived_status(derived2) {
+  if ((derived2.f & CONNECTED) !== 0 || derived2.deps === null) {
+    set_signal_status(derived2, CLEAN);
+  } else {
+    set_signal_status(derived2, MAYBE_DIRTY);
+  }
+}
+
+// node_modules/svelte/src/internal/client/reactivity/utils.js
+function clear_marked(deps) {
+  if (deps === null)
+    return;
+  for (const dep of deps) {
+    if ((dep.f & DERIVED) === 0 || (dep.f & WAS_MARKED) === 0) {
+      continue;
+    }
+    dep.f ^= WAS_MARKED;
+    clear_marked(
+      /** @type {Derived} */
+      dep.deps
+    );
+  }
+}
+function defer_effect(effect2, dirty_effects, maybe_dirty_effects) {
+  if ((effect2.f & DIRTY) !== 0) {
+    dirty_effects.add(effect2);
+  } else if ((effect2.f & MAYBE_DIRTY) !== 0) {
+    maybe_dirty_effects.add(effect2);
+  }
+  clear_marked(effect2.deps);
+  set_signal_status(effect2, CLEAN);
+}
+
+// node_modules/svelte/src/internal/client/reactivity/store.js
+var legacy_is_updating_store = false;
+var is_store_binding = false;
+var IS_UNMOUNTED = Symbol();
+function capture_store_binding(fn) {
+  var previous_is_store_binding = is_store_binding;
+  try {
+    is_store_binding = false;
+    return [fn(), is_store_binding];
+  } finally {
+    is_store_binding = previous_is_store_binding;
+  }
+}
+
+// node_modules/svelte/src/internal/client/reactivity/batch.js
+var batches = /* @__PURE__ */ new Set();
+var current_batch = null;
+var previous_batch = null;
+var batch_values = null;
+var last_scheduled_effect = null;
+var is_flushing_sync = false;
+var is_processing = false;
+var collected_effects = null;
+var legacy_updates = null;
+var flush_count = 0;
+var source_stacks = dev_fallback_default ? /* @__PURE__ */ new Set() : null;
+var uid = 1;
+var _commit_callbacks, _discard_callbacks, _fork_commit_callbacks, _pending, _blocking_pending, _deferred, _roots, _new_effects, _dirty_effects, _maybe_dirty_effects, _skipped_branches, _unskipped_branches, _decrement_queued, _blockers, _is_deferred, is_deferred_fn, _is_blocked, is_blocked_fn, _process, process_fn, _traverse, traverse_fn, _defer_effects, defer_effects_fn, _commit, commit_fn;
+var _Batch = class {
+  constructor() {
+    __privateAdd(this, _is_deferred);
+    __privateAdd(this, _is_blocked);
+    __privateAdd(this, _process);
+    /**
+     * Traverse the effect tree, executing effects or stashing
+     * them for later execution as appropriate
+     * @param {Effect} root
+     * @param {Effect[]} effects
+     * @param {Effect[]} render_effects
+     */
+    __privateAdd(this, _traverse);
+    /**
+     * @param {Effect[]} effects
+     */
+    __privateAdd(this, _defer_effects);
+    __privateAdd(this, _commit);
+    __publicField(this, "id", uid++);
+    /**
+     * The current values of any signals that are updated in this batch.
+     * Tuple format: [value, is_derived] (note: is_derived is false for deriveds, too, if they were overridden via assignment)
+     * They keys of this map are identical to `this.#previous`
+     * @type {Map<Value, [any, boolean]>}
+     */
+    __publicField(this, "current", /* @__PURE__ */ new Map());
+    /**
+     * The values of any signals (sources and deriveds) that are updated in this batch _before_ those updates took place.
+     * They keys of this map are identical to `this.#current`
+     * @type {Map<Value, any>}
+     */
+    __publicField(this, "previous", /* @__PURE__ */ new Map());
+    /**
+     * When the batch is committed (and the DOM is updated), we need to remove old branches
+     * and append new ones by calling the functions added inside (if/each/key/etc) blocks
+     * @type {Set<(batch: Batch) => void>}
+     */
+    __privateAdd(this, _commit_callbacks, /* @__PURE__ */ new Set());
+    /**
+     * If a fork is discarded, we need to destroy any effects that are no longer needed
+     * @type {Set<(batch: Batch) => void>}
+     */
+    __privateAdd(this, _discard_callbacks, /* @__PURE__ */ new Set());
+    /**
+     * Callbacks that should run only when a fork is committed.
+     * @type {Set<(batch: Batch) => void>}
+     */
+    __privateAdd(this, _fork_commit_callbacks, /* @__PURE__ */ new Set());
+    /**
+     * Async effects that are currently in flight
+     * @type {Map<Effect, number>}
+     */
+    __privateAdd(this, _pending, /* @__PURE__ */ new Map());
+    /**
+     * Async effects that are currently in flight, _not_ inside a pending boundary
+     * @type {Map<Effect, number>}
+     */
+    __privateAdd(this, _blocking_pending, /* @__PURE__ */ new Map());
+    /**
+     * A deferred that resolves when the batch is committed, used with `settled()`
+     * TODO replace with Promise.withResolvers once supported widely enough
+     * @type {{ promise: Promise<void>, resolve: (value?: any) => void, reject: (reason: unknown) => void } | null}
+     */
+    __privateAdd(this, _deferred, null);
+    /**
+     * The root effects that need to be flushed
+     * @type {Effect[]}
+     */
+    __privateAdd(this, _roots, []);
+    /**
+     * Effects created while this batch was active.
+     * @type {Effect[]}
+     */
+    __privateAdd(this, _new_effects, []);
+    /**
+     * Deferred effects (which run after async work has completed) that are DIRTY
+     * @type {Set<Effect>}
+     */
+    __privateAdd(this, _dirty_effects, /* @__PURE__ */ new Set());
+    /**
+     * Deferred effects that are MAYBE_DIRTY
+     * @type {Set<Effect>}
+     */
+    __privateAdd(this, _maybe_dirty_effects, /* @__PURE__ */ new Set());
+    /**
+     * A map of branches that still exist, but will be destroyed when this batch
+     * is committed — we skip over these during `process`.
+     * The value contains child effects that were dirty/maybe_dirty before being reset,
+     * so they can be rescheduled if the branch survives.
+     * @type {Map<Effect, { d: Effect[], m: Effect[] }>}
+     */
+    __privateAdd(this, _skipped_branches, /* @__PURE__ */ new Map());
+    /**
+     * Inverse of #skipped_branches which we need to tell prior batches to unskip them when committing
+     * @type {Set<Effect>}
+     */
+    __privateAdd(this, _unskipped_branches, /* @__PURE__ */ new Set());
+    __publicField(this, "is_fork", false);
+    __privateAdd(this, _decrement_queued, false);
+    /** @type {Set<Batch>} */
+    __privateAdd(this, _blockers, /* @__PURE__ */ new Set());
+  }
+  /**
+   * Add an effect to the #skipped_branches map and reset its children
+   * @param {Effect} effect
+   */
+  skip_effect(effect2) {
+    if (!__privateGet(this, _skipped_branches).has(effect2)) {
+      __privateGet(this, _skipped_branches).set(effect2, { d: [], m: [] });
+    }
+    __privateGet(this, _unskipped_branches).delete(effect2);
+  }
+  /**
+   * Remove an effect from the #skipped_branches map and reschedule
+   * any tracked dirty/maybe_dirty child effects
+   * @param {Effect} effect
+   * @param {(e: Effect) => void} callback
+   */
+  unskip_effect(effect2, callback = (e) => this.schedule(e)) {
+    var tracked = __privateGet(this, _skipped_branches).get(effect2);
+    if (tracked) {
+      __privateGet(this, _skipped_branches).delete(effect2);
+      for (var e of tracked.d) {
+        set_signal_status(e, DIRTY);
+        callback(e);
+      }
+      for (e of tracked.m) {
+        set_signal_status(e, MAYBE_DIRTY);
+        callback(e);
+      }
+    }
+    __privateGet(this, _unskipped_branches).add(effect2);
+  }
+  /**
+   * Associate a change to a given source with the current
+   * batch, noting its previous and current values
+   * @param {Value} source
+   * @param {any} value
+   * @param {boolean} [is_derived]
+   */
+  capture(source2, value, is_derived = false) {
+    if (source2.v !== UNINITIALIZED && !this.previous.has(source2)) {
+      this.previous.set(source2, source2.v);
+    }
+    if ((source2.f & ERROR_VALUE) === 0) {
+      this.current.set(source2, [value, is_derived]);
+      batch_values == null ? void 0 : batch_values.set(source2, value);
+    }
+    if (!this.is_fork) {
+      source2.v = value;
+    }
+  }
+  activate() {
+    current_batch = this;
+  }
+  deactivate() {
+    current_batch = null;
+    batch_values = null;
+  }
+  flush() {
+    var source_stacks2 = dev_fallback_default ? /* @__PURE__ */ new Set() : null;
+    try {
+      is_processing = true;
+      current_batch = this;
+      __privateMethod(this, _process, process_fn).call(this);
+    } finally {
+      flush_count = 0;
+      last_scheduled_effect = null;
+      collected_effects = null;
+      legacy_updates = null;
+      is_processing = false;
+      current_batch = null;
+      batch_values = null;
+      old_values.clear();
+      if (dev_fallback_default) {
+        for (
+          const source2 of
+          /** @type {Set<Source>} */
+          source_stacks2
+        ) {
+          source2.updated = null;
+        }
+      }
+    }
+  }
+  discard() {
+    for (const fn of __privateGet(this, _discard_callbacks))
+      fn(this);
+    __privateGet(this, _discard_callbacks).clear();
+    __privateGet(this, _fork_commit_callbacks).clear();
+    batches.delete(this);
+  }
+  /**
+   * @param {Effect} effect
+   */
+  register_created_effect(effect2) {
+    __privateGet(this, _new_effects).push(effect2);
+  }
+  /**
+   * @param {boolean} blocking
+   * @param {Effect} effect
+   */
+  increment(blocking, effect2) {
+    var _a5, _b3;
+    let pending_count = (_a5 = __privateGet(this, _pending).get(effect2)) != null ? _a5 : 0;
+    __privateGet(this, _pending).set(effect2, pending_count + 1);
+    if (blocking) {
+      let blocking_pending_count = (_b3 = __privateGet(this, _blocking_pending).get(effect2)) != null ? _b3 : 0;
+      __privateGet(this, _blocking_pending).set(effect2, blocking_pending_count + 1);
+    }
+  }
+  /**
+   * @param {boolean} blocking
+   * @param {Effect} effect
+   * @param {boolean} skip - whether to skip updates (because this is triggered by a stale reaction)
+   */
+  decrement(blocking, effect2, skip) {
+    var _a5, _b3;
+    let pending_count = (_a5 = __privateGet(this, _pending).get(effect2)) != null ? _a5 : 0;
+    if (pending_count === 1) {
+      __privateGet(this, _pending).delete(effect2);
+    } else {
+      __privateGet(this, _pending).set(effect2, pending_count - 1);
+    }
+    if (blocking) {
+      let blocking_pending_count = (_b3 = __privateGet(this, _blocking_pending).get(effect2)) != null ? _b3 : 0;
+      if (blocking_pending_count === 1) {
+        __privateGet(this, _blocking_pending).delete(effect2);
+      } else {
+        __privateGet(this, _blocking_pending).set(effect2, blocking_pending_count - 1);
+      }
+    }
+    if (__privateGet(this, _decrement_queued) || skip)
+      return;
+    __privateSet(this, _decrement_queued, true);
+    queue_micro_task(() => {
+      __privateSet(this, _decrement_queued, false);
+      this.flush();
+    });
+  }
+  /**
+   * @param {Set<Effect>} dirty_effects
+   * @param {Set<Effect>} maybe_dirty_effects
+   */
+  transfer_effects(dirty_effects, maybe_dirty_effects) {
+    for (const e of dirty_effects) {
+      __privateGet(this, _dirty_effects).add(e);
+    }
+    for (const e of maybe_dirty_effects) {
+      __privateGet(this, _maybe_dirty_effects).add(e);
+    }
+    dirty_effects.clear();
+    maybe_dirty_effects.clear();
+  }
+  /** @param {(batch: Batch) => void} fn */
+  oncommit(fn) {
+    __privateGet(this, _commit_callbacks).add(fn);
+  }
+  /** @param {(batch: Batch) => void} fn */
+  ondiscard(fn) {
+    __privateGet(this, _discard_callbacks).add(fn);
+  }
+  /** @param {(batch: Batch) => void} fn */
+  on_fork_commit(fn) {
+    __privateGet(this, _fork_commit_callbacks).add(fn);
+  }
+  run_fork_commit_callbacks() {
+    for (const fn of __privateGet(this, _fork_commit_callbacks))
+      fn(this);
+    __privateGet(this, _fork_commit_callbacks).clear();
+  }
+  settled() {
+    var _a5;
+    return ((_a5 = __privateGet(this, _deferred)) != null ? _a5 : __privateSet(this, _deferred, deferred())).promise;
+  }
+  static ensure() {
+    if (current_batch === null) {
+      const batch = current_batch = new _Batch();
+      if (!is_processing) {
+        batches.add(current_batch);
+        if (!is_flushing_sync) {
+          queue_micro_task(() => {
+            if (current_batch !== batch) {
+              return;
+            }
+            batch.flush();
+          });
+        }
+      }
+    }
+    return current_batch;
+  }
+  apply() {
+    if (!async_mode_flag || !this.is_fork && batches.size === 1) {
+      batch_values = null;
+      return;
+    }
+    batch_values = /* @__PURE__ */ new Map();
+    for (const [source2, [value]] of this.current) {
+      batch_values.set(source2, value);
+    }
+    for (const batch of batches) {
+      if (batch === this || batch.is_fork)
+        continue;
+      var intersects = false;
+      var differs = false;
+      if (batch.id < this.id) {
+        for (const [source2, [, is_derived]] of batch.current) {
+          if (is_derived)
+            continue;
+          intersects || (intersects = this.current.has(source2));
+          differs || (differs = !this.current.has(source2));
+        }
+      }
+      if (intersects && differs) {
+        __privateGet(this, _blockers).add(batch);
+      } else {
+        for (const [source2, previous] of batch.previous) {
+          if (!batch_values.has(source2)) {
+            batch_values.set(source2, previous);
+          }
+        }
+      }
+    }
+  }
+  /**
+   *
+   * @param {Effect} effect
+   */
+  schedule(effect2) {
+    var _a5;
+    last_scheduled_effect = effect2;
+    if (((_a5 = effect2.b) == null ? void 0 : _a5.is_pending) && (effect2.f & (EFFECT | RENDER_EFFECT | MANAGED_EFFECT)) !== 0 && (effect2.f & REACTION_RAN) === 0) {
+      effect2.b.defer_effect(effect2);
+      return;
+    }
+    var e = effect2;
+    while (e.parent !== null) {
+      e = e.parent;
+      var flags2 = e.f;
+      if (collected_effects !== null && e === active_effect) {
+        if (async_mode_flag)
+          return;
+        if ((active_reaction === null || (active_reaction.f & DERIVED) === 0) && !legacy_is_updating_store) {
+          return;
+        }
+      }
+      if ((flags2 & (ROOT_EFFECT | BRANCH_EFFECT)) !== 0) {
+        if ((flags2 & CLEAN) === 0) {
+          return;
+        }
+        e.f ^= CLEAN;
+      }
+    }
+    __privateGet(this, _roots).push(e);
+  }
+};
+var Batch = _Batch;
+_commit_callbacks = new WeakMap();
+_discard_callbacks = new WeakMap();
+_fork_commit_callbacks = new WeakMap();
+_pending = new WeakMap();
+_blocking_pending = new WeakMap();
+_deferred = new WeakMap();
+_roots = new WeakMap();
+_new_effects = new WeakMap();
+_dirty_effects = new WeakMap();
+_maybe_dirty_effects = new WeakMap();
+_skipped_branches = new WeakMap();
+_unskipped_branches = new WeakMap();
+_decrement_queued = new WeakMap();
+_blockers = new WeakMap();
+_is_deferred = new WeakSet();
+is_deferred_fn = function() {
+  return this.is_fork || __privateGet(this, _blocking_pending).size > 0;
+};
+_is_blocked = new WeakSet();
+is_blocked_fn = function() {
+  for (const batch of __privateGet(this, _blockers)) {
+    for (const effect2 of __privateGet(batch, _blocking_pending).keys()) {
+      var skipped = false;
+      var e = effect2;
+      while (e.parent !== null) {
+        if (__privateGet(this, _skipped_branches).has(e)) {
+          skipped = true;
+          break;
+        }
+        e = e.parent;
+      }
+      if (!skipped) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+_process = new WeakSet();
+process_fn = function() {
+  var _a5, _b3;
+  if (flush_count++ > 1e3) {
+    batches.delete(this);
+    infinite_loop_guard();
+  }
+  if (!__privateMethod(this, _is_deferred, is_deferred_fn).call(this)) {
+    for (const e of __privateGet(this, _dirty_effects)) {
+      __privateGet(this, _maybe_dirty_effects).delete(e);
+      set_signal_status(e, DIRTY);
+      this.schedule(e);
+    }
+    for (const e of __privateGet(this, _maybe_dirty_effects)) {
+      set_signal_status(e, MAYBE_DIRTY);
+      this.schedule(e);
+    }
+  }
+  const roots = __privateGet(this, _roots);
+  __privateSet(this, _roots, []);
+  this.apply();
+  var effects = collected_effects = [];
+  var render_effects = [];
+  var updates = legacy_updates = [];
+  for (const root2 of roots) {
+    try {
+      __privateMethod(this, _traverse, traverse_fn).call(this, root2, effects, render_effects);
+    } catch (e) {
+      reset_all(root2);
+      throw e;
+    }
+  }
+  current_batch = null;
+  if (updates.length > 0) {
+    var batch = _Batch.ensure();
+    for (const e of updates) {
+      batch.schedule(e);
+    }
+  }
+  collected_effects = null;
+  legacy_updates = null;
+  if (__privateMethod(this, _is_deferred, is_deferred_fn).call(this) || __privateMethod(this, _is_blocked, is_blocked_fn).call(this)) {
+    __privateMethod(this, _defer_effects, defer_effects_fn).call(this, render_effects);
+    __privateMethod(this, _defer_effects, defer_effects_fn).call(this, effects);
+    for (const [e, t] of __privateGet(this, _skipped_branches)) {
+      reset_branch(e, t);
+    }
+  } else {
+    if (__privateGet(this, _pending).size === 0) {
+      batches.delete(this);
+    }
+    __privateGet(this, _dirty_effects).clear();
+    __privateGet(this, _maybe_dirty_effects).clear();
+    for (const fn of __privateGet(this, _commit_callbacks))
+      fn(this);
+    __privateGet(this, _commit_callbacks).clear();
+    previous_batch = this;
+    flush_queued_effects(render_effects);
+    flush_queued_effects(effects);
+    previous_batch = null;
+    (_a5 = __privateGet(this, _deferred)) == null ? void 0 : _a5.resolve();
+  }
+  var next_batch = (
+    /** @type {Batch | null} */
+    /** @type {unknown} */
+    current_batch
+  );
+  if (__privateGet(this, _roots).length > 0) {
+    const batch2 = next_batch != null ? next_batch : next_batch = this;
+    __privateGet(batch2, _roots).push(...__privateGet(this, _roots).filter((r) => !__privateGet(batch2, _roots).includes(r)));
+  }
+  if (next_batch !== null) {
+    batches.add(next_batch);
+    if (dev_fallback_default) {
+      for (const source2 of this.current.keys()) {
+        source_stacks.add(source2);
+      }
+    }
+    __privateMethod(_b3 = next_batch, _process, process_fn).call(_b3);
+  }
+  if (async_mode_flag && !batches.has(this)) {
+    __privateMethod(this, _commit, commit_fn).call(this);
+  }
+};
+_traverse = new WeakSet();
+traverse_fn = function(root2, effects, render_effects) {
+  root2.f ^= CLEAN;
+  var effect2 = root2.first;
+  while (effect2 !== null) {
+    var flags2 = effect2.f;
+    var is_branch = (flags2 & (BRANCH_EFFECT | ROOT_EFFECT)) !== 0;
+    var is_skippable_branch = is_branch && (flags2 & CLEAN) !== 0;
+    var skip = is_skippable_branch || (flags2 & INERT) !== 0 || __privateGet(this, _skipped_branches).has(effect2);
+    if (!skip && effect2.fn !== null) {
+      if (is_branch) {
+        effect2.f ^= CLEAN;
+      } else if ((flags2 & EFFECT) !== 0) {
+        effects.push(effect2);
+      } else if (async_mode_flag && (flags2 & (RENDER_EFFECT | MANAGED_EFFECT)) !== 0) {
+        render_effects.push(effect2);
+      } else if (is_dirty(effect2)) {
+        if ((flags2 & BLOCK_EFFECT) !== 0)
+          __privateGet(this, _maybe_dirty_effects).add(effect2);
+        update_effect(effect2);
+      }
+      var child2 = effect2.first;
+      if (child2 !== null) {
+        effect2 = child2;
+        continue;
+      }
+    }
+    while (effect2 !== null) {
+      var next2 = effect2.next;
+      if (next2 !== null) {
+        effect2 = next2;
+        break;
+      }
+      effect2 = effect2.parent;
+    }
+  }
+};
+_defer_effects = new WeakSet();
+defer_effects_fn = function(effects) {
+  for (var i = 0; i < effects.length; i += 1) {
+    defer_effect(effects[i], __privateGet(this, _dirty_effects), __privateGet(this, _maybe_dirty_effects));
+  }
+};
+_commit = new WeakSet();
+commit_fn = function() {
+  var _a5, _b3, _c2;
+  for (const batch of batches) {
+    var is_earlier = batch.id < this.id;
+    var sources = [];
+    for (const [source3, [value, is_derived]] of this.current) {
+      if (batch.current.has(source3)) {
+        var batch_value = (
+          /** @type {[any, boolean]} */
+          batch.current.get(source3)[0]
+        );
+        if (is_earlier && value !== batch_value) {
+          batch.current.set(source3, [value, is_derived]);
+        } else {
+          continue;
+        }
+      }
+      sources.push(source3);
+    }
+    var others = [...batch.current.keys()].filter((s) => !this.current.has(s));
+    if (others.length === 0) {
+      if (is_earlier) {
+        batch.discard();
+      }
+    } else if (sources.length > 0) {
+      if (dev_fallback_default) {
+        invariant(__privateGet(batch, _roots).length === 0, "Batch has scheduled roots");
+      }
+      if (is_earlier) {
+        for (const unskipped of __privateGet(this, _unskipped_branches)) {
+          batch.unskip_effect(unskipped, (e) => {
+            var _a6;
+            if ((e.f & (BLOCK_EFFECT | ASYNC)) !== 0) {
+              batch.schedule(e);
+            } else {
+              __privateMethod(_a6 = batch, _defer_effects, defer_effects_fn).call(_a6, [e]);
+            }
+          });
+        }
+      }
+      batch.activate();
+      var marked = /* @__PURE__ */ new Set();
+      var checked = /* @__PURE__ */ new Map();
+      for (var source2 of sources) {
+        mark_effects(source2, others, marked, checked);
+      }
+      checked = /* @__PURE__ */ new Map();
+      var current_unequal = [...batch.current.keys()].filter(
+        (c) => this.current.has(c) ? (
+          /** @type {[any, boolean]} */
+          this.current.get(c)[0] !== c
+        ) : true
+      );
+      for (const effect2 of __privateGet(this, _new_effects)) {
+        if ((effect2.f & (DESTROYED | INERT | EAGER_EFFECT)) === 0 && depends_on(effect2, current_unequal, checked)) {
+          if ((effect2.f & (ASYNC | BLOCK_EFFECT)) !== 0) {
+            set_signal_status(effect2, DIRTY);
+            batch.schedule(effect2);
+          } else {
+            __privateGet(batch, _dirty_effects).add(effect2);
+          }
+        }
+      }
+      if (__privateGet(batch, _roots).length > 0) {
+        batch.apply();
+        for (var root2 of __privateGet(batch, _roots)) {
+          __privateMethod(_a5 = batch, _traverse, traverse_fn).call(_a5, root2, [], []);
+        }
+        __privateSet(batch, _roots, []);
+      }
+      batch.deactivate();
+    }
+  }
+  for (const batch of batches) {
+    if (__privateGet(batch, _blockers).has(this)) {
+      __privateGet(batch, _blockers).delete(this);
+      if (__privateGet(batch, _blockers).size === 0 && !__privateMethod(_b3 = batch, _is_deferred, is_deferred_fn).call(_b3)) {
+        batch.activate();
+        __privateMethod(_c2 = batch, _process, process_fn).call(_c2);
+      }
+    }
+  }
+};
+function flushSync(fn) {
+  var was_flushing_sync = is_flushing_sync;
+  is_flushing_sync = true;
+  try {
+    var result;
+    if (fn) {
+      if (current_batch !== null && !current_batch.is_fork) {
+        current_batch.flush();
+      }
+      result = fn();
+    }
+    while (true) {
+      flush_tasks();
+      if (current_batch === null) {
+        return (
+          /** @type {T} */
+          result
+        );
+      }
+      current_batch.flush();
+    }
+  } finally {
+    is_flushing_sync = was_flushing_sync;
+  }
+}
+function infinite_loop_guard() {
+  var _a5;
+  if (dev_fallback_default) {
+    var updates = /* @__PURE__ */ new Map();
+    for (
+      const source2 of
+      /** @type {Batch} */
+      current_batch.current.keys()
+    ) {
+      for (const [stack2, update2] of (_a5 = source2.updated) != null ? _a5 : []) {
+        var entry = updates.get(stack2);
+        if (!entry) {
+          entry = { error: update2.error, count: 0 };
+          updates.set(stack2, entry);
+        }
+        entry.count += update2.count;
+      }
+    }
+    for (const update2 of updates.values()) {
+      if (update2.error) {
+        console.error(update2.error);
+      }
+    }
+  }
+  try {
+    effect_update_depth_exceeded();
+  } catch (error) {
+    if (dev_fallback_default) {
+      define_property(error, "stack", { value: "" });
+    }
+    invoke_error_boundary(error, last_scheduled_effect);
+  }
+}
+var eager_block_effects = null;
+function flush_queued_effects(effects) {
+  var length = effects.length;
+  if (length === 0)
+    return;
+  var i = 0;
+  while (i < length) {
+    var effect2 = effects[i++];
+    if ((effect2.f & (DESTROYED | INERT)) === 0 && is_dirty(effect2)) {
+      eager_block_effects = /* @__PURE__ */ new Set();
+      update_effect(effect2);
+      if (effect2.deps === null && effect2.first === null && effect2.nodes === null && effect2.teardown === null && effect2.ac === null) {
+        unlink_effect(effect2);
+      }
+      if ((eager_block_effects == null ? void 0 : eager_block_effects.size) > 0) {
+        old_values.clear();
+        for (const e of eager_block_effects) {
+          if ((e.f & (DESTROYED | INERT)) !== 0)
+            continue;
+          const ordered_effects = [e];
+          let ancestor = e.parent;
+          while (ancestor !== null) {
+            if (eager_block_effects.has(ancestor)) {
+              eager_block_effects.delete(ancestor);
+              ordered_effects.push(ancestor);
+            }
+            ancestor = ancestor.parent;
+          }
+          for (let j = ordered_effects.length - 1; j >= 0; j--) {
+            const e2 = ordered_effects[j];
+            if ((e2.f & (DESTROYED | INERT)) !== 0)
+              continue;
+            update_effect(e2);
+          }
+        }
+        eager_block_effects.clear();
+      }
+    }
+  }
+  eager_block_effects = null;
+}
+function mark_effects(value, sources, marked, checked) {
+  if (marked.has(value))
+    return;
+  marked.add(value);
+  if (value.reactions !== null) {
+    for (const reaction of value.reactions) {
+      const flags2 = reaction.f;
+      if ((flags2 & DERIVED) !== 0) {
+        mark_effects(
+          /** @type {Derived} */
+          reaction,
+          sources,
+          marked,
+          checked
+        );
+      } else if ((flags2 & (ASYNC | BLOCK_EFFECT)) !== 0 && (flags2 & DIRTY) === 0 && depends_on(reaction, sources, checked)) {
+        set_signal_status(reaction, DIRTY);
+        schedule_effect(
+          /** @type {Effect} */
+          reaction
+        );
+      }
+    }
+  }
+}
+function depends_on(reaction, sources, checked) {
+  const depends = checked.get(reaction);
+  if (depends !== void 0)
+    return depends;
+  if (reaction.deps !== null) {
+    for (const dep of reaction.deps) {
+      if (includes.call(sources, dep)) {
+        return true;
+      }
+      if ((dep.f & DERIVED) !== 0 && depends_on(
+        /** @type {Derived} */
+        dep,
+        sources,
+        checked
+      )) {
+        checked.set(
+          /** @type {Derived} */
+          dep,
+          true
+        );
+        return true;
+      }
+    }
+  }
+  checked.set(reaction, false);
+  return false;
+}
+function schedule_effect(effect2) {
+  current_batch.schedule(effect2);
+}
+function reset_branch(effect2, tracked) {
+  if ((effect2.f & BRANCH_EFFECT) !== 0 && (effect2.f & CLEAN) !== 0) {
+    return;
+  }
+  if ((effect2.f & DIRTY) !== 0) {
+    tracked.d.push(effect2);
+  } else if ((effect2.f & MAYBE_DIRTY) !== 0) {
+    tracked.m.push(effect2);
+  }
+  set_signal_status(effect2, CLEAN);
+  var e = effect2.first;
+  while (e !== null) {
+    reset_branch(e, tracked);
+    e = e.next;
+  }
+}
+function reset_all(effect2) {
+  set_signal_status(effect2, CLEAN);
+  var e = effect2.first;
+  while (e !== null) {
+    reset_all(e);
+    e = e.next;
+  }
+}
+
+// node_modules/svelte/src/reactivity/create-subscriber.js
+function createSubscriber(start) {
+  let subscribers = 0;
+  let version = source(0);
+  let stop;
+  if (dev_fallback_default) {
+    tag(version, "createSubscriber version");
+  }
+  return () => {
+    if (effect_tracking()) {
+      get2(version);
+      render_effect(() => {
+        if (subscribers === 0) {
+          stop = untrack(() => start(() => increment(version)));
+        }
+        subscribers += 1;
+        return () => {
+          queue_micro_task(() => {
+            subscribers -= 1;
+            if (subscribers === 0) {
+              stop == null ? void 0 : stop();
+              stop = void 0;
+              increment(version);
+            }
+          });
+        };
+      });
+    }
+  };
+}
+
+// node_modules/svelte/src/internal/client/dom/blocks/boundary.js
+var flags = EFFECT_TRANSPARENT | EFFECT_PRESERVED;
+function boundary(node, props, children, transform_error) {
+  new Boundary(node, props, children, transform_error);
+}
+var _anchor, _hydrate_open, _props, _children, _effect, _main_effect, _pending_effect, _failed_effect, _offscreen_fragment, _local_pending_count, _pending_count, _pending_count_update_queued, _dirty_effects2, _maybe_dirty_effects2, _effect_pending, _effect_pending_subscriber, _hydrate_resolved_content, hydrate_resolved_content_fn, _hydrate_failed_content, hydrate_failed_content_fn, _hydrate_pending_content, hydrate_pending_content_fn, _render, render_fn, _resolve, resolve_fn, _run, run_fn, _update_pending_count, update_pending_count_fn, _handle_error, handle_error_fn;
+var Boundary = class {
+  /**
+   * @param {TemplateNode} node
+   * @param {BoundaryProps} props
+   * @param {((anchor: Node) => void)} children
+   * @param {((error: unknown) => unknown) | undefined} [transform_error]
+   */
+  constructor(node, props, children, transform_error) {
+    __privateAdd(this, _hydrate_resolved_content);
+    /**
+     * @param {unknown} error The deserialized error from the server's hydration comment
+     */
+    __privateAdd(this, _hydrate_failed_content);
+    __privateAdd(this, _hydrate_pending_content);
+    __privateAdd(this, _render);
+    /**
+     * @param {Batch} batch
+     */
+    __privateAdd(this, _resolve);
+    /**
+     * @template T
+     * @param {() => T} fn
+     */
+    __privateAdd(this, _run);
+    /**
+     * Updates the pending count associated with the currently visible pending snippet,
+     * if any, such that we can replace the snippet with content once work is done
+     * @param {1 | -1} d
+     * @param {Batch} batch
+     */
+    __privateAdd(this, _update_pending_count);
+    /**
+     * @param {unknown} error
+     */
+    __privateAdd(this, _handle_error);
+    /** @type {Boundary | null} */
+    __publicField(this, "parent");
+    __publicField(this, "is_pending", false);
+    /**
+     * API-level transformError transform function. Transforms errors before they reach the `failed` snippet.
+     * Inherited from parent boundary, or defaults to identity.
+     * @type {(error: unknown) => unknown}
+     */
+    __publicField(this, "transform_error");
+    /** @type {TemplateNode} */
+    __privateAdd(this, _anchor, void 0);
+    /** @type {TemplateNode | null} */
+    __privateAdd(this, _hydrate_open, hydrating ? hydrate_node : null);
+    /** @type {BoundaryProps} */
+    __privateAdd(this, _props, void 0);
+    /** @type {((anchor: Node) => void)} */
+    __privateAdd(this, _children, void 0);
+    /** @type {Effect} */
+    __privateAdd(this, _effect, void 0);
+    /** @type {Effect | null} */
+    __privateAdd(this, _main_effect, null);
+    /** @type {Effect | null} */
+    __privateAdd(this, _pending_effect, null);
+    /** @type {Effect | null} */
+    __privateAdd(this, _failed_effect, null);
+    /** @type {DocumentFragment | null} */
+    __privateAdd(this, _offscreen_fragment, null);
+    __privateAdd(this, _local_pending_count, 0);
+    __privateAdd(this, _pending_count, 0);
+    __privateAdd(this, _pending_count_update_queued, false);
+    /** @type {Set<Effect>} */
+    __privateAdd(this, _dirty_effects2, /* @__PURE__ */ new Set());
+    /** @type {Set<Effect>} */
+    __privateAdd(this, _maybe_dirty_effects2, /* @__PURE__ */ new Set());
+    /**
+     * A source containing the number of pending async deriveds/expressions.
+     * Only created if `$effect.pending()` is used inside the boundary,
+     * otherwise updating the source results in needless `Batch.ensure()`
+     * calls followed by no-op flushes
+     * @type {Source<number> | null}
+     */
+    __privateAdd(this, _effect_pending, null);
+    __privateAdd(this, _effect_pending_subscriber, createSubscriber(() => {
+      __privateSet(this, _effect_pending, source(__privateGet(this, _local_pending_count)));
+      if (dev_fallback_default) {
+        tag(__privateGet(this, _effect_pending), "$effect.pending()");
+      }
+      return () => {
+        __privateSet(this, _effect_pending, null);
+      };
+    }));
+    var _a5, _b3;
+    __privateSet(this, _anchor, node);
+    __privateSet(this, _props, props);
+    __privateSet(this, _children, (anchor) => {
+      var effect2 = (
+        /** @type {Effect} */
+        active_effect
+      );
+      effect2.b = this;
+      effect2.f |= BOUNDARY_EFFECT;
+      children(anchor);
+    });
+    this.parent = /** @type {Effect} */
+    active_effect.b;
+    this.transform_error = (_b3 = transform_error != null ? transform_error : (_a5 = this.parent) == null ? void 0 : _a5.transform_error) != null ? _b3 : (e) => e;
+    __privateSet(this, _effect, block(() => {
+      if (hydrating) {
+        const comment2 = (
+          /** @type {Comment} */
+          __privateGet(this, _hydrate_open)
+        );
+        hydrate_next();
+        const server_rendered_pending = comment2.data === HYDRATION_START_ELSE;
+        const server_rendered_failed = comment2.data.startsWith(HYDRATION_START_FAILED);
+        if (server_rendered_failed) {
+          const serialized_error = JSON.parse(comment2.data.slice(HYDRATION_START_FAILED.length));
+          __privateMethod(this, _hydrate_failed_content, hydrate_failed_content_fn).call(this, serialized_error);
+        } else if (server_rendered_pending) {
+          __privateMethod(this, _hydrate_pending_content, hydrate_pending_content_fn).call(this);
+        } else {
+          __privateMethod(this, _hydrate_resolved_content, hydrate_resolved_content_fn).call(this);
+        }
+      } else {
+        __privateMethod(this, _render, render_fn).call(this);
+      }
+    }, flags));
+    if (hydrating) {
+      __privateSet(this, _anchor, hydrate_node);
+    }
+  }
+  /**
+   * Defer an effect inside a pending boundary until the boundary resolves
+   * @param {Effect} effect
+   */
+  defer_effect(effect2) {
+    defer_effect(effect2, __privateGet(this, _dirty_effects2), __privateGet(this, _maybe_dirty_effects2));
+  }
+  /**
+   * Returns `false` if the effect exists inside a boundary whose pending snippet is shown
+   * @returns {boolean}
+   */
+  is_rendered() {
+    return !this.is_pending && (!this.parent || this.parent.is_rendered());
+  }
+  has_pending_snippet() {
+    return !!__privateGet(this, _props).pending;
+  }
+  /**
+   * Update the source that powers `$effect.pending()` inside this boundary,
+   * and controls when the current `pending` snippet (if any) is removed.
+   * Do not call from inside the class
+   * @param {1 | -1} d
+   * @param {Batch} batch
+   */
+  update_pending_count(d, batch) {
+    __privateMethod(this, _update_pending_count, update_pending_count_fn).call(this, d, batch);
+    __privateSet(this, _local_pending_count, __privateGet(this, _local_pending_count) + d);
+    if (!__privateGet(this, _effect_pending) || __privateGet(this, _pending_count_update_queued))
+      return;
+    __privateSet(this, _pending_count_update_queued, true);
+    queue_micro_task(() => {
+      __privateSet(this, _pending_count_update_queued, false);
+      if (__privateGet(this, _effect_pending)) {
+        internal_set(__privateGet(this, _effect_pending), __privateGet(this, _local_pending_count));
+      }
+    });
+  }
+  get_effect_pending() {
+    __privateGet(this, _effect_pending_subscriber).call(this);
+    return get2(
+      /** @type {Source<number>} */
+      __privateGet(this, _effect_pending)
+    );
+  }
+  /** @param {unknown} error */
+  error(error) {
+    var _a5;
+    if (!__privateGet(this, _props).onerror && !__privateGet(this, _props).failed) {
+      throw error;
+    }
+    if ((_a5 = current_batch) == null ? void 0 : _a5.is_fork) {
+      if (__privateGet(this, _main_effect))
+        current_batch.skip_effect(__privateGet(this, _main_effect));
+      if (__privateGet(this, _pending_effect))
+        current_batch.skip_effect(__privateGet(this, _pending_effect));
+      if (__privateGet(this, _failed_effect))
+        current_batch.skip_effect(__privateGet(this, _failed_effect));
+      current_batch.on_fork_commit(() => {
+        __privateMethod(this, _handle_error, handle_error_fn).call(this, error);
+      });
+    } else {
+      __privateMethod(this, _handle_error, handle_error_fn).call(this, error);
+    }
+  }
+};
+_anchor = new WeakMap();
+_hydrate_open = new WeakMap();
+_props = new WeakMap();
+_children = new WeakMap();
+_effect = new WeakMap();
+_main_effect = new WeakMap();
+_pending_effect = new WeakMap();
+_failed_effect = new WeakMap();
+_offscreen_fragment = new WeakMap();
+_local_pending_count = new WeakMap();
+_pending_count = new WeakMap();
+_pending_count_update_queued = new WeakMap();
+_dirty_effects2 = new WeakMap();
+_maybe_dirty_effects2 = new WeakMap();
+_effect_pending = new WeakMap();
+_effect_pending_subscriber = new WeakMap();
+_hydrate_resolved_content = new WeakSet();
+hydrate_resolved_content_fn = function() {
+  try {
+    __privateSet(this, _main_effect, branch(() => __privateGet(this, _children).call(this, __privateGet(this, _anchor))));
+  } catch (error) {
+    this.error(error);
+  }
+};
+_hydrate_failed_content = new WeakSet();
+hydrate_failed_content_fn = function(error) {
+  const failed = __privateGet(this, _props).failed;
+  if (!failed)
+    return;
+  __privateSet(this, _failed_effect, branch(() => {
+    failed(
+      __privateGet(this, _anchor),
+      () => error,
+      () => () => {
+      }
+    );
+  }));
+};
+_hydrate_pending_content = new WeakSet();
+hydrate_pending_content_fn = function() {
+  const pending2 = __privateGet(this, _props).pending;
+  if (!pending2)
+    return;
+  this.is_pending = true;
+  __privateSet(this, _pending_effect, branch(() => pending2(__privateGet(this, _anchor))));
+  queue_micro_task(() => {
+    var fragment = __privateSet(this, _offscreen_fragment, document.createDocumentFragment());
+    var anchor = create_text();
+    fragment.append(anchor);
+    __privateSet(this, _main_effect, __privateMethod(this, _run, run_fn).call(this, () => {
+      return branch(() => __privateGet(this, _children).call(this, anchor));
+    }));
+    if (__privateGet(this, _pending_count) === 0) {
+      __privateGet(this, _anchor).before(fragment);
+      __privateSet(this, _offscreen_fragment, null);
+      pause_effect(
+        /** @type {Effect} */
+        __privateGet(this, _pending_effect),
+        () => {
+          __privateSet(this, _pending_effect, null);
+        }
+      );
+      __privateMethod(this, _resolve, resolve_fn).call(
+        this,
+        /** @type {Batch} */
+        current_batch
+      );
+    }
+  });
+};
+_render = new WeakSet();
+render_fn = function() {
+  try {
+    this.is_pending = this.has_pending_snippet();
+    __privateSet(this, _pending_count, 0);
+    __privateSet(this, _local_pending_count, 0);
+    __privateSet(this, _main_effect, branch(() => {
+      __privateGet(this, _children).call(this, __privateGet(this, _anchor));
+    }));
+    if (__privateGet(this, _pending_count) > 0) {
+      var fragment = __privateSet(this, _offscreen_fragment, document.createDocumentFragment());
+      move_effect(__privateGet(this, _main_effect), fragment);
+      const pending2 = (
+        /** @type {(anchor: Node) => void} */
+        __privateGet(this, _props).pending
+      );
+      __privateSet(this, _pending_effect, branch(() => pending2(__privateGet(this, _anchor))));
+    } else {
+      __privateMethod(this, _resolve, resolve_fn).call(
+        this,
+        /** @type {Batch} */
+        current_batch
+      );
+    }
+  } catch (error) {
+    this.error(error);
+  }
+};
+_resolve = new WeakSet();
+resolve_fn = function(batch) {
+  this.is_pending = false;
+  batch.transfer_effects(__privateGet(this, _dirty_effects2), __privateGet(this, _maybe_dirty_effects2));
+};
+_run = new WeakSet();
+run_fn = function(fn) {
+  var previous_effect = active_effect;
+  var previous_reaction = active_reaction;
+  var previous_ctx = component_context;
+  set_active_effect(__privateGet(this, _effect));
+  set_active_reaction(__privateGet(this, _effect));
+  set_component_context(__privateGet(this, _effect).ctx);
+  try {
+    Batch.ensure();
+    return fn();
+  } catch (e) {
+    handle_error(e);
+    return null;
+  } finally {
+    set_active_effect(previous_effect);
+    set_active_reaction(previous_reaction);
+    set_component_context(previous_ctx);
+  }
+};
+_update_pending_count = new WeakSet();
+update_pending_count_fn = function(d, batch) {
+  var _a5;
+  if (!this.has_pending_snippet()) {
+    if (this.parent) {
+      __privateMethod(_a5 = this.parent, _update_pending_count, update_pending_count_fn).call(_a5, d, batch);
+    }
+    return;
+  }
+  __privateSet(this, _pending_count, __privateGet(this, _pending_count) + d);
+  if (__privateGet(this, _pending_count) === 0) {
+    __privateMethod(this, _resolve, resolve_fn).call(this, batch);
+    if (__privateGet(this, _pending_effect)) {
+      pause_effect(__privateGet(this, _pending_effect), () => {
+        __privateSet(this, _pending_effect, null);
+      });
+    }
+    if (__privateGet(this, _offscreen_fragment)) {
+      __privateGet(this, _anchor).before(__privateGet(this, _offscreen_fragment));
+      __privateSet(this, _offscreen_fragment, null);
+    }
+  }
+};
+_handle_error = new WeakSet();
+handle_error_fn = function(error) {
+  if (__privateGet(this, _main_effect)) {
+    destroy_effect(__privateGet(this, _main_effect));
+    __privateSet(this, _main_effect, null);
+  }
+  if (__privateGet(this, _pending_effect)) {
+    destroy_effect(__privateGet(this, _pending_effect));
+    __privateSet(this, _pending_effect, null);
+  }
+  if (__privateGet(this, _failed_effect)) {
+    destroy_effect(__privateGet(this, _failed_effect));
+    __privateSet(this, _failed_effect, null);
+  }
+  if (hydrating) {
+    set_hydrate_node(
+      /** @type {TemplateNode} */
+      __privateGet(this, _hydrate_open)
+    );
+    next();
+    set_hydrate_node(skip_nodes());
+  }
+  var onerror = __privateGet(this, _props).onerror;
+  let failed = __privateGet(this, _props).failed;
+  var did_reset = false;
+  var calling_on_error = false;
+  const reset2 = () => {
+    if (did_reset) {
+      svelte_boundary_reset_noop();
+      return;
+    }
+    did_reset = true;
+    if (calling_on_error) {
+      svelte_boundary_reset_onerror();
+    }
+    if (__privateGet(this, _failed_effect) !== null) {
+      pause_effect(__privateGet(this, _failed_effect), () => {
+        __privateSet(this, _failed_effect, null);
+      });
+    }
+    __privateMethod(this, _run, run_fn).call(this, () => {
+      __privateMethod(this, _render, render_fn).call(this);
+    });
+  };
+  const handle_error_result = (transformed_error) => {
+    try {
+      calling_on_error = true;
+      onerror == null ? void 0 : onerror(transformed_error, reset2);
+      calling_on_error = false;
+    } catch (error2) {
+      invoke_error_boundary(error2, __privateGet(this, _effect) && __privateGet(this, _effect).parent);
+    }
+    if (failed) {
+      __privateSet(this, _failed_effect, __privateMethod(this, _run, run_fn).call(this, () => {
+        try {
+          return branch(() => {
+            var effect2 = (
+              /** @type {Effect} */
+              active_effect
+            );
+            effect2.b = this;
+            effect2.f |= BOUNDARY_EFFECT;
+            failed(
+              __privateGet(this, _anchor),
+              () => transformed_error,
+              () => reset2
+            );
+          });
+        } catch (error2) {
+          invoke_error_boundary(
+            error2,
+            /** @type {Effect} */
+            __privateGet(this, _effect).parent
+          );
+          return null;
+        }
+      }));
+    }
+  };
+  queue_micro_task(() => {
+    var result;
+    try {
+      result = this.transform_error(error);
+    } catch (e) {
+      invoke_error_boundary(e, __privateGet(this, _effect) && __privateGet(this, _effect).parent);
+      return;
+    }
+    if (result !== null && typeof result === "object" && typeof /** @type {any} */
+    result.then === "function") {
+      result.then(
+        handle_error_result,
+        /** @param {unknown} e */
+        (e) => invoke_error_boundary(e, __privateGet(this, _effect) && __privateGet(this, _effect).parent)
+      );
+    } else {
+      handle_error_result(result);
+    }
+  });
+};
+
+// node_modules/svelte/src/internal/client/reactivity/async.js
+function flatten(blockers, sync, async2, fn) {
+  const d = is_runes() ? derived : derived_safe_equal;
+  var pending2 = blockers.filter((b) => !b.settled);
+  if (async2.length === 0 && pending2.length === 0) {
+    fn(sync.map(d));
+    return;
+  }
+  var parent = (
+    /** @type {Effect} */
+    active_effect
+  );
+  var restore = capture();
+  var blocker_promise = pending2.length === 1 ? pending2[0].promise : pending2.length > 1 ? Promise.all(pending2.map((b) => b.promise)) : null;
+  function finish(values) {
+    restore();
+    try {
+      fn(values);
+    } catch (error) {
+      if ((parent.f & DESTROYED) === 0) {
+        invoke_error_boundary(error, parent);
+      }
+    }
+    unset_context();
+  }
+  if (async2.length === 0) {
+    blocker_promise.then(() => finish(sync.map(d)));
+    return;
+  }
+  var decrement_pending = increment_pending();
+  function run3() {
+    Promise.all(async2.map((expression) => async_derived(expression))).then((result) => finish([...sync.map(d), ...result])).catch((error) => invoke_error_boundary(error, parent)).finally(() => decrement_pending());
+  }
+  if (blocker_promise) {
+    blocker_promise.then(() => {
+      restore();
+      run3();
+      unset_context();
+    });
+  } else {
+    run3();
+  }
+}
+function capture() {
+  var previous_effect = (
+    /** @type {Effect} */
+    active_effect
+  );
+  var previous_reaction = active_reaction;
+  var previous_component_context = component_context;
+  var previous_batch2 = (
+    /** @type {Batch} */
+    current_batch
+  );
+  if (dev_fallback_default) {
+    var previous_dev_stack = dev_stack;
+  }
+  return function restore(activate_batch = true) {
+    set_active_effect(previous_effect);
+    set_active_reaction(previous_reaction);
+    set_component_context(previous_component_context);
+    if (activate_batch && (previous_effect.f & DESTROYED) === 0) {
+      previous_batch2 == null ? void 0 : previous_batch2.activate();
+      previous_batch2 == null ? void 0 : previous_batch2.apply();
+    }
+    if (dev_fallback_default) {
+      set_reactivity_loss_tracker(null);
+      set_dev_stack(previous_dev_stack);
+    }
+  };
+}
+function unset_context(deactivate_batch = true) {
+  var _a5;
+  set_active_effect(null);
+  set_active_reaction(null);
+  set_component_context(null);
+  if (deactivate_batch)
+    (_a5 = current_batch) == null ? void 0 : _a5.deactivate();
+  if (dev_fallback_default) {
+    set_reactivity_loss_tracker(null);
+    set_dev_stack(null);
+  }
+}
+function increment_pending() {
+  var effect2 = (
+    /** @type {Effect} */
+    active_effect
+  );
+  var boundary2 = (
+    /** @type {Boundary} */
+    effect2.b
+  );
+  var batch = (
+    /** @type {Batch} */
+    current_batch
+  );
+  var blocking = boundary2.is_rendered();
+  boundary2.update_pending_count(1, batch);
+  batch.increment(blocking, effect2);
+  return (skip = false) => {
+    boundary2.update_pending_count(-1, batch);
+    batch.decrement(blocking, effect2, skip);
+  };
+}
+
+// node_modules/svelte/src/internal/client/reactivity/deriveds.js
+var reactivity_loss_tracker = null;
+function set_reactivity_loss_tracker(v) {
+  reactivity_loss_tracker = v;
+}
+var recent_async_deriveds = /* @__PURE__ */ new Set();
+function derived(fn) {
+  var flags2 = DERIVED | DIRTY;
+  if (active_effect !== null) {
+    active_effect.f |= EFFECT_PRESERVED;
+  }
+  const signal = {
+    ctx: component_context,
+    deps: null,
+    effects: null,
+    equals,
+    f: flags2,
+    fn,
+    reactions: null,
+    rv: 0,
+    v: (
+      /** @type {V} */
+      UNINITIALIZED
+    ),
+    wv: 0,
+    parent: active_effect,
+    ac: null
+  };
+  if (dev_fallback_default && tracing_mode_flag) {
+    signal.created = get_error("created at");
+  }
+  return signal;
+}
+function async_derived(fn, label, location) {
+  let parent = (
+    /** @type {Effect | null} */
+    active_effect
+  );
+  if (parent === null) {
+    async_derived_orphan();
+  }
+  var promise = (
+    /** @type {Promise<V>} */
+    /** @type {unknown} */
+    void 0
+  );
+  var signal = source(
+    /** @type {V} */
+    UNINITIALIZED
+  );
+  if (dev_fallback_default)
+    signal.label = label;
+  var should_suspend = !active_reaction;
+  var deferreds = /* @__PURE__ */ new Map();
+  async_effect(() => {
+    var _a5;
+    var effect2 = (
+      /** @type {Effect} */
+      active_effect
+    );
+    if (dev_fallback_default) {
+      reactivity_loss_tracker = { effect: effect2, effect_deps: /* @__PURE__ */ new Set(), warned: false };
+    }
+    var d = deferred();
+    promise = d.promise;
+    try {
+      Promise.resolve(fn()).then(d.resolve, d.reject).finally(unset_context);
+    } catch (error) {
+      d.reject(error);
+      unset_context();
+    }
+    if (dev_fallback_default) {
+      if (reactivity_loss_tracker) {
+        if (effect2.deps !== null) {
+          for (let i = 0; i < skipped_deps; i += 1) {
+            reactivity_loss_tracker.effect_deps.add(effect2.deps[i]);
+          }
+        }
+        if (new_deps !== null) {
+          for (let i = 0; i < new_deps.length; i += 1) {
+            reactivity_loss_tracker.effect_deps.add(new_deps[i]);
+          }
+        }
+      }
+      reactivity_loss_tracker = null;
+    }
+    var batch = (
+      /** @type {Batch} */
+      current_batch
+    );
+    if (should_suspend) {
+      if ((effect2.f & REACTION_RAN) !== 0) {
+        var decrement_pending = increment_pending();
+      }
+      if (
+        /** @type {Boundary} */
+        parent.b.is_rendered()
+      ) {
+        (_a5 = deferreds.get(batch)) == null ? void 0 : _a5.reject(STALE_REACTION);
+        deferreds.delete(batch);
+      } else {
+        for (const d2 of deferreds.values()) {
+          d2.reject(STALE_REACTION);
+        }
+        deferreds.clear();
+      }
+      deferreds.set(batch, d);
+    }
+    const handler = (value, error = void 0) => {
+      if (dev_fallback_default) {
+        reactivity_loss_tracker = null;
+      }
+      if (decrement_pending) {
+        var skip = error === STALE_REACTION;
+        decrement_pending(skip);
+      }
+      if (error === STALE_REACTION || (effect2.f & DESTROYED) !== 0) {
+        return;
+      }
+      batch.activate();
+      if (error) {
+        signal.f |= ERROR_VALUE;
+        internal_set(signal, error);
+      } else {
+        if ((signal.f & ERROR_VALUE) !== 0) {
+          signal.f ^= ERROR_VALUE;
+        }
+        internal_set(signal, value);
+        for (const [b, d2] of deferreds) {
+          deferreds.delete(b);
+          if (b === batch)
+            break;
+          d2.reject(STALE_REACTION);
+        }
+        if (dev_fallback_default && location !== void 0) {
+          recent_async_deriveds.add(signal);
+          setTimeout(() => {
+            if (recent_async_deriveds.has(signal)) {
+              await_waterfall(
+                /** @type {string} */
+                signal.label,
+                location
+              );
+              recent_async_deriveds.delete(signal);
+            }
+          });
+        }
+      }
+      batch.deactivate();
+    };
+    d.promise.then(handler, (e) => handler(null, e || "unknown"));
+  });
+  teardown(() => {
+    for (const d of deferreds.values()) {
+      d.reject(STALE_REACTION);
+    }
+  });
+  if (dev_fallback_default) {
+    signal.f |= ASYNC;
+  }
+  return new Promise((fulfil) => {
+    function next2(p) {
+      function go() {
+        if (p === promise) {
+          fulfil(signal);
+        } else {
+          next2(promise);
+        }
+      }
+      p.then(go, go);
+    }
+    next2(promise);
+  });
+}
+function user_derived(fn) {
+  const d = derived(fn);
+  if (!async_mode_flag)
+    push_reaction_value(d);
+  return d;
+}
+function derived_safe_equal(fn) {
+  const signal = derived(fn);
+  signal.equals = safe_equals;
+  return signal;
+}
+function destroy_derived_effects(derived2) {
+  var effects = derived2.effects;
+  if (effects !== null) {
+    derived2.effects = null;
+    for (var i = 0; i < effects.length; i += 1) {
+      destroy_effect(
+        /** @type {Effect} */
+        effects[i]
+      );
+    }
+  }
+}
+var stack = [];
+function execute_derived(derived2) {
+  var value;
+  var prev_active_effect = active_effect;
+  var parent = derived2.parent;
+  if (!is_destroying_effect && parent !== null && (parent.f & (DESTROYED | INERT)) !== 0) {
+    derived_inert();
+    return derived2.v;
+  }
+  set_active_effect(parent);
+  if (dev_fallback_default) {
+    let prev_eager_effects = eager_effects;
+    set_eager_effects(/* @__PURE__ */ new Set());
+    try {
+      if (includes.call(stack, derived2)) {
+        derived_references_self();
+      }
+      stack.push(derived2);
+      derived2.f &= ~WAS_MARKED;
+      destroy_derived_effects(derived2);
+      value = update_reaction(derived2);
+    } finally {
+      set_active_effect(prev_active_effect);
+      set_eager_effects(prev_eager_effects);
+      stack.pop();
+    }
+  } else {
+    try {
+      derived2.f &= ~WAS_MARKED;
+      destroy_derived_effects(derived2);
+      value = update_reaction(derived2);
+    } finally {
+      set_active_effect(prev_active_effect);
+    }
+  }
+  return value;
+}
+function update_derived(derived2) {
+  var _a5, _b3;
+  var value = execute_derived(derived2);
+  if (!derived2.equals(value)) {
+    derived2.wv = increment_write_version();
+    if (!((_a5 = current_batch) == null ? void 0 : _a5.is_fork) || derived2.deps === null) {
+      if (current_batch !== null) {
+        current_batch.capture(derived2, value, true);
+      } else {
+        derived2.v = value;
+      }
+      if (derived2.deps === null) {
+        set_signal_status(derived2, CLEAN);
+        return;
+      }
+    }
+  }
+  if (is_destroying_effect) {
+    return;
+  }
+  if (batch_values !== null) {
+    if (effect_tracking() || ((_b3 = current_batch) == null ? void 0 : _b3.is_fork)) {
+      batch_values.set(derived2, value);
+    }
+  } else {
+    update_derived_status(derived2);
+  }
+}
+function freeze_derived_effects(derived2) {
+  var _a5, _b3;
+  if (derived2.effects === null)
+    return;
+  for (const e of derived2.effects) {
+    if (e.teardown || e.ac) {
+      (_a5 = e.teardown) == null ? void 0 : _a5.call(e);
+      (_b3 = e.ac) == null ? void 0 : _b3.abort(STALE_REACTION);
+      e.teardown = noop;
+      e.ac = null;
+      remove_reactions(e, 0);
+      destroy_effect_children(e);
+    }
+  }
+}
+function unfreeze_derived_effects(derived2) {
+  if (derived2.effects === null)
+    return;
+  for (const e of derived2.effects) {
+    if (e.teardown) {
+      update_effect(e);
+    }
+  }
+}
+
+// node_modules/svelte/src/internal/client/reactivity/sources.js
+var eager_effects = /* @__PURE__ */ new Set();
+var old_values = /* @__PURE__ */ new Map();
+function set_eager_effects(v) {
+  eager_effects = v;
+}
+var eager_effects_deferred = false;
+function set_eager_effects_deferred() {
+  eager_effects_deferred = true;
+}
+function source(v, stack2) {
+  var signal = {
+    f: 0,
+    // TODO ideally we could skip this altogether, but it causes type errors
+    v,
+    reactions: null,
+    equals,
+    rv: 0,
+    wv: 0
+  };
+  if (dev_fallback_default && tracing_mode_flag) {
+    signal.created = stack2 != null ? stack2 : get_error("created at");
+    signal.updated = null;
+    signal.set_during_effect = false;
+    signal.trace = null;
+  }
+  return signal;
+}
+function state(v, stack2) {
+  const s = source(v, stack2);
+  push_reaction_value(s);
+  return s;
+}
+function mutable_source(initial_value, immutable = false, trackable = true) {
+  var _a5, _b3;
+  const s = source(initial_value);
+  if (!immutable) {
+    s.equals = safe_equals;
+  }
+  if (legacy_mode_flag && trackable && component_context !== null && component_context.l !== null) {
+    ((_b3 = (_a5 = component_context.l).s) != null ? _b3 : _a5.s = []).push(s);
+  }
+  return s;
+}
+function set(source2, value, should_proxy = false) {
+  if (active_reaction !== null && // since we are untracking the function inside `$inspect.with` we need to add this check
+  // to ensure we error if state is set inside an inspect effect
+  (!untracking || (active_reaction.f & EAGER_EFFECT) !== 0) && is_runes() && (active_reaction.f & (DERIVED | BLOCK_EFFECT | ASYNC | EAGER_EFFECT)) !== 0 && (current_sources === null || !includes.call(current_sources, source2))) {
+    state_unsafe_mutation();
+  }
+  let new_value = should_proxy ? proxy(value) : value;
+  if (dev_fallback_default) {
+    tag_proxy(
+      new_value,
+      /** @type {string} */
+      source2.label
+    );
+  }
+  return internal_set(source2, new_value, legacy_updates);
+}
+function internal_set(source2, value, updated_during_traversal = null) {
+  var _a5, _b3, _c2;
+  if (!source2.equals(value)) {
+    old_values.set(source2, is_destroying_effect ? value : source2.v);
+    var batch = Batch.ensure();
+    batch.capture(source2, value);
+    if (dev_fallback_default) {
+      if (tracing_mode_flag || active_effect !== null) {
+        (_a5 = source2.updated) != null ? _a5 : source2.updated = /* @__PURE__ */ new Map();
+        const count = ((_c2 = (_b3 = source2.updated.get("")) == null ? void 0 : _b3.count) != null ? _c2 : 0) + 1;
+        source2.updated.set("", { error: (
+          /** @type {any} */
+          null
+        ), count });
+        if (tracing_mode_flag || count > 5) {
+          const error = get_error("updated at");
+          if (error !== null) {
+            let entry = source2.updated.get(error.stack);
+            if (!entry) {
+              entry = { error, count: 0 };
+              source2.updated.set(error.stack, entry);
+            }
+            entry.count++;
+          }
+        }
+      }
+      if (active_effect !== null) {
+        source2.set_during_effect = true;
+      }
+    }
+    if ((source2.f & DERIVED) !== 0) {
+      const derived2 = (
+        /** @type {Derived} */
+        source2
+      );
+      if ((source2.f & DIRTY) !== 0) {
+        execute_derived(derived2);
+      }
+      if (batch_values === null) {
+        update_derived_status(derived2);
+      }
+    }
+    source2.wv = increment_write_version();
+    mark_reactions(source2, DIRTY, updated_during_traversal);
+    if (is_runes() && active_effect !== null && (active_effect.f & CLEAN) !== 0 && (active_effect.f & (BRANCH_EFFECT | ROOT_EFFECT)) === 0) {
+      if (untracked_writes === null) {
+        set_untracked_writes([source2]);
+      } else {
+        untracked_writes.push(source2);
+      }
+    }
+    if (!batch.is_fork && eager_effects.size > 0 && !eager_effects_deferred) {
+      flush_eager_effects();
+    }
+  }
+  return value;
+}
+function flush_eager_effects() {
+  eager_effects_deferred = false;
+  for (const effect2 of eager_effects) {
+    if ((effect2.f & CLEAN) !== 0) {
+      set_signal_status(effect2, MAYBE_DIRTY);
+    }
+    if (is_dirty(effect2)) {
+      update_effect(effect2);
+    }
+  }
+  eager_effects.clear();
+}
+function increment(source2) {
+  set(source2, source2.v + 1);
+}
+function mark_reactions(signal, status, updated_during_traversal) {
+  var _a5;
+  var reactions = signal.reactions;
+  if (reactions === null)
+    return;
+  var runes = is_runes();
+  var length = reactions.length;
+  for (var i = 0; i < length; i++) {
+    var reaction = reactions[i];
+    var flags2 = reaction.f;
+    if (!runes && reaction === active_effect)
+      continue;
+    if (dev_fallback_default && (flags2 & EAGER_EFFECT) !== 0) {
+      eager_effects.add(reaction);
+      continue;
+    }
+    var not_dirty = (flags2 & DIRTY) === 0;
+    if (not_dirty) {
+      set_signal_status(reaction, status);
+    }
+    if ((flags2 & DERIVED) !== 0) {
+      var derived2 = (
+        /** @type {Derived} */
+        reaction
+      );
+      (_a5 = batch_values) == null ? void 0 : _a5.delete(derived2);
+      if ((flags2 & WAS_MARKED) === 0) {
+        if (flags2 & CONNECTED && (active_effect === null || (active_effect.f & REACTION_IS_UPDATING) === 0)) {
+          reaction.f |= WAS_MARKED;
+        }
+        mark_reactions(derived2, MAYBE_DIRTY, updated_during_traversal);
+      }
+    } else if (not_dirty) {
+      var effect2 = (
+        /** @type {Effect} */
+        reaction
+      );
+      if ((flags2 & BLOCK_EFFECT) !== 0 && eager_block_effects !== null) {
+        eager_block_effects.add(effect2);
+      }
+      if (updated_during_traversal !== null) {
+        updated_during_traversal.push(effect2);
+      } else {
+        schedule_effect(effect2);
+      }
+    }
+  }
+}
+
+// node_modules/svelte/src/internal/client/proxy.js
+var regex_is_valid_identifier = /^[a-zA-Z_$][a-zA-Z_$0-9]*$/;
+function proxy(value) {
+  if (typeof value !== "object" || value === null || STATE_SYMBOL in value) {
+    return value;
+  }
+  const prototype = get_prototype_of(value);
+  if (prototype !== object_prototype && prototype !== array_prototype) {
+    return value;
+  }
+  var sources = /* @__PURE__ */ new Map();
+  var is_proxied_array = is_array(value);
+  var version = state(0);
+  var stack2 = dev_fallback_default && tracing_mode_flag ? get_error("created at") : null;
+  var parent_version = update_version;
+  var with_parent = (fn) => {
+    if (update_version === parent_version) {
+      return fn();
+    }
+    var reaction = active_reaction;
+    var version2 = update_version;
+    set_active_reaction(null);
+    set_update_version(parent_version);
+    var result = fn();
+    set_active_reaction(reaction);
+    set_update_version(version2);
+    return result;
+  };
+  if (is_proxied_array) {
+    sources.set("length", state(
+      /** @type {any[]} */
+      value.length,
+      stack2
+    ));
+    if (dev_fallback_default) {
+      value = /** @type {any} */
+      inspectable_array(
+        /** @type {any[]} */
+        value
+      );
+    }
+  }
+  var path = "";
+  let updating = false;
+  function update_path(new_path) {
+    if (updating)
+      return;
+    updating = true;
+    path = new_path;
+    tag(version, `${path} version`);
+    for (const [prop2, source2] of sources) {
+      tag(source2, get_label(path, prop2));
+    }
+    updating = false;
+  }
+  return new Proxy(
+    /** @type {any} */
+    value,
+    {
+      defineProperty(_, prop2, descriptor) {
+        if (!("value" in descriptor) || descriptor.configurable === false || descriptor.enumerable === false || descriptor.writable === false) {
+          state_descriptors_fixed();
+        }
+        var s = sources.get(prop2);
+        if (s === void 0) {
+          with_parent(() => {
+            var s2 = state(descriptor.value, stack2);
+            sources.set(prop2, s2);
+            if (dev_fallback_default && typeof prop2 === "string") {
+              tag(s2, get_label(path, prop2));
+            }
+            return s2;
+          });
+        } else {
+          set(s, descriptor.value, true);
+        }
+        return true;
+      },
+      deleteProperty(target, prop2) {
+        var s = sources.get(prop2);
+        if (s === void 0) {
+          if (prop2 in target) {
+            const s2 = with_parent(() => state(UNINITIALIZED, stack2));
+            sources.set(prop2, s2);
+            increment(version);
+            if (dev_fallback_default) {
+              tag(s2, get_label(path, prop2));
+            }
+          }
+        } else {
+          set(s, UNINITIALIZED);
+          increment(version);
+        }
+        return true;
+      },
+      get(target, prop2, receiver) {
+        var _a5;
+        if (prop2 === STATE_SYMBOL) {
+          return value;
+        }
+        if (dev_fallback_default && prop2 === PROXY_PATH_SYMBOL) {
+          return update_path;
+        }
+        var s = sources.get(prop2);
+        var exists = prop2 in target;
+        if (s === void 0 && (!exists || ((_a5 = get_descriptor(target, prop2)) == null ? void 0 : _a5.writable))) {
+          s = with_parent(() => {
+            var p = proxy(exists ? target[prop2] : UNINITIALIZED);
+            var s2 = state(p, stack2);
+            if (dev_fallback_default) {
+              tag(s2, get_label(path, prop2));
+            }
+            return s2;
+          });
+          sources.set(prop2, s);
+        }
+        if (s !== void 0) {
+          var v = get2(s);
+          return v === UNINITIALIZED ? void 0 : v;
+        }
+        return Reflect.get(target, prop2, receiver);
+      },
+      getOwnPropertyDescriptor(target, prop2) {
+        var descriptor = Reflect.getOwnPropertyDescriptor(target, prop2);
+        if (descriptor && "value" in descriptor) {
+          var s = sources.get(prop2);
+          if (s)
+            descriptor.value = get2(s);
+        } else if (descriptor === void 0) {
+          var source2 = sources.get(prop2);
+          var value2 = source2 == null ? void 0 : source2.v;
+          if (source2 !== void 0 && value2 !== UNINITIALIZED) {
+            return {
+              enumerable: true,
+              configurable: true,
+              value: value2,
+              writable: true
+            };
+          }
+        }
+        return descriptor;
+      },
+      has(target, prop2) {
+        var _a5;
+        if (prop2 === STATE_SYMBOL) {
+          return true;
+        }
+        var s = sources.get(prop2);
+        var has = s !== void 0 && s.v !== UNINITIALIZED || Reflect.has(target, prop2);
+        if (s !== void 0 || active_effect !== null && (!has || ((_a5 = get_descriptor(target, prop2)) == null ? void 0 : _a5.writable))) {
+          if (s === void 0) {
+            s = with_parent(() => {
+              var p = has ? proxy(target[prop2]) : UNINITIALIZED;
+              var s2 = state(p, stack2);
+              if (dev_fallback_default) {
+                tag(s2, get_label(path, prop2));
+              }
+              return s2;
+            });
+            sources.set(prop2, s);
+          }
+          var value2 = get2(s);
+          if (value2 === UNINITIALIZED) {
+            return false;
+          }
+        }
+        return has;
+      },
+      set(target, prop2, value2, receiver) {
+        var _a5;
+        var s = sources.get(prop2);
+        var has = prop2 in target;
+        if (is_proxied_array && prop2 === "length") {
+          for (var i = value2; i < /** @type {Source<number>} */
+          s.v; i += 1) {
+            var other_s = sources.get(i + "");
+            if (other_s !== void 0) {
+              set(other_s, UNINITIALIZED);
+            } else if (i in target) {
+              other_s = with_parent(() => state(UNINITIALIZED, stack2));
+              sources.set(i + "", other_s);
+              if (dev_fallback_default) {
+                tag(other_s, get_label(path, i));
+              }
+            }
+          }
+        }
+        if (s === void 0) {
+          if (!has || ((_a5 = get_descriptor(target, prop2)) == null ? void 0 : _a5.writable)) {
+            s = with_parent(() => state(void 0, stack2));
+            if (dev_fallback_default) {
+              tag(s, get_label(path, prop2));
+            }
+            set(s, proxy(value2));
+            sources.set(prop2, s);
+          }
+        } else {
+          has = s.v !== UNINITIALIZED;
+          var p = with_parent(() => proxy(value2));
+          set(s, p);
+        }
+        var descriptor = Reflect.getOwnPropertyDescriptor(target, prop2);
+        if (descriptor == null ? void 0 : descriptor.set) {
+          descriptor.set.call(receiver, value2);
+        }
+        if (!has) {
+          if (is_proxied_array && typeof prop2 === "string") {
+            var ls = (
+              /** @type {Source<number>} */
+              sources.get("length")
+            );
+            var n = Number(prop2);
+            if (Number.isInteger(n) && n >= ls.v) {
+              set(ls, n + 1);
+            }
+          }
+          increment(version);
+        }
+        return true;
+      },
+      ownKeys(target) {
+        get2(version);
+        var own_keys = Reflect.ownKeys(target).filter((key3) => {
+          var source3 = sources.get(key3);
+          return source3 === void 0 || source3.v !== UNINITIALIZED;
+        });
+        for (var [key2, source2] of sources) {
+          if (source2.v !== UNINITIALIZED && !(key2 in target)) {
+            own_keys.push(key2);
+          }
+        }
+        return own_keys;
+      },
+      setPrototypeOf() {
+        state_prototype_fixed();
+      }
+    }
+  );
+}
+function get_label(path, prop2) {
+  var _a5;
+  if (typeof prop2 === "symbol")
+    return `${path}[Symbol(${(_a5 = prop2.description) != null ? _a5 : ""})]`;
+  if (regex_is_valid_identifier.test(prop2))
+    return `${path}.${prop2}`;
+  return /^\d+$/.test(prop2) ? `${path}[${prop2}]` : `${path}['${prop2}']`;
+}
+function get_proxied_value(value) {
+  try {
+    if (value !== null && typeof value === "object" && STATE_SYMBOL in value) {
+      return value[STATE_SYMBOL];
+    }
+  } catch (e) {
+  }
+  return value;
+}
+var ARRAY_MUTATING_METHODS = /* @__PURE__ */ new Set([
+  "copyWithin",
+  "fill",
+  "pop",
+  "push",
+  "reverse",
+  "shift",
+  "sort",
+  "splice",
+  "unshift"
+]);
+function inspectable_array(array) {
+  return new Proxy(array, {
+    get(target, prop2, receiver) {
+      var value = Reflect.get(target, prop2, receiver);
+      if (!ARRAY_MUTATING_METHODS.has(
+        /** @type {string} */
+        prop2
+      )) {
+        return value;
+      }
+      return function(...args) {
+        set_eager_effects_deferred();
+        var result = value.apply(this, args);
+        flush_eager_effects();
+        return result;
+      };
+    }
+  });
+}
+
+// node_modules/svelte/src/internal/client/dev/equality.js
+function init_array_prototype_warnings() {
+  const array_prototype2 = Array.prototype;
+  const cleanup = Array.__svelte_cleanup;
+  if (cleanup) {
+    cleanup();
+  }
+  const { indexOf, lastIndexOf, includes: includes2 } = array_prototype2;
+  array_prototype2.indexOf = function(item, from_index) {
+    const index2 = indexOf.call(this, item, from_index);
+    if (index2 === -1) {
+      for (let i = from_index != null ? from_index : 0; i < this.length; i += 1) {
+        if (get_proxied_value(this[i]) === item) {
+          state_proxy_equality_mismatch("array.indexOf(...)");
+          break;
+        }
+      }
+    }
+    return index2;
+  };
+  array_prototype2.lastIndexOf = function(item, from_index) {
+    const index2 = lastIndexOf.call(this, item, from_index != null ? from_index : this.length - 1);
+    if (index2 === -1) {
+      for (let i = 0; i <= (from_index != null ? from_index : this.length - 1); i += 1) {
+        if (get_proxied_value(this[i]) === item) {
+          state_proxy_equality_mismatch("array.lastIndexOf(...)");
+          break;
+        }
+      }
+    }
+    return index2;
+  };
+  array_prototype2.includes = function(item, from_index) {
+    const has = includes2.call(this, item, from_index);
+    if (!has) {
+      for (let i = 0; i < this.length; i += 1) {
+        if (get_proxied_value(this[i]) === item) {
+          state_proxy_equality_mismatch("array.includes(...)");
+          break;
+        }
+      }
+    }
+    return has;
+  };
+  Array.__svelte_cleanup = () => {
+    array_prototype2.indexOf = indexOf;
+    array_prototype2.lastIndexOf = lastIndexOf;
+    array_prototype2.includes = includes2;
+  };
+}
+
+// node_modules/svelte/src/internal/client/dom/operations.js
+var $window;
+var $document;
+var is_firefox;
+var first_child_getter;
+var next_sibling_getter;
+function init_operations() {
+  if ($window !== void 0) {
+    return;
+  }
+  $window = window;
+  $document = document;
+  is_firefox = /Firefox/.test(navigator.userAgent);
+  var element_prototype = Element.prototype;
+  var node_prototype = Node.prototype;
+  var text_prototype = Text.prototype;
+  first_child_getter = get_descriptor(node_prototype, "firstChild").get;
+  next_sibling_getter = get_descriptor(node_prototype, "nextSibling").get;
+  if (is_extensible(element_prototype)) {
+    element_prototype.__click = void 0;
+    element_prototype.__className = void 0;
+    element_prototype.__attributes = null;
+    element_prototype.__style = void 0;
+    element_prototype.__e = void 0;
+  }
+  if (is_extensible(text_prototype)) {
+    text_prototype.__t = void 0;
+  }
+  if (dev_fallback_default) {
+    element_prototype.__svelte_meta = null;
+    init_array_prototype_warnings();
+  }
+}
+function create_text(value = "") {
+  return document.createTextNode(value);
+}
+function get_first_child(node) {
+  return (
+    /** @type {TemplateNode | null} */
+    first_child_getter.call(node)
+  );
+}
+function get_next_sibling(node) {
+  return (
+    /** @type {TemplateNode | null} */
+    next_sibling_getter.call(node)
+  );
+}
+function child(node, is_text) {
+  if (!hydrating) {
+    return get_first_child(node);
+  }
+  var child2 = get_first_child(hydrate_node);
+  if (child2 === null) {
+    child2 = hydrate_node.appendChild(create_text());
+  } else if (is_text && child2.nodeType !== TEXT_NODE) {
+    var text2 = create_text();
+    child2 == null ? void 0 : child2.before(text2);
+    set_hydrate_node(text2);
+    return text2;
+  }
+  if (is_text) {
+    merge_text_nodes(
+      /** @type {Text} */
+      child2
+    );
+  }
+  set_hydrate_node(child2);
+  return child2;
+}
+function sibling(node, count = 1, is_text = false) {
+  let next_sibling = hydrating ? hydrate_node : node;
+  var last_sibling;
+  while (count--) {
+    last_sibling = next_sibling;
+    next_sibling = /** @type {TemplateNode} */
+    get_next_sibling(next_sibling);
+  }
+  if (!hydrating) {
+    return next_sibling;
+  }
+  if (is_text) {
+    if ((next_sibling == null ? void 0 : next_sibling.nodeType) !== TEXT_NODE) {
+      var text2 = create_text();
+      if (next_sibling === null) {
+        last_sibling == null ? void 0 : last_sibling.after(text2);
+      } else {
+        next_sibling.before(text2);
+      }
+      set_hydrate_node(text2);
+      return text2;
+    }
+    merge_text_nodes(
+      /** @type {Text} */
+      next_sibling
+    );
+  }
+  set_hydrate_node(next_sibling);
+  return next_sibling;
+}
+function clear_text_content(node) {
+  node.textContent = "";
+}
+function should_defer_append() {
+  if (!async_mode_flag)
+    return false;
+  if (eager_block_effects !== null)
+    return false;
+  var flags2 = (
+    /** @type {Effect} */
+    active_effect.f
+  );
+  return (flags2 & REACTION_RAN) !== 0;
+}
+function create_element(tag2, namespace, is2) {
+  let options = is2 ? { is: is2 } : void 0;
+  return (
+    /** @type {T extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[T] : Element} */
+    document.createElementNS(namespace != null ? namespace : NAMESPACE_HTML, tag2, options)
+  );
+}
+function merge_text_nodes(text2) {
+  if (
+    /** @type {string} */
+    text2.nodeValue.length < 65536
+  ) {
+    return;
+  }
+  let next2 = text2.nextSibling;
+  while (next2 !== null && next2.nodeType === TEXT_NODE) {
+    next2.remove();
+    text2.nodeValue += /** @type {string} */
+    next2.nodeValue;
+    next2 = text2.nextSibling;
+  }
+}
+
+// node_modules/svelte/src/internal/client/dom/elements/bindings/shared.js
+function without_reactive_context(fn) {
+  var previous_reaction = active_reaction;
+  var previous_effect = active_effect;
+  set_active_reaction(null);
+  set_active_effect(null);
+  try {
+    return fn();
+  } finally {
+    set_active_reaction(previous_reaction);
+    set_active_effect(previous_effect);
+  }
+}
+
+// node_modules/svelte/src/internal/client/reactivity/effects.js
+function validate_effect(rune) {
+  if (active_effect === null) {
+    if (active_reaction === null) {
+      effect_orphan(rune);
+    }
+    effect_in_unowned_derived();
+  }
+  if (is_destroying_effect) {
+    effect_in_teardown(rune);
+  }
+}
+function push_effect(effect2, parent_effect) {
+  var parent_last = parent_effect.last;
+  if (parent_last === null) {
+    parent_effect.last = parent_effect.first = effect2;
+  } else {
+    parent_last.next = effect2;
+    effect2.prev = parent_last;
+    parent_effect.last = effect2;
+  }
+}
+function create_effect(type, fn) {
+  var _a5, _b3;
+  var parent = active_effect;
+  if (dev_fallback_default) {
+    while (parent !== null && (parent.f & EAGER_EFFECT) !== 0) {
+      parent = parent.parent;
+    }
+  }
+  if (parent !== null && (parent.f & INERT) !== 0) {
+    type |= INERT;
+  }
+  var effect2 = {
+    ctx: component_context,
+    deps: null,
+    nodes: null,
+    f: type | DIRTY | CONNECTED,
+    first: null,
+    fn,
+    last: null,
+    next: null,
+    parent,
+    b: parent && parent.b,
+    prev: null,
+    teardown: null,
+    wv: 0,
+    ac: null
+  };
+  if (dev_fallback_default) {
+    effect2.component_function = dev_current_component_function;
+  }
+  (_a5 = current_batch) == null ? void 0 : _a5.register_created_effect(effect2);
+  var e = effect2;
+  if ((type & EFFECT) !== 0) {
+    if (collected_effects !== null) {
+      collected_effects.push(effect2);
+    } else {
+      Batch.ensure().schedule(effect2);
+    }
+  } else if (fn !== null) {
+    try {
+      update_effect(effect2);
+    } catch (e2) {
+      destroy_effect(effect2);
+      throw e2;
+    }
+    if (e.deps === null && e.teardown === null && e.nodes === null && e.first === e.last && // either `null`, or a singular child
+    (e.f & EFFECT_PRESERVED) === 0) {
+      e = e.first;
+      if ((type & BLOCK_EFFECT) !== 0 && (type & EFFECT_TRANSPARENT) !== 0 && e !== null) {
+        e.f |= EFFECT_TRANSPARENT;
+      }
+    }
+  }
+  if (e !== null) {
+    e.parent = parent;
+    if (parent !== null) {
+      push_effect(e, parent);
+    }
+    if (active_reaction !== null && (active_reaction.f & DERIVED) !== 0 && (type & ROOT_EFFECT) === 0) {
+      var derived2 = (
+        /** @type {Derived} */
+        active_reaction
+      );
+      ((_b3 = derived2.effects) != null ? _b3 : derived2.effects = []).push(e);
+    }
+  }
+  return effect2;
+}
+function effect_tracking() {
+  return active_reaction !== null && !untracking;
+}
+function teardown(fn) {
+  const effect2 = create_effect(RENDER_EFFECT, null);
+  set_signal_status(effect2, CLEAN);
+  effect2.teardown = fn;
+  return effect2;
+}
+function user_effect(fn) {
+  var _a5;
+  validate_effect("$effect");
+  if (dev_fallback_default) {
+    define_property(fn, "name", {
+      value: "$effect"
+    });
+  }
+  var flags2 = (
+    /** @type {Effect} */
+    active_effect.f
+  );
+  var defer = !active_reaction && (flags2 & BRANCH_EFFECT) !== 0 && (flags2 & REACTION_RAN) === 0;
+  if (defer) {
+    var context = (
+      /** @type {ComponentContext} */
+      component_context
+    );
+    ((_a5 = context.e) != null ? _a5 : context.e = []).push(fn);
+  } else {
+    return create_user_effect(fn);
+  }
+}
+function create_user_effect(fn) {
+  return create_effect(EFFECT | USER_EFFECT, fn);
+}
+function effect_root(fn) {
+  Batch.ensure();
+  const effect2 = create_effect(ROOT_EFFECT | EFFECT_PRESERVED, fn);
+  return () => {
+    destroy_effect(effect2);
+  };
+}
+function component_root(fn) {
+  Batch.ensure();
+  const effect2 = create_effect(ROOT_EFFECT | EFFECT_PRESERVED, fn);
+  return (options = {}) => {
+    return new Promise((fulfil) => {
+      if (options.outro) {
+        pause_effect(effect2, () => {
+          destroy_effect(effect2);
+          fulfil(void 0);
+        });
+      } else {
+        destroy_effect(effect2);
+        fulfil(void 0);
+      }
+    });
+  };
+}
+function async_effect(fn) {
+  return create_effect(ASYNC | EFFECT_PRESERVED, fn);
+}
+function render_effect(fn, flags2 = 0) {
+  return create_effect(RENDER_EFFECT | flags2, fn);
+}
+function template_effect(fn, sync = [], async2 = [], blockers = []) {
+  flatten(blockers, sync, async2, (values) => {
+    create_effect(RENDER_EFFECT, () => fn(...values.map(get2)));
+  });
+}
+function block(fn, flags2 = 0) {
+  var effect2 = create_effect(BLOCK_EFFECT | flags2, fn);
+  if (dev_fallback_default) {
+    effect2.dev_stack = dev_stack;
+  }
+  return effect2;
+}
+function branch(fn) {
+  return create_effect(BRANCH_EFFECT | EFFECT_PRESERVED, fn);
+}
+function execute_effect_teardown(effect2) {
+  var teardown2 = effect2.teardown;
+  if (teardown2 !== null) {
+    const previously_destroying_effect = is_destroying_effect;
+    const previous_reaction = active_reaction;
+    set_is_destroying_effect(true);
+    set_active_reaction(null);
+    try {
+      teardown2.call(null);
+    } finally {
+      set_is_destroying_effect(previously_destroying_effect);
+      set_active_reaction(previous_reaction);
+    }
+  }
+}
+function destroy_effect_children(signal, remove_dom = false) {
+  var effect2 = signal.first;
+  signal.first = signal.last = null;
+  while (effect2 !== null) {
+    const controller = effect2.ac;
+    if (controller !== null) {
+      without_reactive_context(() => {
+        controller.abort(STALE_REACTION);
+      });
+    }
+    var next2 = effect2.next;
+    if ((effect2.f & ROOT_EFFECT) !== 0) {
+      effect2.parent = null;
+    } else {
+      destroy_effect(effect2, remove_dom);
+    }
+    effect2 = next2;
+  }
+}
+function destroy_block_effect_children(signal) {
+  var effect2 = signal.first;
+  while (effect2 !== null) {
+    var next2 = effect2.next;
+    if ((effect2.f & BRANCH_EFFECT) === 0) {
+      destroy_effect(effect2);
+    }
+    effect2 = next2;
+  }
+}
+function destroy_effect(effect2, remove_dom = true) {
+  var removed = false;
+  if ((remove_dom || (effect2.f & HEAD_EFFECT) !== 0) && effect2.nodes !== null && effect2.nodes.end !== null) {
+    remove_effect_dom(
+      effect2.nodes.start,
+      /** @type {TemplateNode} */
+      effect2.nodes.end
+    );
+    removed = true;
+  }
+  set_signal_status(effect2, DESTROYING);
+  destroy_effect_children(effect2, remove_dom && !removed);
+  remove_reactions(effect2, 0);
+  var transitions = effect2.nodes && effect2.nodes.t;
+  if (transitions !== null) {
+    for (const transition2 of transitions) {
+      transition2.stop();
+    }
+  }
+  execute_effect_teardown(effect2);
+  effect2.f ^= DESTROYING;
+  effect2.f |= DESTROYED;
+  var parent = effect2.parent;
+  if (parent !== null && parent.first !== null) {
+    unlink_effect(effect2);
+  }
+  if (dev_fallback_default) {
+    effect2.component_function = null;
+  }
+  effect2.next = effect2.prev = effect2.teardown = effect2.ctx = effect2.deps = effect2.fn = effect2.nodes = effect2.ac = effect2.b = null;
+}
+function remove_effect_dom(node, end) {
+  while (node !== null) {
+    var next2 = node === end ? null : get_next_sibling(node);
+    node.remove();
+    node = next2;
+  }
+}
+function unlink_effect(effect2) {
+  var parent = effect2.parent;
+  var prev = effect2.prev;
+  var next2 = effect2.next;
+  if (prev !== null)
+    prev.next = next2;
+  if (next2 !== null)
+    next2.prev = prev;
+  if (parent !== null) {
+    if (parent.first === effect2)
+      parent.first = next2;
+    if (parent.last === effect2)
+      parent.last = prev;
+  }
+}
+function pause_effect(effect2, callback, destroy = true) {
+  var transitions = [];
+  pause_children(effect2, transitions, true);
+  var fn = () => {
+    if (destroy)
+      destroy_effect(effect2);
+    if (callback)
+      callback();
+  };
+  var remaining = transitions.length;
+  if (remaining > 0) {
+    var check = () => --remaining || fn();
+    for (var transition2 of transitions) {
+      transition2.out(check);
+    }
+  } else {
+    fn();
+  }
+}
+function pause_children(effect2, transitions, local) {
+  if ((effect2.f & INERT) !== 0)
+    return;
+  effect2.f ^= INERT;
+  var t = effect2.nodes && effect2.nodes.t;
+  if (t !== null) {
+    for (const transition2 of t) {
+      if (transition2.is_global || local) {
+        transitions.push(transition2);
+      }
+    }
+  }
+  var child2 = effect2.first;
+  while (child2 !== null) {
+    var sibling2 = child2.next;
+    if ((child2.f & ROOT_EFFECT) === 0) {
+      var transparent = (child2.f & EFFECT_TRANSPARENT) !== 0 || // If this is a branch effect without a block effect parent,
+      // it means the parent block effect was pruned. In that case,
+      // transparency information was transferred to the branch effect.
+      (child2.f & BRANCH_EFFECT) !== 0 && (effect2.f & BLOCK_EFFECT) !== 0;
+      pause_children(child2, transitions, transparent ? local : false);
+    }
+    child2 = sibling2;
+  }
+}
+function resume_effect(effect2) {
+  resume_children(effect2, true);
+}
+function resume_children(effect2, local) {
+  if ((effect2.f & INERT) === 0)
+    return;
+  effect2.f ^= INERT;
+  if ((effect2.f & CLEAN) === 0) {
+    set_signal_status(effect2, DIRTY);
+    Batch.ensure().schedule(effect2);
+  }
+  var child2 = effect2.first;
+  while (child2 !== null) {
+    var sibling2 = child2.next;
+    var transparent = (child2.f & EFFECT_TRANSPARENT) !== 0 || (child2.f & BRANCH_EFFECT) !== 0;
+    resume_children(child2, transparent ? local : false);
+    child2 = sibling2;
+  }
+  var t = effect2.nodes && effect2.nodes.t;
+  if (t !== null) {
+    for (const transition2 of t) {
+      if (transition2.is_global || local) {
+        transition2.in();
+      }
+    }
+  }
+}
+function move_effect(effect2, fragment) {
+  if (!effect2.nodes)
+    return;
+  var node = effect2.nodes.start;
+  var end = effect2.nodes.end;
+  while (node !== null) {
+    var next2 = node === end ? null : get_next_sibling(node);
+    fragment.append(node);
+    node = next2;
+  }
+}
+
+// node_modules/svelte/src/internal/client/legacy.js
+var captured_signals = null;
+
+// node_modules/svelte/src/internal/client/runtime.js
+var is_updating_effect = false;
+var is_destroying_effect = false;
+function set_is_destroying_effect(value) {
+  is_destroying_effect = value;
+}
+var active_reaction = null;
+var untracking = false;
+function set_active_reaction(reaction) {
+  active_reaction = reaction;
+}
+var active_effect = null;
+function set_active_effect(effect2) {
+  active_effect = effect2;
+}
+var current_sources = null;
+function push_reaction_value(value) {
+  if (active_reaction !== null && (!async_mode_flag || (active_reaction.f & DERIVED) !== 0)) {
+    if (current_sources === null) {
+      current_sources = [value];
+    } else {
+      current_sources.push(value);
+    }
+  }
+}
+var new_deps = null;
+var skipped_deps = 0;
+var untracked_writes = null;
+function set_untracked_writes(value) {
+  untracked_writes = value;
+}
+var write_version = 1;
+var read_version = 0;
+var update_version = read_version;
+function set_update_version(value) {
+  update_version = value;
+}
+function increment_write_version() {
+  return ++write_version;
+}
+function is_dirty(reaction) {
+  var flags2 = reaction.f;
+  if ((flags2 & DIRTY) !== 0) {
+    return true;
+  }
+  if (flags2 & DERIVED) {
+    reaction.f &= ~WAS_MARKED;
+  }
+  if ((flags2 & MAYBE_DIRTY) !== 0) {
+    var dependencies = (
+      /** @type {Value[]} */
+      reaction.deps
+    );
+    var length = dependencies.length;
+    for (var i = 0; i < length; i++) {
+      var dependency = dependencies[i];
+      if (is_dirty(
+        /** @type {Derived} */
+        dependency
+      )) {
+        update_derived(
+          /** @type {Derived} */
+          dependency
+        );
+      }
+      if (dependency.wv > reaction.wv) {
+        return true;
+      }
+    }
+    if ((flags2 & CONNECTED) !== 0 && // During time traveling we don't want to reset the status so that
+    // traversal of the graph in the other batches still happens
+    batch_values === null) {
+      set_signal_status(reaction, CLEAN);
+    }
+  }
+  return false;
+}
+function schedule_possible_effect_self_invalidation(signal, effect2, root2 = true) {
+  var reactions = signal.reactions;
+  if (reactions === null)
+    return;
+  if (!async_mode_flag && current_sources !== null && includes.call(current_sources, signal)) {
+    return;
+  }
+  for (var i = 0; i < reactions.length; i++) {
+    var reaction = reactions[i];
+    if ((reaction.f & DERIVED) !== 0) {
+      schedule_possible_effect_self_invalidation(
+        /** @type {Derived} */
+        reaction,
+        effect2,
+        false
+      );
+    } else if (effect2 === reaction) {
+      if (root2) {
+        set_signal_status(reaction, DIRTY);
+      } else if ((reaction.f & CLEAN) !== 0) {
+        set_signal_status(reaction, MAYBE_DIRTY);
+      }
+      schedule_effect(
+        /** @type {Effect} */
+        reaction
+      );
+    }
+  }
+}
+function update_reaction(reaction) {
+  var _a5, _b3, _c2;
+  var previous_deps = new_deps;
+  var previous_skipped_deps = skipped_deps;
+  var previous_untracked_writes = untracked_writes;
+  var previous_reaction = active_reaction;
+  var previous_sources = current_sources;
+  var previous_component_context = component_context;
+  var previous_untracking = untracking;
+  var previous_update_version = update_version;
+  var flags2 = reaction.f;
+  new_deps = /** @type {null | Value[]} */
+  null;
+  skipped_deps = 0;
+  untracked_writes = null;
+  active_reaction = (flags2 & (BRANCH_EFFECT | ROOT_EFFECT)) === 0 ? reaction : null;
+  current_sources = null;
+  set_component_context(reaction.ctx);
+  untracking = false;
+  update_version = ++read_version;
+  if (reaction.ac !== null) {
+    without_reactive_context(() => {
+      reaction.ac.abort(STALE_REACTION);
+    });
+    reaction.ac = null;
+  }
+  try {
+    reaction.f |= REACTION_IS_UPDATING;
+    var fn = (
+      /** @type {Function} */
+      reaction.fn
+    );
+    var result = fn();
+    reaction.f |= REACTION_RAN;
+    var deps = reaction.deps;
+    var is_fork = (_a5 = current_batch) == null ? void 0 : _a5.is_fork;
+    if (new_deps !== null) {
+      var i;
+      if (!is_fork) {
+        remove_reactions(reaction, skipped_deps);
+      }
+      if (deps !== null && skipped_deps > 0) {
+        deps.length = skipped_deps + new_deps.length;
+        for (i = 0; i < new_deps.length; i++) {
+          deps[skipped_deps + i] = new_deps[i];
+        }
+      } else {
+        reaction.deps = deps = new_deps;
+      }
+      if (effect_tracking() && (reaction.f & CONNECTED) !== 0) {
+        for (i = skipped_deps; i < deps.length; i++) {
+          ((_c2 = (_b3 = deps[i]).reactions) != null ? _c2 : _b3.reactions = []).push(reaction);
+        }
+      }
+    } else if (!is_fork && deps !== null && skipped_deps < deps.length) {
+      remove_reactions(reaction, skipped_deps);
+      deps.length = skipped_deps;
+    }
+    if (is_runes() && untracked_writes !== null && !untracking && deps !== null && (reaction.f & (DERIVED | MAYBE_DIRTY | DIRTY)) === 0) {
+      for (i = 0; i < /** @type {Source[]} */
+      untracked_writes.length; i++) {
+        schedule_possible_effect_self_invalidation(
+          untracked_writes[i],
+          /** @type {Effect} */
+          reaction
+        );
+      }
+    }
+    if (previous_reaction !== null && previous_reaction !== reaction) {
+      read_version++;
+      if (previous_reaction.deps !== null) {
+        for (let i2 = 0; i2 < previous_skipped_deps; i2 += 1) {
+          previous_reaction.deps[i2].rv = read_version;
+        }
+      }
+      if (previous_deps !== null) {
+        for (const dep of previous_deps) {
+          dep.rv = read_version;
+        }
+      }
+      if (untracked_writes !== null) {
+        if (previous_untracked_writes === null) {
+          previous_untracked_writes = untracked_writes;
+        } else {
+          previous_untracked_writes.push(.../** @type {Source[]} */
+          untracked_writes);
+        }
+      }
+    }
+    if ((reaction.f & ERROR_VALUE) !== 0) {
+      reaction.f ^= ERROR_VALUE;
+    }
+    return result;
+  } catch (error) {
+    return handle_error(error);
+  } finally {
+    reaction.f ^= REACTION_IS_UPDATING;
+    new_deps = previous_deps;
+    skipped_deps = previous_skipped_deps;
+    untracked_writes = previous_untracked_writes;
+    active_reaction = previous_reaction;
+    current_sources = previous_sources;
+    set_component_context(previous_component_context);
+    untracking = previous_untracking;
+    update_version = previous_update_version;
+  }
+}
+function remove_reaction(signal, dependency) {
+  let reactions = dependency.reactions;
+  if (reactions !== null) {
+    var index2 = index_of.call(reactions, signal);
+    if (index2 !== -1) {
+      var new_length = reactions.length - 1;
+      if (new_length === 0) {
+        reactions = dependency.reactions = null;
+      } else {
+        reactions[index2] = reactions[new_length];
+        reactions.pop();
+      }
+    }
+  }
+  if (reactions === null && (dependency.f & DERIVED) !== 0 && // Destroying a child effect while updating a parent effect can cause a dependency to appear
+  // to be unused, when in fact it is used by the currently-updating parent. Checking `new_deps`
+  // allows us to skip the expensive work of disconnecting and immediately reconnecting it
+  (new_deps === null || !includes.call(new_deps, dependency))) {
+    var derived2 = (
+      /** @type {Derived} */
+      dependency
+    );
+    if ((derived2.f & CONNECTED) !== 0) {
+      derived2.f ^= CONNECTED;
+      derived2.f &= ~WAS_MARKED;
+    }
+    if (derived2.v !== UNINITIALIZED) {
+      update_derived_status(derived2);
+    }
+    freeze_derived_effects(derived2);
+    remove_reactions(derived2, 0);
+  }
+}
+function remove_reactions(signal, start_index) {
+  var dependencies = signal.deps;
+  if (dependencies === null)
+    return;
+  for (var i = start_index; i < dependencies.length; i++) {
+    remove_reaction(signal, dependencies[i]);
+  }
+}
+function update_effect(effect2) {
+  var _a5;
+  var flags2 = effect2.f;
+  if ((flags2 & DESTROYED) !== 0) {
+    return;
+  }
+  set_signal_status(effect2, CLEAN);
+  var previous_effect = active_effect;
+  var was_updating_effect = is_updating_effect;
+  active_effect = effect2;
+  is_updating_effect = true;
+  if (dev_fallback_default) {
+    var previous_component_fn = dev_current_component_function;
+    set_dev_current_component_function(effect2.component_function);
+    var previous_stack = (
+      /** @type {any} */
+      dev_stack
+    );
+    set_dev_stack((_a5 = effect2.dev_stack) != null ? _a5 : dev_stack);
+  }
+  try {
+    if ((flags2 & (BLOCK_EFFECT | MANAGED_EFFECT)) !== 0) {
+      destroy_block_effect_children(effect2);
+    } else {
+      destroy_effect_children(effect2);
+    }
+    execute_effect_teardown(effect2);
+    var teardown2 = update_reaction(effect2);
+    effect2.teardown = typeof teardown2 === "function" ? teardown2 : null;
+    effect2.wv = write_version;
+    if (dev_fallback_default && tracing_mode_flag && (effect2.f & DIRTY) !== 0 && effect2.deps !== null) {
+      for (var dep of effect2.deps) {
+        if (dep.set_during_effect) {
+          dep.wv = increment_write_version();
+          dep.set_during_effect = false;
+        }
+      }
+    }
+  } finally {
+    is_updating_effect = was_updating_effect;
+    active_effect = previous_effect;
+    if (dev_fallback_default) {
+      set_dev_current_component_function(previous_component_fn);
+      set_dev_stack(previous_stack);
+    }
+  }
+}
+function get2(signal) {
+  var _a5, _b3, _c2;
+  var flags2 = signal.f;
+  var is_derived = (flags2 & DERIVED) !== 0;
+  (_a5 = captured_signals) == null ? void 0 : _a5.add(signal);
+  if (active_reaction !== null && !untracking) {
+    var destroyed = active_effect !== null && (active_effect.f & DESTROYED) !== 0;
+    if (!destroyed && (current_sources === null || !includes.call(current_sources, signal))) {
+      var deps = active_reaction.deps;
+      if ((active_reaction.f & REACTION_IS_UPDATING) !== 0) {
+        if (signal.rv < read_version) {
+          signal.rv = read_version;
+          if (new_deps === null && deps !== null && deps[skipped_deps] === signal) {
+            skipped_deps++;
+          } else if (new_deps === null) {
+            new_deps = [signal];
+          } else {
+            new_deps.push(signal);
+          }
+        }
+      } else {
+        ((_b3 = active_reaction.deps) != null ? _b3 : active_reaction.deps = []).push(signal);
+        var reactions = signal.reactions;
+        if (reactions === null) {
+          signal.reactions = [active_reaction];
+        } else if (!includes.call(reactions, active_reaction)) {
+          reactions.push(active_reaction);
+        }
+      }
+    }
+  }
+  if (dev_fallback_default) {
+    if (!untracking && reactivity_loss_tracker && !reactivity_loss_tracker.warned && (reactivity_loss_tracker.effect.f & REACTION_IS_UPDATING) === 0 && !reactivity_loss_tracker.effect_deps.has(signal)) {
+      reactivity_loss_tracker.warned = true;
+      await_reactivity_loss(
+        /** @type {string} */
+        signal.label
+      );
+      var trace2 = get_error("traced at");
+      if (trace2)
+        console.warn(trace2);
+    }
+    recent_async_deriveds.delete(signal);
+    if (tracing_mode_flag && !untracking && tracing_expressions !== null && active_reaction !== null && tracing_expressions.reaction === active_reaction) {
+      if (signal.trace) {
+        signal.trace();
+      } else {
+        trace2 = get_error("traced at");
+        if (trace2) {
+          var entry = tracing_expressions.entries.get(signal);
+          if (entry === void 0) {
+            entry = { traces: [] };
+            tracing_expressions.entries.set(signal, entry);
+          }
+          var last = entry.traces[entry.traces.length - 1];
+          if (trace2.stack !== (last == null ? void 0 : last.stack)) {
+            entry.traces.push(trace2);
+          }
+        }
+      }
+    }
+  }
+  if (is_destroying_effect && old_values.has(signal)) {
+    return old_values.get(signal);
+  }
+  if (is_derived) {
+    var derived2 = (
+      /** @type {Derived} */
+      signal
+    );
+    if (is_destroying_effect) {
+      var value = derived2.v;
+      if ((derived2.f & CLEAN) === 0 && derived2.reactions !== null || depends_on_old_values(derived2)) {
+        value = execute_derived(derived2);
+      }
+      old_values.set(derived2, value);
+      return value;
+    }
+    var should_connect = (derived2.f & CONNECTED) === 0 && !untracking && active_reaction !== null && (is_updating_effect || (active_reaction.f & CONNECTED) !== 0);
+    var is_new = (derived2.f & REACTION_RAN) === 0;
+    if (is_dirty(derived2)) {
+      if (should_connect) {
+        derived2.f |= CONNECTED;
+      }
+      update_derived(derived2);
+    }
+    if (should_connect && !is_new) {
+      unfreeze_derived_effects(derived2);
+      reconnect(derived2);
+    }
+  }
+  if ((_c2 = batch_values) == null ? void 0 : _c2.has(signal)) {
+    return batch_values.get(signal);
+  }
+  if ((signal.f & ERROR_VALUE) !== 0) {
+    throw signal.v;
+  }
+  return signal.v;
+}
+function reconnect(derived2) {
+  var _a5;
+  derived2.f |= CONNECTED;
+  if (derived2.deps === null)
+    return;
+  for (const dep of derived2.deps) {
+    ((_a5 = dep.reactions) != null ? _a5 : dep.reactions = []).push(derived2);
+    if ((dep.f & DERIVED) !== 0 && (dep.f & CONNECTED) === 0) {
+      unfreeze_derived_effects(
+        /** @type {Derived} */
+        dep
+      );
+      reconnect(
+        /** @type {Derived} */
+        dep
+      );
+    }
+  }
+}
+function depends_on_old_values(derived2) {
+  if (derived2.v === UNINITIALIZED)
+    return true;
+  if (derived2.deps === null)
+    return false;
+  for (const dep of derived2.deps) {
+    if (old_values.has(dep)) {
+      return true;
+    }
+    if ((dep.f & DERIVED) !== 0 && depends_on_old_values(
+      /** @type {Derived} */
+      dep
+    )) {
+      return true;
+    }
+  }
+  return false;
+}
+function untrack(fn) {
+  var previous_untracking = untracking;
+  try {
+    untracking = true;
+    return fn();
+  } finally {
+    untracking = previous_untracking;
+  }
+}
+
+// node_modules/svelte/src/utils.js
+var DOM_BOOLEAN_ATTRIBUTES = [
+  "allowfullscreen",
+  "async",
+  "autofocus",
+  "autoplay",
+  "checked",
+  "controls",
+  "default",
+  "disabled",
+  "formnovalidate",
+  "indeterminate",
+  "inert",
+  "ismap",
+  "loop",
+  "multiple",
+  "muted",
+  "nomodule",
+  "novalidate",
+  "open",
+  "playsinline",
+  "readonly",
+  "required",
+  "reversed",
+  "seamless",
+  "selected",
+  "webkitdirectory",
+  "defer",
+  "disablepictureinpicture",
+  "disableremoteplayback"
+];
+var DOM_PROPERTIES = [
+  ...DOM_BOOLEAN_ATTRIBUTES,
+  "formNoValidate",
+  "isMap",
+  "noModule",
+  "playsInline",
+  "readOnly",
+  "value",
+  "volume",
+  "defaultValue",
+  "defaultChecked",
+  "srcObject",
+  "noValidate",
+  "allowFullscreen",
+  "disablePictureInPicture",
+  "disableRemotePlayback"
+];
+var PASSIVE_EVENTS = ["touchstart", "touchmove"];
+function is_passive_event(name) {
+  return PASSIVE_EVENTS.includes(name);
+}
+var STATE_CREATION_RUNES = (
+  /** @type {const} */
+  [
+    "$state",
+    "$state.raw",
+    "$derived",
+    "$derived.by"
+  ]
+);
+var RUNES = (
+  /** @type {const} */
+  [
+    ...STATE_CREATION_RUNES,
+    "$state.eager",
+    "$state.snapshot",
+    "$props",
+    "$props.id",
+    "$bindable",
+    "$effect",
+    "$effect.pre",
+    "$effect.tracking",
+    "$effect.root",
+    "$effect.pending",
+    "$inspect",
+    "$inspect().with",
+    "$inspect.trace",
+    "$host"
+  ]
+);
+
+// node_modules/svelte/src/internal/client/dom/elements/events.js
+var event_symbol = Symbol("events");
+var all_registered_events = /* @__PURE__ */ new Set();
+var root_event_handles = /* @__PURE__ */ new Set();
+function delegated(event_name, element2, handler) {
+  var _a5;
+  ((_a5 = element2[event_symbol]) != null ? _a5 : element2[event_symbol] = {})[event_name] = handler;
+}
+function delegate(events) {
+  for (var i = 0; i < events.length; i++) {
+    all_registered_events.add(events[i]);
+  }
+  for (var fn of root_event_handles) {
+    fn(events);
+  }
+}
+var last_propagated_event = null;
+function handle_event_propagation(event2) {
+  var _a5, _b3;
+  var handler_element = this;
+  var owner_document = (
+    /** @type {Node} */
+    handler_element.ownerDocument
+  );
+  var event_name = event2.type;
+  var path = ((_a5 = event2.composedPath) == null ? void 0 : _a5.call(event2)) || [];
+  var current_target = (
+    /** @type {null | Element} */
+    path[0] || event2.target
+  );
+  last_propagated_event = event2;
+  var path_idx = 0;
+  var handled_at = last_propagated_event === event2 && event2[event_symbol];
+  if (handled_at) {
+    var at_idx = path.indexOf(handled_at);
+    if (at_idx !== -1 && (handler_element === document || handler_element === /** @type {any} */
+    window)) {
+      event2[event_symbol] = handler_element;
+      return;
+    }
+    var handler_idx = path.indexOf(handler_element);
+    if (handler_idx === -1) {
+      return;
+    }
+    if (at_idx <= handler_idx) {
+      path_idx = at_idx;
+    }
+  }
+  current_target = /** @type {Element} */
+  path[path_idx] || event2.target;
+  if (current_target === handler_element)
+    return;
+  define_property(event2, "currentTarget", {
+    configurable: true,
+    get() {
+      return current_target || owner_document;
+    }
+  });
+  var previous_reaction = active_reaction;
+  var previous_effect = active_effect;
+  set_active_reaction(null);
+  set_active_effect(null);
+  try {
+    var throw_error;
+    var other_errors = [];
+    while (current_target !== null) {
+      var parent_element = current_target.assignedSlot || current_target.parentNode || /** @type {any} */
+      current_target.host || null;
+      try {
+        var delegated2 = (_b3 = current_target[event_symbol]) == null ? void 0 : _b3[event_name];
+        if (delegated2 != null && (!/** @type {any} */
+        current_target.disabled || // DOM could've been updated already by the time this is reached, so we check this as well
+        // -> the target could not have been disabled because it emits the event in the first place
+        event2.target === current_target)) {
+          delegated2.call(current_target, event2);
+        }
+      } catch (error) {
+        if (throw_error) {
+          other_errors.push(error);
+        } else {
+          throw_error = error;
+        }
+      }
+      if (event2.cancelBubble || parent_element === handler_element || parent_element === null) {
+        break;
+      }
+      current_target = parent_element;
+    }
+    if (throw_error) {
+      for (let error of other_errors) {
+        queueMicrotask(() => {
+          throw error;
+        });
+      }
+      throw throw_error;
+    }
+  } finally {
+    event2[event_symbol] = handler_element;
+    delete event2.currentTarget;
+    set_active_reaction(previous_reaction);
+    set_active_effect(previous_effect);
+  }
+}
+
+// node_modules/svelte/src/internal/client/dom/reconciler.js
+var _a3;
+var policy = (
+  // We gotta write it like this because after downleveling the pure comment may end up in the wrong location
+  ((_a3 = globalThis == null ? void 0 : globalThis.window) == null ? void 0 : _a3.trustedTypes) && /* @__PURE__ */ globalThis.window.trustedTypes.createPolicy("svelte-trusted-html", {
+    /** @param {string} html */
+    createHTML: (html2) => {
+      return html2;
+    }
+  })
+);
+function create_trusted_html(html2) {
+  var _a5;
+  return (
+    /** @type {string} */
+    (_a5 = policy == null ? void 0 : policy.createHTML(html2)) != null ? _a5 : html2
+  );
+}
+function create_fragment_from_html(html2) {
+  var elem = create_element("template");
+  elem.innerHTML = create_trusted_html(html2.replaceAll("<!>", "<!---->"));
+  return elem.content;
+}
+
+// node_modules/svelte/src/internal/client/dom/template.js
+function assign_nodes(start, end) {
+  var effect2 = (
+    /** @type {Effect} */
+    active_effect
+  );
+  if (effect2.nodes === null) {
+    effect2.nodes = { start, end, a: null, t: null };
+  }
+}
+function from_html(content, flags2) {
+  var is_fragment = (flags2 & TEMPLATE_FRAGMENT) !== 0;
+  var use_import_node = (flags2 & TEMPLATE_USE_IMPORT_NODE) !== 0;
+  var node;
+  var has_start = !content.startsWith("<!>");
+  return () => {
+    if (hydrating) {
+      assign_nodes(hydrate_node, null);
+      return hydrate_node;
+    }
+    if (node === void 0) {
+      node = create_fragment_from_html(has_start ? content : "<!>" + content);
+      if (!is_fragment)
+        node = /** @type {TemplateNode} */
+        get_first_child(node);
+    }
+    var clone = (
+      /** @type {TemplateNode} */
+      use_import_node || is_firefox ? document.importNode(node, true) : node.cloneNode(true)
+    );
+    if (is_fragment) {
+      var start = (
+        /** @type {TemplateNode} */
+        get_first_child(clone)
+      );
+      var end = (
+        /** @type {TemplateNode} */
+        clone.lastChild
+      );
+      assign_nodes(start, end);
+    } else {
+      assign_nodes(clone, clone);
+    }
+    return clone;
+  };
+}
+function append(anchor, dom) {
+  if (hydrating) {
+    var effect2 = (
+      /** @type {Effect & { nodes: EffectNodes }} */
+      active_effect
+    );
+    if ((effect2.f & REACTION_RAN) === 0 || effect2.nodes.end === null) {
+      effect2.nodes.end = hydrate_node;
+    }
+    hydrate_next();
+    return;
+  }
+  if (anchor === null) {
+    return;
+  }
+  anchor.before(
+    /** @type {Node} */
+    dom
+  );
+}
+
+// node_modules/svelte/src/internal/client/render.js
+var should_intro = true;
+function mount(component2, options) {
+  return _mount(component2, options);
+}
+function hydrate(component2, options) {
+  var _a5;
+  init_operations();
+  options.intro = (_a5 = options.intro) != null ? _a5 : false;
+  const target = options.target;
+  const was_hydrating = hydrating;
+  const previous_hydrate_node = hydrate_node;
+  try {
+    var anchor = get_first_child(target);
+    while (anchor && (anchor.nodeType !== COMMENT_NODE || /** @type {Comment} */
+    anchor.data !== HYDRATION_START)) {
+      anchor = get_next_sibling(anchor);
+    }
+    if (!anchor) {
+      throw HYDRATION_ERROR;
+    }
+    set_hydrating(true);
+    set_hydrate_node(
+      /** @type {Comment} */
+      anchor
+    );
+    const instance = _mount(component2, { ...options, anchor });
+    set_hydrating(false);
+    return (
+      /**  @type {Exports} */
+      instance
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message.split("\n").some((line) => line.startsWith("https://svelte.dev/e/"))) {
+      throw error;
+    }
+    if (error !== HYDRATION_ERROR) {
+      console.warn("Failed to hydrate: ", error);
+    }
+    if (options.recover === false) {
+      hydration_failed();
+    }
+    init_operations();
+    clear_text_content(target);
+    set_hydrating(false);
+    return mount(component2, options);
+  } finally {
+    set_hydrating(was_hydrating);
+    set_hydrate_node(previous_hydrate_node);
+  }
+}
+var listeners = /* @__PURE__ */ new Map();
+function _mount(Component, { target, anchor, props = {}, events, context, intro = true, transformError }) {
+  init_operations();
+  var component2 = void 0;
+  var unmount2 = component_root(() => {
+    var anchor_node = anchor != null ? anchor : target.appendChild(create_text());
+    boundary(
+      /** @type {TemplateNode} */
+      anchor_node,
+      {
+        pending: () => {
+        }
+      },
+      (anchor_node2) => {
+        push({});
+        var ctx = (
+          /** @type {ComponentContext} */
+          component_context
+        );
+        if (context)
+          ctx.c = context;
+        if (events) {
+          props.$$events = events;
+        }
+        if (hydrating) {
+          assign_nodes(
+            /** @type {TemplateNode} */
+            anchor_node2,
+            null
+          );
+        }
+        should_intro = intro;
+        component2 = Component(anchor_node2, props) || {};
+        should_intro = true;
+        if (hydrating) {
+          active_effect.nodes.end = hydrate_node;
+          if (hydrate_node === null || hydrate_node.nodeType !== COMMENT_NODE || /** @type {Comment} */
+          hydrate_node.data !== HYDRATION_END) {
+            hydration_mismatch();
+            throw HYDRATION_ERROR;
+          }
+        }
+        pop();
+      },
+      transformError
+    );
+    var registered_events = /* @__PURE__ */ new Set();
+    var event_handle = (events2) => {
+      for (var i = 0; i < events2.length; i++) {
+        var event_name = events2[i];
+        if (registered_events.has(event_name))
+          continue;
+        registered_events.add(event_name);
+        var passive2 = is_passive_event(event_name);
+        for (const node of [target, document]) {
+          var counts = listeners.get(node);
+          if (counts === void 0) {
+            counts = /* @__PURE__ */ new Map();
+            listeners.set(node, counts);
+          }
+          var count = counts.get(event_name);
+          if (count === void 0) {
+            node.addEventListener(event_name, handle_event_propagation, { passive: passive2 });
+            counts.set(event_name, 1);
+          } else {
+            counts.set(event_name, count + 1);
+          }
+        }
+      }
+    };
+    event_handle(array_from(all_registered_events));
+    root_event_handles.add(event_handle);
+    return () => {
+      var _a5;
+      for (var event_name of registered_events) {
+        for (const node of [target, document]) {
+          var counts = (
+            /** @type {Map<string, number>} */
+            listeners.get(node)
+          );
+          var count = (
+            /** @type {number} */
+            counts.get(event_name)
+          );
+          if (--count == 0) {
+            node.removeEventListener(event_name, handle_event_propagation);
+            counts.delete(event_name);
+            if (counts.size === 0) {
+              listeners.delete(node);
+            }
+          } else {
+            counts.set(event_name, count);
+          }
+        }
+      }
+      root_event_handles.delete(event_handle);
+      if (anchor_node !== anchor) {
+        (_a5 = anchor_node.parentNode) == null ? void 0 : _a5.removeChild(anchor_node);
+      }
+    };
+  });
+  mounted_components.set(component2, unmount2);
+  return component2;
+}
+var mounted_components = /* @__PURE__ */ new WeakMap();
+function unmount(component2, options) {
+  const fn = mounted_components.get(component2);
+  if (fn) {
+    mounted_components.delete(component2);
+    return fn(options);
+  }
+  if (dev_fallback_default) {
+    if (STATE_SYMBOL in component2) {
+      state_proxy_unmount();
+    } else {
+      lifecycle_double_unmount();
+    }
+  }
+  return Promise.resolve();
+}
+
+// node_modules/svelte/src/internal/client/dom/blocks/branches.js
+var _batches, _onscreen, _offscreen, _outroing, _transition, _commit2, _discard;
+var BranchManager = class {
+  /**
+   * @param {TemplateNode} anchor
+   * @param {boolean} transition
+   */
+  constructor(anchor, transition2 = true) {
+    /** @type {TemplateNode} */
+    __publicField(this, "anchor");
+    /** @type {Map<Batch, Key>} */
+    __privateAdd(this, _batches, /* @__PURE__ */ new Map());
+    /**
+     * Map of keys to effects that are currently rendered in the DOM.
+     * These effects are visible and actively part of the document tree.
+     * Example:
+     * ```
+     * {#if condition}
+     * 	foo
+     * {:else}
+     * 	bar
+     * {/if}
+     * ```
+     * Can result in the entries `true->Effect` and `false->Effect`
+     * @type {Map<Key, Effect>}
+     */
+    __privateAdd(this, _onscreen, /* @__PURE__ */ new Map());
+    /**
+     * Similar to #onscreen with respect to the keys, but contains branches that are not yet
+     * in the DOM, because their insertion is deferred.
+     * @type {Map<Key, Branch>}
+     */
+    __privateAdd(this, _offscreen, /* @__PURE__ */ new Map());
+    /**
+     * Keys of effects that are currently outroing
+     * @type {Set<Key>}
+     */
+    __privateAdd(this, _outroing, /* @__PURE__ */ new Set());
+    /**
+     * Whether to pause (i.e. outro) on change, or destroy immediately.
+     * This is necessary for `<svelte:element>`
+     */
+    __privateAdd(this, _transition, true);
+    /**
+     * @param {Batch} batch
+     */
+    __privateAdd(this, _commit2, (batch) => {
+      if (!__privateGet(this, _batches).has(batch))
+        return;
+      var key2 = (
+        /** @type {Key} */
+        __privateGet(this, _batches).get(batch)
+      );
+      var onscreen = __privateGet(this, _onscreen).get(key2);
+      if (onscreen) {
+        resume_effect(onscreen);
+        __privateGet(this, _outroing).delete(key2);
+      } else {
+        var offscreen = __privateGet(this, _offscreen).get(key2);
+        if (offscreen) {
+          __privateGet(this, _onscreen).set(key2, offscreen.effect);
+          __privateGet(this, _offscreen).delete(key2);
+          if (dev_fallback_default) {
+            offscreen.fragment.lastChild[HMR_ANCHOR] = this.anchor;
+          }
+          offscreen.fragment.lastChild.remove();
+          this.anchor.before(offscreen.fragment);
+          onscreen = offscreen.effect;
+        }
+      }
+      for (const [b, k] of __privateGet(this, _batches)) {
+        __privateGet(this, _batches).delete(b);
+        if (b === batch) {
+          break;
+        }
+        const offscreen2 = __privateGet(this, _offscreen).get(k);
+        if (offscreen2) {
+          destroy_effect(offscreen2.effect);
+          __privateGet(this, _offscreen).delete(k);
+        }
+      }
+      for (const [k, effect2] of __privateGet(this, _onscreen)) {
+        if (k === key2 || __privateGet(this, _outroing).has(k))
+          continue;
+        const on_destroy = () => {
+          const keys = Array.from(__privateGet(this, _batches).values());
+          if (keys.includes(k)) {
+            var fragment = document.createDocumentFragment();
+            move_effect(effect2, fragment);
+            fragment.append(create_text());
+            __privateGet(this, _offscreen).set(k, { effect: effect2, fragment });
+          } else {
+            destroy_effect(effect2);
+          }
+          __privateGet(this, _outroing).delete(k);
+          __privateGet(this, _onscreen).delete(k);
+        };
+        if (__privateGet(this, _transition) || !onscreen) {
+          __privateGet(this, _outroing).add(k);
+          pause_effect(effect2, on_destroy, false);
+        } else {
+          on_destroy();
+        }
+      }
+    });
+    /**
+     * @param {Batch} batch
+     */
+    __privateAdd(this, _discard, (batch) => {
+      __privateGet(this, _batches).delete(batch);
+      const keys = Array.from(__privateGet(this, _batches).values());
+      for (const [k, branch2] of __privateGet(this, _offscreen)) {
+        if (!keys.includes(k)) {
+          destroy_effect(branch2.effect);
+          __privateGet(this, _offscreen).delete(k);
+        }
+      }
+    });
+    this.anchor = anchor;
+    __privateSet(this, _transition, transition2);
+  }
+  /**
+   *
+   * @param {any} key
+   * @param {null | ((target: TemplateNode) => void)} fn
+   */
+  ensure(key2, fn) {
+    var batch = (
+      /** @type {Batch} */
+      current_batch
+    );
+    var defer = should_defer_append();
+    if (fn && !__privateGet(this, _onscreen).has(key2) && !__privateGet(this, _offscreen).has(key2)) {
+      if (defer) {
+        var fragment = document.createDocumentFragment();
+        var target = create_text();
+        fragment.append(target);
+        __privateGet(this, _offscreen).set(key2, {
+          effect: branch(() => fn(target)),
+          fragment
+        });
+      } else {
+        __privateGet(this, _onscreen).set(
+          key2,
+          branch(() => fn(this.anchor))
+        );
+      }
+    }
+    __privateGet(this, _batches).set(batch, key2);
+    if (defer) {
+      for (const [k, effect2] of __privateGet(this, _onscreen)) {
+        if (k === key2) {
+          batch.unskip_effect(effect2);
+        } else {
+          batch.skip_effect(effect2);
+        }
+      }
+      for (const [k, branch2] of __privateGet(this, _offscreen)) {
+        if (k === key2) {
+          batch.unskip_effect(branch2.effect);
+        } else {
+          batch.skip_effect(branch2.effect);
+        }
+      }
+      batch.oncommit(__privateGet(this, _commit2));
+      batch.ondiscard(__privateGet(this, _discard));
+    } else {
+      if (hydrating) {
+        this.anchor = hydrate_node;
+      }
+      __privateGet(this, _commit2).call(this, batch);
+    }
+  }
+};
+_batches = new WeakMap();
+_onscreen = new WeakMap();
+_offscreen = new WeakMap();
+_outroing = new WeakMap();
+_transition = new WeakMap();
+_commit2 = new WeakMap();
+_discard = new WeakMap();
+
+// node_modules/svelte/src/internal/client/dom/blocks/if.js
+function if_block(node, fn, elseif = false) {
+  var marker;
+  if (hydrating) {
+    marker = hydrate_node;
+    hydrate_next();
+  }
+  var branches = new BranchManager(node);
+  var flags2 = elseif ? EFFECT_TRANSPARENT : 0;
+  function update_branch(key2, fn2) {
+    if (hydrating) {
+      var data = read_hydration_instruction(
+        /** @type {TemplateNode} */
+        marker
+      );
+      if (key2 !== parseInt(data.substring(1))) {
+        var anchor = skip_nodes();
+        set_hydrate_node(anchor);
+        branches.anchor = anchor;
+        set_hydrating(false);
+        branches.ensure(key2, fn2);
+        set_hydrating(true);
+        return;
+      }
+    }
+    branches.ensure(key2, fn2);
+  }
+  block(() => {
+    var has_branch = false;
+    fn((fn2, key2 = 0) => {
+      has_branch = true;
+      update_branch(key2, fn2);
+    });
+    if (!has_branch) {
+      update_branch(-1, null);
+    }
+  }, flags2);
+}
+
+// node_modules/svelte/src/internal/client/dom/blocks/key.js
+var NAN = Symbol("NaN");
+
+// node_modules/svelte/src/internal/shared/attributes.js
+var whitespace = [..." 	\n\r\f\xA0\v\uFEFF"];
+function to_class(value, hash2, directives) {
+  var classname = value == null ? "" : "" + value;
+  if (hash2) {
+    classname = classname ? classname + " " + hash2 : hash2;
+  }
+  if (directives) {
+    for (var key2 of Object.keys(directives)) {
+      if (directives[key2]) {
+        classname = classname ? classname + " " + key2 : key2;
+      } else if (classname.length) {
+        var len = key2.length;
+        var a = 0;
+        while ((a = classname.indexOf(key2, a)) >= 0) {
+          var b = a + len;
+          if ((a === 0 || whitespace.includes(classname[a - 1])) && (b === classname.length || whitespace.includes(classname[b]))) {
+            classname = (a === 0 ? "" : classname.substring(0, a)) + classname.substring(b + 1);
+          } else {
+            a = b;
+          }
+        }
+      }
+    }
+  }
+  return classname === "" ? null : classname;
+}
+
+// node_modules/svelte/src/internal/client/dom/elements/class.js
+function set_class(dom, is_html, value, hash2, prev_classes, next_classes) {
+  var prev = dom.__className;
+  if (hydrating || prev !== value || prev === void 0) {
+    var next_class_name = to_class(value, hash2, next_classes);
+    if (!hydrating || next_class_name !== dom.getAttribute("class")) {
+      if (next_class_name == null) {
+        dom.removeAttribute("class");
+      } else if (is_html) {
+        dom.className = next_class_name;
+      } else {
+        dom.setAttribute("class", next_class_name);
+      }
+    }
+    dom.__className = value;
+  } else if (next_classes && prev_classes !== next_classes) {
+    for (var key2 in next_classes) {
+      var is_present = !!next_classes[key2];
+      if (prev_classes == null || is_present !== !!prev_classes[key2]) {
+        dom.classList.toggle(key2, is_present);
+      }
+    }
+  }
+  return next_classes;
+}
+
+// node_modules/svelte/src/internal/client/dom/elements/attributes.js
+var CLASS = Symbol("class");
+var STYLE = Symbol("style");
+var IS_CUSTOM_ELEMENT = Symbol("is custom element");
+var IS_HTML = Symbol("is html");
+
+// node_modules/svelte/src/internal/client/dom/elements/bindings/size.js
+var _listeners, _observer, _options, _getObserver, getObserver_fn;
+var _ResizeObserverSingleton = class {
+  /** @param {ResizeObserverOptions} options */
+  constructor(options) {
+    __privateAdd(this, _getObserver);
+    /** */
+    __privateAdd(this, _listeners, /* @__PURE__ */ new WeakMap());
+    /** @type {ResizeObserver | undefined} */
+    __privateAdd(this, _observer, void 0);
+    /** @type {ResizeObserverOptions} */
+    __privateAdd(this, _options, void 0);
+    __privateSet(this, _options, options);
+  }
+  /**
+   * @param {Element} element
+   * @param {(entry: ResizeObserverEntry) => any} listener
+   */
+  observe(element2, listener) {
+    var listeners2 = __privateGet(this, _listeners).get(element2) || /* @__PURE__ */ new Set();
+    listeners2.add(listener);
+    __privateGet(this, _listeners).set(element2, listeners2);
+    __privateMethod(this, _getObserver, getObserver_fn).call(this).observe(element2, __privateGet(this, _options));
+    return () => {
+      var listeners3 = __privateGet(this, _listeners).get(element2);
+      listeners3.delete(listener);
+      if (listeners3.size === 0) {
+        __privateGet(this, _listeners).delete(element2);
+        __privateGet(this, _observer).unobserve(element2);
+      }
+    };
+  }
+};
+var ResizeObserverSingleton = _ResizeObserverSingleton;
+_listeners = new WeakMap();
+_observer = new WeakMap();
+_options = new WeakMap();
+_getObserver = new WeakSet();
+getObserver_fn = function() {
+  var _a5;
+  return (_a5 = __privateGet(this, _observer)) != null ? _a5 : __privateSet(this, _observer, new ResizeObserver(
+    /** @param {any} entries */
+    (entries) => {
+      for (var entry of entries) {
+        _ResizeObserverSingleton.entries.set(entry.target, entry);
+        for (var listener of __privateGet(this, _listeners).get(entry.target) || []) {
+          listener(entry);
+        }
+      }
+    }
+  ));
+};
+/** @static */
+__publicField(ResizeObserverSingleton, "entries", /* @__PURE__ */ new WeakMap());
+
+// node_modules/svelte/src/internal/client/reactivity/props.js
+function prop(props, key2, flags2, fallback2) {
+  var _a5, _b3;
+  var runes = !legacy_mode_flag || (flags2 & PROPS_IS_RUNES) !== 0;
+  var bindable = (flags2 & PROPS_IS_BINDABLE) !== 0;
+  var lazy = (flags2 & PROPS_IS_LAZY_INITIAL) !== 0;
+  var fallback_value = (
+    /** @type {V} */
+    fallback2
+  );
+  var fallback_dirty = true;
+  var get_fallback = () => {
+    if (fallback_dirty) {
+      fallback_dirty = false;
+      fallback_value = lazy ? untrack(
+        /** @type {() => V} */
+        fallback2
+      ) : (
+        /** @type {V} */
+        fallback2
+      );
+    }
+    return fallback_value;
+  };
+  let setter;
+  if (bindable) {
+    var is_entry_props = STATE_SYMBOL in props || LEGACY_PROPS in props;
+    setter = (_b3 = (_a5 = get_descriptor(props, key2)) == null ? void 0 : _a5.set) != null ? _b3 : is_entry_props && key2 in props ? (v) => props[key2] = v : void 0;
+  }
+  var initial_value;
+  var is_store_sub = false;
+  if (bindable) {
+    [initial_value, is_store_sub] = capture_store_binding(() => (
+      /** @type {V} */
+      props[key2]
+    ));
+  } else {
+    initial_value = /** @type {V} */
+    props[key2];
+  }
+  if (initial_value === void 0 && fallback2 !== void 0) {
+    initial_value = get_fallback();
+    if (setter) {
+      if (runes)
+        props_invalid_value(key2);
+      setter(initial_value);
+    }
+  }
+  var getter;
+  if (runes) {
+    getter = () => {
+      var value = (
+        /** @type {V} */
+        props[key2]
+      );
+      if (value === void 0)
+        return get_fallback();
+      fallback_dirty = true;
+      return value;
+    };
+  } else {
+    getter = () => {
+      var value = (
+        /** @type {V} */
+        props[key2]
+      );
+      if (value !== void 0) {
+        fallback_value = /** @type {V} */
+        void 0;
+      }
+      return value === void 0 ? fallback_value : value;
+    };
+  }
+  if (runes && (flags2 & PROPS_IS_UPDATED) === 0) {
+    return getter;
+  }
+  if (setter) {
+    var legacy_parent = props.$$legacy;
+    return (
+      /** @type {() => V} */
+      function(value, mutation) {
+        if (arguments.length > 0) {
+          if (!runes || !mutation || legacy_parent || is_store_sub) {
+            setter(mutation ? getter() : value);
+          }
+          return value;
+        }
+        return getter();
+      }
+    );
+  }
+  var overridden = false;
+  var d = ((flags2 & PROPS_IS_IMMUTABLE) !== 0 ? derived : derived_safe_equal)(() => {
+    overridden = false;
+    return getter();
+  });
+  if (dev_fallback_default) {
+    d.label = key2;
+  }
+  if (bindable)
+    get2(d);
+  var parent_effect = (
+    /** @type {Effect} */
+    active_effect
+  );
+  return (
+    /** @type {() => V} */
+    function(value, mutation) {
+      if (arguments.length > 0) {
+        const new_value = mutation ? get2(d) : runes && bindable ? proxy(value) : value;
+        set(d, new_value);
+        overridden = true;
+        if (fallback_value !== void 0) {
+          fallback_value = new_value;
+        }
+        return value;
+      }
+      if (is_destroying_effect && overridden || (parent_effect.f & DESTROYED) !== 0) {
+        return d.v;
+      }
+      return get2(d);
+    }
+  );
+}
+
+// node_modules/svelte/src/legacy/legacy-client.js
+function createClassComponent(options) {
+  return new Svelte4Component(options);
+}
+var _events, _instance;
+var Svelte4Component = class {
+  /**
+   * @param {ComponentConstructorOptions & {
+   *  component: any;
+   * }} options
+   */
+  constructor(options) {
+    /** @type {any} */
+    __privateAdd(this, _events, void 0);
+    /** @type {Record<string, any>} */
+    __privateAdd(this, _instance, void 0);
+    var _a5, _b3;
+    var sources = /* @__PURE__ */ new Map();
+    var add_source = (key2, value) => {
+      var s = mutable_source(value, false, false);
+      sources.set(key2, s);
+      return s;
+    };
+    const props = new Proxy(
+      { ...options.props || {}, $$events: {} },
+      {
+        get(target, prop2) {
+          var _a6;
+          return get2((_a6 = sources.get(prop2)) != null ? _a6 : add_source(prop2, Reflect.get(target, prop2)));
+        },
+        has(target, prop2) {
+          var _a6;
+          if (prop2 === LEGACY_PROPS)
+            return true;
+          get2((_a6 = sources.get(prop2)) != null ? _a6 : add_source(prop2, Reflect.get(target, prop2)));
+          return Reflect.has(target, prop2);
+        },
+        set(target, prop2, value) {
+          var _a6;
+          set((_a6 = sources.get(prop2)) != null ? _a6 : add_source(prop2, value), value);
+          return Reflect.set(target, prop2, value);
+        }
+      }
+    );
+    __privateSet(this, _instance, (options.hydrate ? hydrate : mount)(options.component, {
+      target: options.target,
+      anchor: options.anchor,
+      props,
+      context: options.context,
+      intro: (_a5 = options.intro) != null ? _a5 : false,
+      recover: options.recover,
+      transformError: options.transformError
+    }));
+    if (!async_mode_flag && (!((_b3 = options == null ? void 0 : options.props) == null ? void 0 : _b3.$$host) || options.sync === false)) {
+      flushSync();
+    }
+    __privateSet(this, _events, props.$$events);
+    for (const key2 of Object.keys(__privateGet(this, _instance))) {
+      if (key2 === "$set" || key2 === "$destroy" || key2 === "$on")
+        continue;
+      define_property(this, key2, {
+        get() {
+          return __privateGet(this, _instance)[key2];
+        },
+        /** @param {any} value */
+        set(value) {
+          __privateGet(this, _instance)[key2] = value;
+        },
+        enumerable: true
+      });
+    }
+    __privateGet(this, _instance).$set = /** @param {Record<string, any>} next */
+    (next2) => {
+      Object.assign(props, next2);
+    };
+    __privateGet(this, _instance).$destroy = () => {
+      unmount(__privateGet(this, _instance));
+    };
+  }
+  /** @param {Record<string, any>} props */
+  $set(props) {
+    __privateGet(this, _instance).$set(props);
+  }
+  /**
+   * @param {string} event
+   * @param {(...args: any[]) => any} callback
+   * @returns {any}
+   */
+  $on(event2, callback) {
+    __privateGet(this, _events)[event2] = __privateGet(this, _events)[event2] || [];
+    const cb = (...args) => callback.call(this, ...args);
+    __privateGet(this, _events)[event2].push(cb);
+    return () => {
+      __privateGet(this, _events)[event2] = __privateGet(this, _events)[event2].filter(
+        /** @param {any} fn */
+        (fn) => fn !== cb
+      );
+    };
+  }
+  $destroy() {
+    __privateGet(this, _instance).$destroy();
+  }
+};
+_events = new WeakMap();
+_instance = new WeakMap();
+
+// node_modules/svelte/src/internal/client/dom/elements/custom-element.js
+var SvelteElement;
+if (typeof HTMLElement === "function") {
+  SvelteElement = class extends HTMLElement {
+    /**
+     * @param {*} $$componentCtor
+     * @param {*} $$slots
+     * @param {ShadowRootInit | undefined} shadow_root_init
+     */
+    constructor($$componentCtor, $$slots, shadow_root_init) {
+      super();
+      /** The Svelte component constructor */
+      __publicField(this, "$$ctor");
+      /** Slots */
+      __publicField(this, "$$s");
+      /** @type {any} The Svelte component instance */
+      __publicField(this, "$$c");
+      /** Whether or not the custom element is connected */
+      __publicField(this, "$$cn", false);
+      /** @type {Record<string, any>} Component props data */
+      __publicField(this, "$$d", {});
+      /** `true` if currently in the process of reflecting component props back to attributes */
+      __publicField(this, "$$r", false);
+      /** @type {Record<string, CustomElementPropDefinition>} Props definition (name, reflected, type etc) */
+      __publicField(this, "$$p_d", {});
+      /** @type {Record<string, EventListenerOrEventListenerObject[]>} Event listeners */
+      __publicField(this, "$$l", {});
+      /** @type {Map<EventListenerOrEventListenerObject, Function>} Event listener unsubscribe functions */
+      __publicField(this, "$$l_u", /* @__PURE__ */ new Map());
+      /** @type {any} The managed render effect for reflecting attributes */
+      __publicField(this, "$$me");
+      /** @type {ShadowRoot | null} The ShadowRoot of the custom element */
+      __publicField(this, "$$shadowRoot", null);
+      this.$$ctor = $$componentCtor;
+      this.$$s = $$slots;
+      if (shadow_root_init) {
+        this.$$shadowRoot = this.attachShadow(shadow_root_init);
+      }
+    }
+    /**
+     * @param {string} type
+     * @param {EventListenerOrEventListenerObject} listener
+     * @param {boolean | AddEventListenerOptions} [options]
+     */
+    addEventListener(type, listener, options) {
+      this.$$l[type] = this.$$l[type] || [];
+      this.$$l[type].push(listener);
+      if (this.$$c) {
+        const unsub = this.$$c.$on(type, listener);
+        this.$$l_u.set(listener, unsub);
+      }
+      super.addEventListener(type, listener, options);
+    }
+    /**
+     * @param {string} type
+     * @param {EventListenerOrEventListenerObject} listener
+     * @param {boolean | AddEventListenerOptions} [options]
+     */
+    removeEventListener(type, listener, options) {
+      super.removeEventListener(type, listener, options);
+      if (this.$$c) {
+        const unsub = this.$$l_u.get(listener);
+        if (unsub) {
+          unsub();
+          this.$$l_u.delete(listener);
+        }
+      }
+    }
+    async connectedCallback() {
+      this.$$cn = true;
+      if (!this.$$c) {
+        let create_slot = function(name) {
+          return (anchor) => {
+            const slot2 = create_element("slot");
+            if (name !== "default")
+              slot2.name = name;
+            append(anchor, slot2);
+          };
+        };
+        await Promise.resolve();
+        if (!this.$$cn || this.$$c) {
+          return;
+        }
+        const $$slots = {};
+        const existing_slots = get_custom_elements_slots(this);
+        for (const name of this.$$s) {
+          if (name in existing_slots) {
+            if (name === "default" && !this.$$d.children) {
+              this.$$d.children = create_slot(name);
+              $$slots.default = true;
+            } else {
+              $$slots[name] = create_slot(name);
+            }
+          }
+        }
+        for (const attribute of this.attributes) {
+          const name = this.$$g_p(attribute.name);
+          if (!(name in this.$$d)) {
+            this.$$d[name] = get_custom_element_value(name, attribute.value, this.$$p_d, "toProp");
+          }
+        }
+        for (const key2 in this.$$p_d) {
+          if (!(key2 in this.$$d) && this[key2] !== void 0) {
+            this.$$d[key2] = this[key2];
+            delete this[key2];
+          }
+        }
+        this.$$c = createClassComponent({
+          component: this.$$ctor,
+          target: this.$$shadowRoot || this,
+          props: {
+            ...this.$$d,
+            $$slots,
+            $$host: this
+          }
+        });
+        this.$$me = effect_root(() => {
+          render_effect(() => {
+            var _a5;
+            this.$$r = true;
+            for (const key2 of object_keys(this.$$c)) {
+              if (!((_a5 = this.$$p_d[key2]) == null ? void 0 : _a5.reflect))
+                continue;
+              this.$$d[key2] = this.$$c[key2];
+              const attribute_value = get_custom_element_value(
+                key2,
+                this.$$d[key2],
+                this.$$p_d,
+                "toAttribute"
+              );
+              if (attribute_value == null) {
+                this.removeAttribute(this.$$p_d[key2].attribute || key2);
+              } else {
+                this.setAttribute(this.$$p_d[key2].attribute || key2, attribute_value);
+              }
+            }
+            this.$$r = false;
+          });
+        });
+        for (const type in this.$$l) {
+          for (const listener of this.$$l[type]) {
+            const unsub = this.$$c.$on(type, listener);
+            this.$$l_u.set(listener, unsub);
+          }
+        }
+        this.$$l = {};
+      }
+    }
+    // We don't need this when working within Svelte code, but for compatibility of people using this outside of Svelte
+    // and setting attributes through setAttribute etc, this is helpful
+    /**
+     * @param {string} attr
+     * @param {string} _oldValue
+     * @param {string} newValue
+     */
+    attributeChangedCallback(attr2, _oldValue, newValue) {
+      var _a5;
+      if (this.$$r)
+        return;
+      attr2 = this.$$g_p(attr2);
+      this.$$d[attr2] = get_custom_element_value(attr2, newValue, this.$$p_d, "toProp");
+      (_a5 = this.$$c) == null ? void 0 : _a5.$set({ [attr2]: this.$$d[attr2] });
+    }
+    disconnectedCallback() {
+      this.$$cn = false;
+      Promise.resolve().then(() => {
+        if (!this.$$cn && this.$$c) {
+          this.$$c.$destroy();
+          this.$$me();
+          this.$$c = void 0;
+        }
+      });
+    }
+    /**
+     * @param {string} attribute_name
+     */
+    $$g_p(attribute_name) {
+      return object_keys(this.$$p_d).find(
+        (key2) => this.$$p_d[key2].attribute === attribute_name || !this.$$p_d[key2].attribute && key2.toLowerCase() === attribute_name
+      ) || attribute_name;
+    }
+  };
+}
+function get_custom_element_value(prop2, value, props_definition, transform) {
+  var _a5;
+  const type = (_a5 = props_definition[prop2]) == null ? void 0 : _a5.type;
+  value = type === "Boolean" && typeof value !== "boolean" ? value != null : value;
+  if (!transform || !props_definition[prop2]) {
+    return value;
+  } else if (transform === "toAttribute") {
+    switch (type) {
+      case "Object":
+      case "Array":
+        return value == null ? null : JSON.stringify(value);
+      case "Boolean":
+        return value ? "" : null;
+      case "Number":
+        return value == null ? null : value;
+      default:
+        return value;
+    }
+  } else {
+    switch (type) {
+      case "Object":
+      case "Array":
+        return value && JSON.parse(value);
+      case "Boolean":
+        return value;
+      case "Number":
+        return value != null ? +value : value;
+      default:
+        return value;
+    }
+  }
+}
+function get_custom_elements_slots(element2) {
+  const result = {};
+  element2.childNodes.forEach((node) => {
+    result[
+      /** @type {Element} node */
+      node.slot || "default"
+    ] = true;
+  });
+  return result;
+}
+
+// node_modules/svelte/src/index-client.js
+if (dev_fallback_default) {
+  let throw_rune_error = function(rune) {
+    if (!(rune in globalThis)) {
+      let value;
+      Object.defineProperty(globalThis, rune, {
+        configurable: true,
+        // eslint-disable-next-line getter-return
+        get: () => {
+          if (value !== void 0) {
+            return value;
+          }
+          rune_outside_svelte(rune);
+        },
+        set: (v) => {
+          value = v;
+        }
+      });
+    }
+  };
+  throw_rune_error("$state");
+  throw_rune_error("$effect");
+  throw_rune_error("$derived");
+  throw_rune_error("$inspect");
+  throw_rune_error("$props");
+  throw_rune_error("$bindable");
+}
+
+// node_modules/svelte/src/version.js
+var PUBLIC_VERSION = "5";
+
+// node_modules/svelte/src/internal/disclose-version.js
+var _a4, _b2, _c;
+if (typeof window !== "undefined") {
+  ((_c = (_b2 = (_a4 = window.__svelte) != null ? _a4 : window.__svelte = {}).v) != null ? _c : _b2.v = /* @__PURE__ */ new Set()).add(PUBLIC_VERSION);
+}
+
+// src/multiDay.ts
+var import_obsidian8 = require("obsidian");
+function buildFallback(settings) {
+  return {
+    folder: settings.dailyNoteFolderFallback,
+    format: settings.dailyNoteFormatFallback,
+    template: settings.dailyNoteTemplate,
+    templatesByDay: settings.dailyNoteTemplatesByDay,
+    dateLinkFormat: settings.dateLinkFormat,
+    prefixes: settings.prefixes,
+    quotesFile: settings.quotesFile,
+    addCreatedTag: settings.addCreatedTagToFrontmatter
+  };
+}
+async function loadInboxTasks(app, settings) {
+  const path = resolveInboxPath(
+    settings.inboxPath,
+    settings.dailyNoteFolderFallback
+  );
+  if (!path)
+    return { path: "", file: null, tasks: [] };
+  const af = app.vault.getAbstractFileByPath(path);
+  if (!(af instanceof import_obsidian8.TFile))
+    return { path, file: null, tasks: [] };
+  const content = await app.vault.read(af);
+  const all = parseFileTasks(
+    path,
+    content,
+    settings.prefixes,
+    settings.defaultDurationMin
+  );
+  return { path, file: af, tasks: all.filter((t) => !t.checked) };
+}
+async function loadDayWindow(app, settings, anchor, count) {
+  const fallback2 = buildFallback(settings);
+  const start = startOfDay(anchor);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const date = addDays(start, i);
+    const resolved = await resolveDailyNote(app, date, fallback2);
+    let tasks = [];
+    if (resolved.file) {
+      const content = await app.vault.read(resolved.file);
+      tasks = parseFileTasks(
+        resolved.path,
+        content,
+        settings.prefixes,
+        settings.defaultDurationMin
+      );
+    }
+    out.push({ date, path: resolved.path, file: resolved.file, tasks });
+  }
+  return out;
+}
+function summarizeWindow(days, projectColors) {
+  var _a5, _b3, _c2;
+  const allTasks = [];
+  for (const d of days)
+    for (const t of d.tasks)
+      allTasks.push(t);
+  const colorInputs = allTasks.filter((t) => !!t.project).map((t) => ({ project: t.project, subproject: t.subproject }));
+  const colorMap = resolveProjectColors(colorInputs, projectColors);
+  const minutesByKey = /* @__PURE__ */ new Map();
+  for (const t of allTasks) {
+    if (t.startMin === null)
+      continue;
+    const key2 = (_a5 = t.project) != null ? _a5 : "Unassigned";
+    minutesByKey.set(key2, ((_b3 = minutesByKey.get(key2)) != null ? _b3 : 0) + t.durationMin);
+  }
+  const byProject = [];
+  let totalMin = 0;
+  for (const [project, minutes] of minutesByKey) {
+    totalMin += minutes;
+    const color = project === "Unassigned" ? "#7B8794" : (_c2 = getTaskColor(project, null, colorMap)) != null ? _c2 : "#7B8794";
+    byProject.push({ project, minutes, color });
+  }
+  byProject.sort((a, b) => b.minutes - a.minutes);
+  return { totalMin, byProject };
+}
+function buildWindowColorMap(days, inbox, projectColors) {
+  const all = [];
+  for (const d of days)
+    for (const t of d.tasks)
+      if (t.project)
+        all.push({ project: t.project, subproject: t.subproject });
+  for (const t of inbox)
+    if (t.project)
+      all.push({ project: t.project, subproject: t.subproject });
+  return resolveProjectColors(all, projectColors);
+}
+
+// src/multiday/MultiDayApp.svelte
+var root_1 = from_html(`<div class="dp-md-loading">Loading\u2026</div>`);
+var root = from_html(`<div class="dp-md-root"><div class="dp-md-header"><div class="dp-md-nav"><button class="dp-md-nav-btn" aria-label="Previous">\u2039</button> <button class="dp-md-today-btn">Today</button> <button class="dp-md-nav-btn" aria-label="Next">\u203A</button></div> <div class="dp-md-count-toggle"><button>3</button> <button>7</button></div></div> <!> <div class="dp-md-body"><!> <!></div> <!></div>`);
+function MultiDayApp($$anchor, $$props) {
+  push($$props, true);
+  var _a5;
+  let plugin = prop($$props, "plugin", 7);
+  let anchor = state(proxy(startOfDay(new Date())));
+  let count = state(proxy((_a5 = plugin().settings.multiDayCount) !== null && _a5 !== void 0 ? _a5 : 7));
+  let days = state(proxy([]));
+  let inbox = state(proxy({ path: "", file: null, tasks: [] }));
+  let loading = state(true);
+  const summary = user_derived(() => summarizeWindow(get2(days), plugin().settings.projectColors));
+  const colorMap = user_derived(() => buildWindowColorMap(get2(days), get2(inbox).tasks, plugin().settings.projectColors));
+  async function refresh() {
+    set(loading, true);
+    const [d, i] = await Promise.all([
+      loadDayWindow(plugin().app, plugin().settings, get2(anchor), get2(count)),
+      loadInboxTasks(plugin().app, plugin().settings)
+    ]);
+    set(days, d, true);
+    set(inbox, i, true);
+    set(loading, false);
+  }
+  $$props.registerRefresh(refresh);
+  user_effect(() => {
+    void get2(anchor);
+    void get2(count);
+    void refresh();
+  });
+  function shiftDays(delta) {
+    set(anchor, addDays(get2(anchor), delta), true);
+  }
+  function jumpToToday() {
+    set(anchor, startOfDay(new Date()), true);
+  }
+  async function setCount(n) {
+    set(count, n, true);
+    plugin().settings.multiDayCount = n;
+    await plugin().saveSettings();
+  }
+  async function handleDropRefresh() {
+    await refresh();
+  }
+  var div = root();
+  var div_1 = child(div);
+  var div_2 = child(div_1);
+  var button = child(div_2);
+  var button_1 = sibling(button, 2);
+  var button_2 = sibling(button_1, 2);
+  reset(div_2);
+  var div_3 = sibling(div_2, 2);
+  var button_3 = child(div_3);
+  var button_4 = sibling(button_3, 2);
+  reset(div_3);
+  reset(div_1);
+  var node = sibling(div_1, 2);
+  SummaryBar(node, {
+    get summary() {
+      return get2(summary);
+    }
+  });
+  var div_4 = sibling(node, 2);
+  var node_1 = child(div_4);
+  InboxPanel(node_1, {
+    get plugin() {
+      return plugin();
+    },
+    get tasks() {
+      return get2(inbox).tasks;
+    },
+    get file() {
+      return get2(inbox).file;
+    },
+    get colorMap() {
+      return get2(colorMap);
+    }
+  });
+  var node_2 = sibling(node_1, 2);
+  DayGrid(node_2, {
+    get plugin() {
+      return plugin();
+    },
+    get days() {
+      return get2(days);
+    },
+    get colorMap() {
+      return get2(colorMap);
+    },
+    get inboxFile() {
+      return get2(inbox).file;
+    },
+    onMoved: handleDropRefresh
+  });
+  reset(div_4);
+  var node_3 = sibling(div_4, 2);
+  {
+    var consequent = ($$anchor2) => {
+      var div_5 = root_1();
+      append($$anchor2, div_5);
+    };
+    if_block(node_3, ($$render) => {
+      if (get2(loading) && get2(days).length === 0)
+        $$render(consequent);
+    });
+  }
+  reset(div);
+  template_effect(() => {
+    set_class(button_3, 1, "dp-md-count-btn" + (get2(count) === 3 ? " is-active" : ""));
+    set_class(button_4, 1, "dp-md-count-btn" + (get2(count) === 7 ? " is-active" : ""));
+  });
+  delegated("click", button, () => shiftDays(-get2(count)));
+  delegated("click", button_1, jumpToToday);
+  delegated("click", button_2, () => shiftDays(get2(count)));
+  delegated("click", button_3, () => setCount(3));
+  delegated("click", button_4, () => setCount(7));
+  append($$anchor, div);
+  pop();
+}
+delegate(["click"]);
+
+// src/multiDayView.ts
+var VIEW_TYPE_MULTI_DAY = "today-multi-day";
+var MultiDayView = class extends import_obsidian9.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.app$ = null;
+    this.rerenderTimer = null;
+    this.refreshFn = null;
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return VIEW_TYPE_MULTI_DAY;
+  }
+  getDisplayText() {
+    return "Multi-day view";
+  }
+  getIcon() {
+    return "calendar-range";
+  }
+  async onOpen() {
+    const root2 = this.containerEl.children[1];
+    root2.empty();
+    root2.addClass("today-root");
+    root2.addClass("dp-multiday");
+    this.app$ = mount(MultiDayApp, {
+      target: root2,
+      props: {
+        plugin: this.plugin,
+        registerRefresh: (fn) => {
+          this.refreshFn = fn;
+        }
+      }
+    });
+    this.registerEvent(
+      this.app.vault.on("modify", () => this.scheduleRefresh())
+    );
+    this.registerEvent(
+      this.app.vault.on("delete", () => this.scheduleRefresh())
+    );
+    this.registerEvent(
+      this.app.vault.on("create", () => this.scheduleRefresh())
+    );
+  }
+  async onClose() {
+    if (this.rerenderTimer !== null)
+      window.clearTimeout(this.rerenderTimer);
+    if (this.app$) {
+      unmount(this.app$);
+      this.app$ = null;
+    }
+  }
+  scheduleRefresh() {
+    if (this.rerenderTimer !== null)
+      window.clearTimeout(this.rerenderTimer);
+    this.rerenderTimer = window.setTimeout(() => {
+      var _a5;
+      this.rerenderTimer = null;
+      (_a5 = this.refreshFn) == null ? void 0 : _a5.call(this);
+    }, 100);
+  }
+};
+
+// src/main.ts
+var import_obsidian11 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian8.Plugin {
+var TodayPlugin = class extends import_obsidian10.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    if (import_obsidian8.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian10.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
@@ -9143,8 +14628,15 @@ var TodayPlugin = class extends import_obsidian8.Plugin {
       VIEW_TYPE_HABITS_STATS,
       (leaf) => new HabitsStatsView(leaf, this)
     );
+    this.registerView(
+      VIEW_TYPE_MULTI_DAY,
+      (leaf) => new MultiDayView(leaf, this)
+    );
     this.addRibbonIcon("calendar-clock", "Open Today", () => {
       void this.activateView();
+    });
+    this.addRibbonIcon("calendar-range", "Open multi-day view", () => {
+      void this.activateMultiDayView();
     });
     this.addCommand({
       id: "open-today",
@@ -9160,6 +14652,11 @@ var TodayPlugin = class extends import_obsidian8.Plugin {
       id: "open-habits-stats",
       name: "Open habit stats",
       callback: () => void this.activateHabitsStatsView()
+    });
+    this.addCommand({
+      id: "open-multi-day",
+      name: "Open multi-day view",
+      callback: () => void this.activateMultiDayView()
     });
     this.addCommand({
       id: "open-daily-note-today",
@@ -9185,7 +14682,7 @@ var TodayPlugin = class extends import_obsidian8.Plugin {
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian8.TFile))
+        if (!(af instanceof import_obsidian10.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -9203,19 +14700,19 @@ var TodayPlugin = class extends import_obsidian8.Plugin {
   async onunload() {
   }
   async loadSettings() {
-    var _a, _b, _c;
+    var _a5, _b3, _c2;
     const data = await this.loadData();
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...data != null ? data : {},
-      prefixes: { ...DEFAULT_PREFIXES, ...(_a = data == null ? void 0 : data.prefixes) != null ? _a : {} },
+      prefixes: { ...DEFAULT_PREFIXES, ...(_a5 = data == null ? void 0 : data.prefixes) != null ? _a5 : {} },
       autocomplete: {
         ...DEFAULT_AUTOCOMPLETE,
-        ...(_b = data == null ? void 0 : data.autocomplete) != null ? _b : {}
+        ...(_b3 = data == null ? void 0 : data.autocomplete) != null ? _b3 : {}
       },
       dailyNoteTemplatesByDay: {
         ...DEFAULT_WEEKDAY_TEMPLATES,
-        ...(_c = data == null ? void 0 : data.dailyNoteTemplatesByDay) != null ? _c : {}
+        ...(_c2 = data == null ? void 0 : data.dailyNoteTemplatesByDay) != null ? _c2 : {}
       },
       projectColors: Array.isArray(data == null ? void 0 : data.projectColors) ? data.projectColors.filter(
         (c) => c && typeof c.project === "string" && typeof c.color === "string"
@@ -9252,8 +14749,8 @@ var TodayPlugin = class extends import_obsidian8.Plugin {
     }
   }
   async openDailyNoteForOffset(dayOffset) {
-    const target = (0, import_obsidian9.moment)().startOf("day").add(dayOffset, "day").toDate();
-    const fallback = {
+    const target = (0, import_obsidian11.moment)().startOf("day").add(dayOffset, "day").toDate();
+    const fallback2 = {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
       template: this.settings.dailyNoteTemplate,
@@ -9263,7 +14760,7 @@ var TodayPlugin = class extends import_obsidian8.Plugin {
       quotesFile: this.settings.quotesFile,
       addCreatedTag: this.settings.addCreatedTagToFrontmatter
     };
-    const file = await ensureDailyNote(this.app, target, fallback, false);
+    const file = await ensureDailyNote(this.app, target, fallback2, false);
     const leaf = this.app.workspace.getLeaf(false);
     await leaf.openFile(file);
   }
@@ -9286,8 +14783,25 @@ var TodayPlugin = class extends import_obsidian8.Plugin {
     });
     this.app.workspace.revealLeaf(leaf);
   }
+  async activateMultiDayView() {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_MULTI_DAY);
+    let leaf;
+    if (existing.length > 0) {
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      return;
+    }
+    leaf = this.app.workspace.getLeaf("tab");
+    if (!leaf)
+      return;
+    await leaf.setViewState({
+      type: VIEW_TYPE_MULTI_DAY,
+      active: true
+    });
+    this.app.workspace.revealLeaf(leaf);
+  }
 };
-var InlineSuggest = class extends import_obsidian8.EditorSuggest {
+var InlineSuggest = class extends import_obsidian10.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -9379,7 +14893,7 @@ var InlineSuggest = class extends import_obsidian8.EditorSuggest {
       const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian9.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian11.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,
@@ -9437,14 +14951,14 @@ var InlineSuggest = class extends import_obsidian8.EditorSuggest {
     return [...starts, ...contains].slice(0, limit);
   }
   collectProjects() {
-    var _a, _b;
+    var _a5, _b3;
     const prefix = `#${this.plugin.settings.prefixes.project}/`.toLowerCase();
     const names = /* @__PURE__ */ new Set();
     const cache = this.app.metadataCache;
-    const tags = (_b = (_a = cache.getTags) == null ? void 0 : _a.call(cache)) != null ? _b : {};
-    for (const tag of Object.keys(tags)) {
-      if (tag.toLowerCase().startsWith(prefix)) {
-        const name = tag.slice(prefix.length);
+    const tags = (_b3 = (_a5 = cache.getTags) == null ? void 0 : _a5.call(cache)) != null ? _b3 : {};
+    for (const tag2 of Object.keys(tags)) {
+      if (tag2.toLowerCase().startsWith(prefix)) {
+        const name = tag2.slice(prefix.length);
         if (name)
           names.add(name);
       }
