@@ -2802,46 +2802,38 @@ function layoutTimeline(scheduled, rangeStartMin, pxPerMin, maxColumns) {
         }
       }
     }
+    const colCount = columns.length;
+    const slotPct = 100 / colCount;
     columns.forEach((col, idx) => {
       for (const t of col) {
-        const concurrent = peakConcurrentDuring(t, group);
-        const lanes = Math.min(concurrent, maxColumns != null ? maxColumns : concurrent);
-        const widthPct = 100 / lanes;
+        const ext = rightExtensionCols(t, idx, columns);
         blocks.push({
           task: t,
           topPx: (t.startMin - rangeStartMin) * pxPerMin,
           heightPx: t.durationMin * pxPerMin,
-          leftPct: idx * widthPct,
-          widthPct
+          leftPct: idx * slotPct,
+          widthPct: ext * slotPct
         });
       }
     });
   }
   return blocks;
 }
-function peakConcurrentDuring(t, group) {
+function rightExtensionCols(t, idx, columns) {
   const tStart = t.startMin;
   const tEnd = tStart + t.durationMin;
-  const events = [];
-  for (const o of group) {
-    const oStart = o.startMin;
-    const oEnd = oStart + o.durationMin;
-    const s = Math.max(oStart, tStart);
-    const e = Math.min(oEnd, tEnd);
-    if (e <= s)
-      continue;
-    events.push({ time: s, delta: 1 });
-    events.push({ time: e, delta: -1 });
+  let ext = 1;
+  for (let j = idx + 1; j < columns.length; j++) {
+    const collides = columns[j].some((o) => {
+      const oStart = o.startMin;
+      const oEnd = oStart + o.durationMin;
+      return oStart < tEnd && tStart < oEnd;
+    });
+    if (collides)
+      break;
+    ext++;
   }
-  events.sort((a, b) => a.time - b.time || b.delta - a.delta);
-  let cur = 0;
-  let max = 0;
-  for (const ev of events) {
-    cur += ev.delta;
-    if (cur > max)
-      max = cur;
-  }
-  return Math.max(1, max);
+  return ext;
 }
 function groupOverlaps(scheduled) {
   const groups = [];

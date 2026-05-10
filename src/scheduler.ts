@@ -140,21 +140,51 @@ export function layoutTimeline(
         }
       }
     }
+    // Position each block within the cluster's column slot (anchored by
+    // greedy idx), but let it EXTEND right into adjacent columns whose
+    // blocks don't overlap this one in time. So a non-overlapping task in
+    // col 0 of a 2-col cluster renders full-width; an overlapping pair
+    // splits 50/50. Anchoring to the cluster's column count (not per-block
+    // concurrency) keeps every block inside its day column instead of
+    // shooting past the right edge.
     const colCount = columns.length;
-    const widthPct = 100 / colCount;
+    const slotPct = 100 / colCount;
     columns.forEach((col, idx) => {
       for (const t of col) {
+        const ext = rightExtensionCols(t, idx, columns);
         blocks.push({
           task: t,
           topPx: (t.startMin! - rangeStartMin) * pxPerMin,
           heightPx: t.durationMin * pxPerMin,
-          leftPct: idx * widthPct,
-          widthPct,
+          leftPct: idx * slotPct,
+          widthPct: ext * slotPct,
         });
       }
     });
   }
   return blocks;
+}
+
+// How many columns starting at `idx` this block can span without colliding
+// with any other column's block in time. Always ≥ 1 (its own column).
+function rightExtensionCols(
+  t: ParsedTask,
+  idx: number,
+  columns: ParsedTask[][],
+): number {
+  const tStart = t.startMin!;
+  const tEnd = tStart + t.durationMin;
+  let ext = 1;
+  for (let j = idx + 1; j < columns.length; j++) {
+    const collides = columns[j].some((o) => {
+      const oStart = o.startMin!;
+      const oEnd = oStart + o.durationMin;
+      return oStart < tEnd && tStart < oEnd;
+    });
+    if (collides) break;
+    ext++;
+  }
+  return ext;
 }
 
 function groupOverlaps(scheduled: ParsedTask[]): ParsedTask[][] {
