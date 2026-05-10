@@ -20,6 +20,7 @@ import {
 import {
   parseExercises,
   parseFileTasks,
+  formatHoursDecimal,
   formatTotal,
 } from "./parser";
 import { resolveProjectColors } from "./colors";
@@ -71,6 +72,11 @@ interface PeriodSection {
 }
 
 type StatsTab = "habits" | "workouts" | "projects";
+
+// Sentinel row name for completed tasks with no project. Real project names
+// come from `[[wikilinks]]` and never match this literal.
+const UNCATEGORIZED = "Uncategorized";
+const UNCATEGORIZED_COLOR = "#8a8f98";
 
 export class HabitsStatsView extends ItemView {
   plugin: TodayPlugin;
@@ -347,6 +353,9 @@ export class HabitsStatsView extends ItemView {
     // map. Only `- [x]` lines count, matching how the workouts tab counts
     // only completed sets — a planned-but-not-done block shouldn't inflate
     // the "what I actually did" totals this report exists to show.
+    // Tasks without a project are bucketed under UNCATEGORIZED so the
+    // report shows where un-tagged time is going instead of silently
+    // dropping it.
     const totals = new Map<string, number[]>();
     const colTotals = new Array<number>(buckets.length).fill(0);
     let grandTotal = 0;
@@ -366,12 +375,12 @@ export class HabitsStatsView extends ItemView {
         );
         for (const t of tasks) {
           if (!t.checked) continue;
-          if (!t.project) continue;
           if (t.durationMin <= 0) continue;
-          let row = totals.get(t.project);
+          const key = t.project || UNCATEGORIZED;
+          let row = totals.get(key);
           if (!row) {
             row = new Array<number>(buckets.length).fill(0);
-            totals.set(t.project, row);
+            totals.set(key, row);
           }
           row[bi] += t.durationMin;
           colTotals[bi] += t.durationMin;
@@ -395,13 +404,18 @@ export class HabitsStatsView extends ItemView {
     if (totals.size === 0) {
       sectionEl.createDiv({
         cls: "dp-heatmap-no-habits",
-        text: `No completed tasks with a project in this ${name.toLowerCase()} window.`,
+        text: `No completed tasks in this ${name.toLowerCase()} window.`,
       });
       return;
     }
 
+    // Don't feed UNCATEGORIZED into the palette resolver — it would burn an
+    // auto-color that might collide with a real project. We hand it a fixed
+    // neutral gray below.
     const colorMap = resolveProjectColors(
-      Array.from(totals.keys()).map((p) => ({ project: p })),
+      Array.from(totals.keys())
+        .filter((p) => p !== UNCATEGORIZED)
+        .map((p) => ({ project: p })),
       settings.projectColors,
     );
 
@@ -411,7 +425,14 @@ export class HabitsStatsView extends ItemView {
         cells,
         rowTotal: cells.reduce((a, b) => a + b, 0),
       }))
-      .sort((a, b) => b.rowTotal - a.rowTotal || a.name.localeCompare(b.name));
+      // Uncategorized always sinks to the bottom regardless of total — it's
+      // a catch-all bucket, not a project the user is tracking.
+      .sort((a, b) => {
+        const au = a.name === UNCATEGORIZED ? 1 : 0;
+        const bu = b.name === UNCATEGORIZED ? 1 : 0;
+        if (au !== bu) return au - bu;
+        return b.rowTotal - a.rowTotal || a.name.localeCompare(b.name);
+      });
 
     const table = sectionEl.createEl("table", { cls: "dp-workout-log" });
     const thead = table.createEl("thead");
@@ -432,7 +453,10 @@ export class HabitsStatsView extends ItemView {
       const tr = tbody.createEl("tr");
       const nameTd = tr.createEl("td", { cls: "dp-workout-log-name" });
       const swatch = nameTd.createSpan({ cls: "dp-st-swatch" });
-      const color = colorMap.get(row.name);
+      const color =
+        row.name === UNCATEGORIZED
+          ? UNCATEGORIZED_COLOR
+          : colorMap.get(row.name);
       if (color) swatch.style.backgroundColor = color;
       nameTd.createSpan({ text: row.name });
       for (let i = 0; i < buckets.length; i++) {
@@ -442,13 +466,13 @@ export class HabitsStatsView extends ItemView {
             "dp-workout-log-cell" +
             (mins === 0 ? " is-empty" : "") +
             (buckets[i].isCurrent ? " is-current" : ""),
-          text: mins > 0 ? formatTotal(mins) : "",
+          text: mins > 0 ? formatHoursDecimal(mins) : "",
         });
-        td.title = `${row.name} · ${buckets[i].tooltip}\n${formatTotal(mins)}`;
+        td.title = `${row.name} · ${buckets[i].tooltip}\n${formatHoursDecimal(mins)}`;
       }
       tr.createEl("td", {
         cls: "dp-workout-log-total",
-        text: formatTotal(row.rowTotal),
+        text: formatHoursDecimal(row.rowTotal),
       });
     }
 
@@ -466,12 +490,12 @@ export class HabitsStatsView extends ItemView {
           "dp-workout-log-cell dp-workout-log-foot" +
           (colTotals[i] === 0 ? " is-empty" : "") +
           (buckets[i].isCurrent ? " is-current" : ""),
-        text: colTotals[i] > 0 ? formatTotal(colTotals[i]) : "",
+        text: colTotals[i] > 0 ? formatHoursDecimal(colTotals[i]) : "",
       });
     }
     footRow.createEl("td", {
       cls: "dp-workout-log-total dp-workout-log-foot",
-      text: formatTotal(grandTotal),
+      text: formatHoursDecimal(grandTotal),
     });
   }
 

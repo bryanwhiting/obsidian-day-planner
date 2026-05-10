@@ -331,6 +331,7 @@ __export(parser_exports, {
   formatDuration: () => formatDuration,
   formatExerciseLine: () => formatExerciseLine,
   formatExerciseSummary: () => formatExerciseSummary,
+  formatHoursDecimal: () => formatHoursDecimal,
   formatTime: () => formatTime,
   formatTotal: () => formatTotal,
   generateTaskId: () => generateTaskId,
@@ -932,6 +933,12 @@ function formatTotal(totalMin) {
   if (m === 0)
     return `${h}h`;
   return `${h}h ${m}m`;
+}
+function formatHoursDecimal(totalMin) {
+  if (totalMin <= 0)
+    return "0";
+  const hours = totalMin / 60;
+  return hours.toFixed(2).replace(/\.?0+$/, "");
 }
 function formatClockShort(totalMin) {
   const h24 = Math.floor(totalMin / 60) % 24;
@@ -8755,6 +8762,8 @@ function extractTitle(rawLine) {
 var import_obsidian7 = require("obsidian");
 init_parser();
 var VIEW_TYPE_HABITS_STATS = "today-habits-stats";
+var UNCATEGORIZED = "Uncategorized";
+var UNCATEGORIZED_COLOR = "#8a8f98";
 var HabitsStatsView = class extends import_obsidian7.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -8992,14 +9001,13 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
         for (const t of tasks) {
           if (!t.checked)
             continue;
-          if (!t.project)
-            continue;
           if (t.durationMin <= 0)
             continue;
-          let row = totals.get(t.project);
+          const key = t.project || UNCATEGORIZED;
+          let row = totals.get(key);
           if (!row) {
             row = new Array(buckets.length).fill(0);
-            totals.set(t.project, row);
+            totals.set(key, row);
           }
           row[bi] += t.durationMin;
           colTotals[bi] += t.durationMin;
@@ -9018,19 +9026,25 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
     if (totals.size === 0) {
       sectionEl.createDiv({
         cls: "dp-heatmap-no-habits",
-        text: `No completed tasks with a project in this ${name.toLowerCase()} window.`
+        text: `No completed tasks in this ${name.toLowerCase()} window.`
       });
       return;
     }
     const colorMap = resolveProjectColors(
-      Array.from(totals.keys()).map((p) => ({ project: p })),
+      Array.from(totals.keys()).filter((p) => p !== UNCATEGORIZED).map((p) => ({ project: p })),
       settings.projectColors
     );
     const rows = Array.from(totals.entries()).map(([rowName, cells]) => ({
       name: rowName,
       cells,
       rowTotal: cells.reduce((a, b) => a + b, 0)
-    })).sort((a, b) => b.rowTotal - a.rowTotal || a.name.localeCompare(b.name));
+    })).sort((a, b) => {
+      const au = a.name === UNCATEGORIZED ? 1 : 0;
+      const bu = b.name === UNCATEGORIZED ? 1 : 0;
+      if (au !== bu)
+        return au - bu;
+      return b.rowTotal - a.rowTotal || a.name.localeCompare(b.name);
+    });
     const table = sectionEl.createEl("table", { cls: "dp-workout-log" });
     const thead = table.createEl("thead");
     const headRow = thead.createEl("tr");
@@ -9048,7 +9062,7 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
       const tr = tbody.createEl("tr");
       const nameTd = tr.createEl("td", { cls: "dp-workout-log-name" });
       const swatch = nameTd.createSpan({ cls: "dp-st-swatch" });
-      const color = colorMap.get(row.name);
+      const color = row.name === UNCATEGORIZED ? UNCATEGORIZED_COLOR : colorMap.get(row.name);
       if (color)
         swatch.style.backgroundColor = color;
       nameTd.createSpan({ text: row.name });
@@ -9056,14 +9070,14 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
         const mins = row.cells[i];
         const td = tr.createEl("td", {
           cls: "dp-workout-log-cell" + (mins === 0 ? " is-empty" : "") + (buckets[i].isCurrent ? " is-current" : ""),
-          text: mins > 0 ? formatTotal(mins) : ""
+          text: mins > 0 ? formatHoursDecimal(mins) : ""
         });
         td.title = `${row.name} \xB7 ${buckets[i].tooltip}
-${formatTotal(mins)}`;
+${formatHoursDecimal(mins)}`;
       }
       tr.createEl("td", {
         cls: "dp-workout-log-total",
-        text: formatTotal(row.rowTotal)
+        text: formatHoursDecimal(row.rowTotal)
       });
     }
     const tfoot = table.createEl("tfoot");
@@ -9075,12 +9089,12 @@ ${formatTotal(mins)}`;
     for (let i = 0; i < buckets.length; i++) {
       footRow.createEl("td", {
         cls: "dp-workout-log-cell dp-workout-log-foot" + (colTotals[i] === 0 ? " is-empty" : "") + (buckets[i].isCurrent ? " is-current" : ""),
-        text: colTotals[i] > 0 ? formatTotal(colTotals[i]) : ""
+        text: colTotals[i] > 0 ? formatHoursDecimal(colTotals[i]) : ""
       });
     }
     footRow.createEl("td", {
       cls: "dp-workout-log-total dp-workout-log-foot",
-      text: formatTotal(grandTotal)
+      text: formatHoursDecimal(grandTotal)
     });
   }
   async loadHabitsAndGoals() {

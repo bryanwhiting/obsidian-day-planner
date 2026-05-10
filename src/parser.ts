@@ -799,6 +799,14 @@ export function formatTotal(totalMin: number): string {
   return `${h}h ${m}m`;
 }
 
+// Decimal-hours form for the Reporting view: 210 → "3.5", 30 → "0.5",
+// 120 → "2", 75 → "1.25". Two-decimal max, trailing zeros trimmed.
+export function formatHoursDecimal(totalMin: number): string {
+  if (totalMin <= 0) return "0";
+  const hours = totalMin / 60;
+  return hours.toFixed(2).replace(/\.?0+$/, "");
+}
+
 // Compact 12-hour clock label: "7a" (no minutes), "12p" (noon), "7:30p"
 // (half-hour). The colon goes in for display; strip it before writing as a
 // `#t/` tag body (the parser regex doesn't allow ":").
