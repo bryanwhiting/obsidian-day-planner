@@ -309,8 +309,10 @@ export class TodaySettingTab extends PluginSettingTab {
   }
 
   private renderIntro(containerEl: HTMLElement): void {
-    const intro = containerEl.createDiv({ cls: "dp-settings-intro" });
-    intro.createEl("h2", {
+    const intro = containerEl.createEl("details", {
+      cls: "dp-settings-intro",
+    });
+    intro.createEl("summary", {
       cls: "dp-settings-intro-title",
       text: "Today plugin settings",
     });

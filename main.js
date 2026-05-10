@@ -1329,8 +1329,10 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     }
   }
   renderIntro(containerEl) {
-    const intro = containerEl.createDiv({ cls: "dp-settings-intro" });
-    intro.createEl("h2", {
+    const intro = containerEl.createEl("details", {
+      cls: "dp-settings-intro"
+    });
+    intro.createEl("summary", {
       cls: "dp-settings-intro-title",
       text: "Today plugin settings"
     });

@@ -2089,6 +2089,31 @@
     letter-spacing: var(--tracking-display);
     margin: 0 0 6px;
     color: var(--color-ink);
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dp-settings-intro-title::-webkit-details-marker {
+    display: none;
+  }
+
+  .dp-settings-intro-title::before {
+    content: "▸";
+    font-size: 14px;
+    color: var(--color-ink-muted);
+    transition: transform 120ms ease;
+    display: inline-block;
+  }
+
+  .dp-settings-intro[open] > .dp-settings-intro-title::before {
+    transform: rotate(90deg);
+  }
+
+  .dp-settings-intro[open] > .dp-settings-intro-title {
+    margin-bottom: 6px;
   }
 
   .dp-settings-intro-sub {
