@@ -405,6 +405,18 @@
     letter-spacing: 0.02em;
   }
 
+  .dp-quote-row {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .dp-quote {
+    font-style: italic;
+    color: var(--color-ink-muted);
+    letter-spacing: 0.02em;
+  }
+
   .dp-workout {
     text-align: center;
     font-family: var(--font-mono);

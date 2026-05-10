@@ -169,15 +169,15 @@ export function formatExerciseSummary(summary: ExerciseSummary): string {
   return summary.name;
 }
 
-// Scans a file for the first `#<intentionTag>` occurrence and returns the
-// trailing text on that line (trimmed). Returns null if the tag is absent or
-// the tag is bare with no following text. The lookahead guards against
-// substrings like `#intentional` or nested tags like `#intention/foo`.
-export function parseIntention(
+// Scans a file for the first `#<tag>` occurrence and returns the trailing
+// text on that line (trimmed). Returns null if the tag is absent or bare
+// with no following text. The lookahead guards against substrings like
+// `#intentional` or nested tags like `#intention/foo`.
+export function parseTaggedLine(
   content: string,
-  intentionTag: string,
+  tagName: string,
 ): string | null {
-  const tag = intentionTag.replace(/^#+/, "").trim();
+  const tag = tagName.replace(/^#+/, "").trim();
   if (!tag) return null;
   const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`#${esc}(?![A-Za-z0-9_/])\\s*([^\\n]*)`);

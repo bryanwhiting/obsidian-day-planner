@@ -108,6 +108,13 @@ export interface TodaySettings {
   // The text following the tag on the line is shown next to the daily-note
   // path in the dashboard header. Default: "intention", matching #intention.
   intentionTag: string;
+  // Bare hashtag (no leading "#") that flags a "quote" line for the day. The
+  // text following the tag on the line is shown on its own row in the
+  // dashboard header beneath the intention. Pairs with the `<@quote>`
+  // template placeholder — `#quote <@quote>` lets the same line both seed
+  // a random quote at note-creation time and surface it in the header.
+  // Default: "quote", matching #quote.
+  quoteTag: string;
   timelineHeightDesktop: string;
   timelineHeightMobile: string;
   pomodoroWorkMin: number;
@@ -175,6 +182,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   contextTags: [],
   noteTag: "note",
   intentionTag: "intention",
+  quoteTag: "quote",
   timelineHeightDesktop: "",
   timelineHeightMobile: "",
   pomodoroWorkMin: 25,
@@ -1489,6 +1497,32 @@ export class TodaySettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.intentionTag)
           .onChange(async (v) => {
             this.plugin.settings.intentionTag = v.trim().replace(/^#+/, "");
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    const quoteDesc = document.createDocumentFragment();
+    quoteDesc.append(
+      "Anywhere this hashtag appears in the daily note, the rest of the line is treated as your quote for the day and shown on its own row in the dashboard header beneath the intention. Pairs with the ",
+      makeCode("<@quote>"),
+      " template placeholder — e.g. ",
+      makeCode("#quote <@quote>"),
+      " seeds a random quote into the note at creation time and surfaces it in the header. Enter the bare tag without the leading ",
+      makeCode("#"),
+      ". If multiple ",
+      makeCode("#quote"),
+      " lines exist, only the first is shown.",
+    );
+
+    new Setting(containerEl)
+      .setName("Quote tag")
+      .setDesc(quoteDesc)
+      .addText((t) =>
+        t
+          .setPlaceholder("quote")
+          .setValue(this.plugin.settings.quoteTag)
+          .onChange(async (v) => {
+            this.plugin.settings.quoteTag = v.trim().replace(/^#+/, "");
             await this.plugin.saveSettings();
           }),
       );

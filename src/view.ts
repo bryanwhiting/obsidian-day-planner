@@ -18,7 +18,7 @@ import {
   TagPrefixes,
   parseFileTasks,
   parseExercises,
-  parseIntention,
+  parseTaggedLine,
   parseTime,
   parseDuration,
   formatExerciseLine,
@@ -462,7 +462,10 @@ export class TodayView extends ItemView {
       : [];
     const exercises = parseExercises(fileContent, this.plugin.settings.prefixes);
     const intention = displayFile
-      ? parseIntention(fileContent, this.plugin.settings.intentionTag)
+      ? parseTaggedLine(fileContent, this.plugin.settings.intentionTag)
+      : null;
+    const quote = displayFile
+      ? parseTaggedLine(fileContent, this.plugin.settings.quoteTag)
       : null;
 
     const activeFile = this.app.workspace.getActiveFile();
@@ -499,6 +502,7 @@ export class TodayView extends ItemView {
       colorMap,
       showOpenActiveLink ? activeFile : null,
       intention,
+      quote,
     );
 
     this.renderTimelineHints(root);
@@ -745,6 +749,7 @@ export class TodayView extends ItemView {
     colorMap: Map<string, string>,
     openActiveTarget: TFile | null = null,
     intention: string | null = null,
+    quote: string | null = null,
   ): void {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed) section.addClass("is-summaries-collapsed");
@@ -790,6 +795,10 @@ export class TodayView extends ItemView {
           this.scheduleRender();
         });
       }
+    }
+    if (quote) {
+      const quoteRow = header.createDiv({ cls: "dp-quote-row" });
+      quoteRow.createSpan({ cls: "dp-quote", text: quote });
     }
 
     if (isPrimary) {
