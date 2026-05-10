@@ -34,7 +34,6 @@ export const VIEW_TYPE_MULTI_DAY = "today-multi-day";
 // 3-day window — matches the spec ("3 days at a time").
 const VISIBLE_DAYS = 3;
 const TIMELINE_PX_PER_MIN = 0.9;
-const TIMELINE_LANE_CAP = 2;
 // When the inbox renders proportional heights, anchor 1 minute to this many
 // pixels. A 30-min task ~= 18px tall; long-running tasks visibly outweigh
 // short ones without dominating the rail.
@@ -480,12 +479,12 @@ export class MultiDayView extends ItemView {
 
     const blocksLayer = lanes.createDiv({ cls: "dp-md-timeline-blocks" });
     const scheduled = day.tasks.filter((t) => t.startMin !== null);
-    const layout = layoutTimeline(
-      scheduled,
-      startMin,
-      TIMELINE_PX_PER_MIN,
-      TIMELINE_LANE_CAP,
-    );
+    // No lane cap — every overlapping cluster splits the day column N-ways
+    // so two simultaneous tasks never visually stack on top of each other.
+    // Trade-off: a 4-way overlap in 7-day mode shrinks each block to ~25% of
+    // a narrow column, but the user has explicitly preferred no-overlap over
+    // wider-but-stacked.
+    const layout = layoutTimeline(scheduled, startMin, TIMELINE_PX_PER_MIN);
     for (const b of layout) {
       this.renderBlock(blocksLayer, day, b, colorMap);
     }

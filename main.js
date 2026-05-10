@@ -9561,7 +9561,6 @@ init_parser();
 var VIEW_TYPE_MULTI_DAY = "today-multi-day";
 var VISIBLE_DAYS = 3;
 var TIMELINE_PX_PER_MIN = 0.9;
-var TIMELINE_LANE_CAP = 2;
 var INBOX_PX_PER_MIN = 0.6;
 var INBOX_FLAT_HEIGHT_PX = 28;
 var MultiDayView = class extends import_obsidian9.ItemView {
@@ -9932,12 +9931,7 @@ var MultiDayView = class extends import_obsidian9.ItemView {
     }
     const blocksLayer = lanes.createDiv({ cls: "dp-md-timeline-blocks" });
     const scheduled = day.tasks.filter((t) => t.startMin !== null);
-    const layout = layoutTimeline(
-      scheduled,
-      startMin,
-      TIMELINE_PX_PER_MIN,
-      TIMELINE_LANE_CAP
-    );
+    const layout = layoutTimeline(scheduled, startMin, TIMELINE_PX_PER_MIN);
     for (const b of layout) {
       this.renderBlock(blocksLayer, day, b, colorMap);
     }
