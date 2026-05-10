@@ -21,7 +21,6 @@ import {
   parseExercises,
   parseFileTasks,
   formatHoursDecimal,
-  formatTotal,
 } from "./parser";
 import { resolveProjectColors } from "./colors";
 
