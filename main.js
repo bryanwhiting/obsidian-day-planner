@@ -2779,13 +2779,15 @@ function layoutTimeline(scheduled, rangeStartMin, pxPerMin, maxColumns) {
     const slotPct = 100 / colCount;
     columns.forEach((col, idx) => {
       for (const t of col) {
-        const ext = rightExtensionCols(t, idx, columns);
+        const leftExt = leftExtensionCols(t, idx, columns);
+        const rightExt = rightExtensionCols(t, idx, columns);
+        const span = leftExt + 1 + rightExt;
         blocks.push({
           task: t,
           topPx: (t.startMin - rangeStartMin) * pxPerMin,
           heightPx: t.durationMin * pxPerMin,
-          leftPct: idx * slotPct,
-          widthPct: ext * slotPct
+          leftPct: (idx - leftExt) * slotPct,
+          widthPct: span * slotPct
         });
       }
     });
@@ -2797,16 +2799,29 @@ function rightExtensionCols(t, idx, columns) {
   const tEnd = tStart + t.durationMin;
   let ext = 1;
   for (let j = idx + 1; j < columns.length; j++) {
-    const collides = columns[j].some((o) => {
-      const oStart = o.startMin;
-      const oEnd = oStart + o.durationMin;
-      return oStart < tEnd && tStart < oEnd;
-    });
-    if (collides)
+    if (columnCollides(columns[j], tStart, tEnd))
       break;
     ext++;
   }
   return ext;
+}
+function leftExtensionCols(t, idx, columns) {
+  const tStart = t.startMin;
+  const tEnd = tStart + t.durationMin;
+  let ext = 0;
+  for (let j = idx - 1; j >= 0; j--) {
+    if (columnCollides(columns[j], tStart, tEnd))
+      break;
+    ext++;
+  }
+  return ext;
+}
+function columnCollides(col, tStart, tEnd) {
+  return col.some((o) => {
+    const oStart = o.startMin;
+    const oEnd = oStart + o.durationMin;
+    return oStart < tEnd && tStart < oEnd;
+  });
 }
 function groupOverlaps(scheduled) {
   const groups = [];
