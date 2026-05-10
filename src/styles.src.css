@@ -639,6 +639,22 @@
     font-weight: 600;
   }
 
+  /* Project-pivot row labels: tuck the color swatch flush against the
+     project name so the row reads "● <project>" without wrapping. */
+  .dp-workout-log-name .dp-st-swatch {
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+
+  /* Footer = column totals. Heavier weight + top hairline so the row reads
+     as a summary divider rather than just another body row. */
+  .dp-workout-log tfoot .dp-workout-log-foot {
+    border-top: 1px solid var(--color-ink-muted);
+    border-bottom: none;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
   .dp-heatmap-section {
     display: flex;
     flex-direction: column;

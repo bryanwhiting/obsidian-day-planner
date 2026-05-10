@@ -92,7 +92,7 @@ export default class TodayPlugin extends Plugin {
 
     this.addCommand({
       id: "open-habits-stats",
-      name: "Open habit stats",
+      name: "Open reporting",
       callback: () => void this.activateHabitsStatsView(),
     });
 
@@ -105,7 +105,7 @@ export default class TodayPlugin extends Plugin {
 
     this.addCommand({
       id: "open-combined-popout",
-      name: "Open Today + multi-day + habits in popout",
+      name: "Open Today + multi-day + reporting in popout",
       callback: () => void this.openCombinedPopout(),
     });
 

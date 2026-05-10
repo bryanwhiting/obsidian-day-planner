@@ -17,7 +17,12 @@ import {
   startOfDay,
   type DailyNoteFallback,
 } from "./dailyNote";
-import { parseExercises } from "./parser";
+import {
+  parseExercises,
+  parseFileTasks,
+  formatTotal,
+} from "./parser";
+import { resolveProjectColors } from "./colors";
 
 export const VIEW_TYPE_HABITS_STATS = "today-habits-stats";
 
@@ -65,7 +70,7 @@ interface PeriodSection {
   exerciseTotals: Map<string, number>;
 }
 
-type StatsTab = "habits" | "workouts";
+type StatsTab = "habits" | "workouts" | "projects";
 
 export class HabitsStatsView extends ItemView {
   plugin: TodayPlugin;
@@ -82,7 +87,7 @@ export class HabitsStatsView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Habit stats";
+    return "Reporting";
   }
 
   getIcon(): string {
@@ -131,9 +136,17 @@ export class HabitsStatsView extends ItemView {
     };
 
     const heading = root.createDiv({ cls: "dp-habit-stats-header" });
-    heading.createEl("h3", { text: "Habit stats" });
+    heading.createEl("h3", { text: "Reporting" });
 
     this.renderTabs(root);
+
+    const today = startOfDay(new Date());
+    const window = settings.habitsStatsWindow;
+
+    if (this.activeTab === "projects") {
+      await this.renderProjectsByWeek(root, today, window, fallback);
+      return;
+    }
 
     const { habits, goals } = await this.loadHabitsAndGoals();
     if (habits.length === 0 && goals.length === 0) {
@@ -143,9 +156,6 @@ export class HabitsStatsView extends ItemView {
       });
       return;
     }
-
-    const today = startOfDay(new Date());
-    const window = settings.habitsStatsWindow;
 
     if (this.activeTab === "workouts") {
       await this.renderWorkoutLog(root, today, window, fallback);
@@ -203,6 +213,7 @@ export class HabitsStatsView extends ItemView {
     };
     make("habits", "Habits");
     make("workouts", "Workouts");
+    make("projects", "Projects");
   }
 
   private async renderWorkoutLog(
@@ -296,6 +307,139 @@ export class HabitsStatsView extends ItemView {
         text: (totalsByName.get(name) ?? 0).toLocaleString(),
       });
     }
+  }
+
+  private async renderProjectsByWeek(
+    parent: HTMLElement,
+    today: Date,
+    window: number,
+    fallback: DailyNoteFallback,
+  ): Promise<void> {
+    const settings = this.plugin.settings;
+    const weekBuckets = this.buildWeekBuckets(today, window);
+
+    // Aggregate completed-task minutes into a (project → weekIdx → mins) map.
+    // Only `- [x]` lines count, matching how the workouts tab counts only
+    // completed sets — a planned-but-not-done block shouldn't inflate the
+    // "what I actually did" totals this report exists to show.
+    const totals = new Map<string, number[]>();
+    const colTotals = new Array<number>(weekBuckets.length).fill(0);
+    let grandTotal = 0;
+    for (let wi = 0; wi < weekBuckets.length; wi++) {
+      const b = weekBuckets[wi];
+      for (const d of enumerateDailyNoteDatesInRange(b.start, b.end)) {
+        const content = await this.plugin.habitsScanner.readDateContent(
+          d,
+          fallback,
+        );
+        if (!content) continue;
+        const tasks = parseFileTasks(
+          "",
+          content,
+          settings.prefixes,
+          settings.defaultDurationMin,
+        );
+        for (const t of tasks) {
+          if (!t.checked) continue;
+          if (!t.project) continue;
+          if (t.durationMin <= 0) continue;
+          let row = totals.get(t.project);
+          if (!row) {
+            row = new Array<number>(weekBuckets.length).fill(0);
+            totals.set(t.project, row);
+          }
+          row[wi] += t.durationMin;
+          colTotals[wi] += t.durationMin;
+          grandTotal += t.durationMin;
+        }
+      }
+    }
+
+    const sectionEl = parent.createDiv({ cls: "dp-heatmap-section" });
+    if (totals.size === 0) {
+      sectionEl.createDiv({
+        cls: "dp-heatmap-no-habits",
+        text: "No completed tasks with a project in this window.",
+      });
+      return;
+    }
+
+    const colorMap = resolveProjectColors(
+      Array.from(totals.keys()).map((p) => ({ project: p })),
+      settings.projectColors,
+    );
+
+    const rows = Array.from(totals.entries())
+      .map(([name, cells]) => ({
+        name,
+        cells,
+        rowTotal: cells.reduce((a, b) => a + b, 0),
+      }))
+      .sort((a, b) => b.rowTotal - a.rowTotal || a.name.localeCompare(b.name));
+
+    const table = sectionEl.createEl("table", { cls: "dp-workout-log" });
+    const thead = table.createEl("thead");
+    const headRow = thead.createEl("tr");
+    headRow.createEl("th", { cls: "dp-workout-log-name-h", text: "Project" });
+    for (const b of weekBuckets) {
+      const th = headRow.createEl("th", {
+        cls:
+          "dp-workout-log-date" + (b.isCurrent ? " is-current" : ""),
+        text: b.start.toLocaleDateString(undefined, {
+          month: "numeric",
+          day: "numeric",
+        }),
+      });
+      th.title = b.tooltip;
+    }
+    headRow.createEl("th", { cls: "dp-workout-log-total-h", text: "Total" });
+
+    const tbody = table.createEl("tbody");
+    for (const row of rows) {
+      const tr = tbody.createEl("tr");
+      const nameTd = tr.createEl("td", { cls: "dp-workout-log-name" });
+      const swatch = nameTd.createSpan({ cls: "dp-st-swatch" });
+      const color = colorMap.get(row.name);
+      if (color) swatch.style.backgroundColor = color;
+      nameTd.createSpan({ text: row.name });
+      for (let i = 0; i < weekBuckets.length; i++) {
+        const mins = row.cells[i];
+        const td = tr.createEl("td", {
+          cls:
+            "dp-workout-log-cell" +
+            (mins === 0 ? " is-empty" : "") +
+            (weekBuckets[i].isCurrent ? " is-current" : ""),
+          text: mins > 0 ? formatTotal(mins) : "",
+        });
+        td.title = `${row.name} · ${weekBuckets[i].tooltip}\n${formatTotal(mins)}`;
+      }
+      tr.createEl("td", {
+        cls: "dp-workout-log-total",
+        text: formatTotal(row.rowTotal),
+      });
+    }
+
+    // Column-totals footer row. `tfoot` so the row visually pairs with the
+    // header rather than blending into the body.
+    const tfoot = table.createEl("tfoot");
+    const footRow = tfoot.createEl("tr");
+    footRow.createEl("td", {
+      cls: "dp-workout-log-name dp-workout-log-foot",
+      text: "Total",
+    });
+    for (let i = 0; i < weekBuckets.length; i++) {
+      footRow.createEl("td", {
+        cls:
+          "dp-workout-log-cell dp-workout-log-foot" +
+          (colTotals[i] === 0 ? " is-empty" : "") +
+          (weekBuckets[i].isCurrent ? " is-current" : ""),
+        text: colTotals[i] > 0 ? formatTotal(colTotals[i]) : "",
+      });
+    }
+    footRow.createEl("td", {
+      cls: "dp-workout-log-total dp-workout-log-foot",
+      text: formatTotal(grandTotal),
+    });
   }
 
   private async loadHabitsAndGoals(): Promise<{
