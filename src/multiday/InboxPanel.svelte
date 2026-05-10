@@ -53,6 +53,8 @@
     <ul class="dp-md-inbox-list">
       {#each tasks as task (task.lineNumber)}
         {@const color = colorFor(task, colorMap)}
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
         <li
           class="dp-md-inbox-item"
           draggable={true}

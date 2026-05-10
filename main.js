@@ -345,7 +345,7 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian10 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
@@ -1459,7 +1459,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       return;
     const snap = this.prefixSnapshot;
     this.prefixSnapshot = null;
-    const current = this.plugin.settings.prefixes;
+    const current2 = this.plugin.settings.prefixes;
     const keys = [
       "duration",
       "time",
@@ -1474,7 +1474,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     const changes = [];
     for (const key2 of keys) {
       const oldP = snap[key2];
-      const newP = current[key2];
+      const newP = current2[key2];
       if (oldP && newP && oldP !== newP) {
         changes.push({ key: key2, oldPrefix: oldP, newPrefix: newP });
       }
@@ -2731,22 +2731,22 @@ function layoutTimeline(scheduled, rangeStartMin, pxPerMin) {
 }
 function groupOverlaps(scheduled) {
   const groups = [];
-  let current = [];
+  let current2 = [];
   let currentEnd = -1;
   for (const t of scheduled) {
     const start = t.startMin;
     const end = start + t.durationMin;
-    if (current.length === 0 || start < currentEnd) {
-      current.push(t);
+    if (current2.length === 0 || start < currentEnd) {
+      current2.push(t);
       currentEnd = Math.max(currentEnd, end);
     } else {
-      groups.push(current);
-      current = [t];
+      groups.push(current2);
+      current2 = [t];
       currentEnd = end;
     }
   }
-  if (current.length)
-    groups.push(current);
+  if (current2.length)
+    groups.push(current2);
   return groups;
 }
 
@@ -3693,20 +3693,20 @@ var TodayView = class extends import_obsidian5.ItemView {
   }
   async render() {
     var _a5, _b3, _c2, _d, _e;
-    const root2 = this.containerEl.children[1];
+    const root7 = this.containerEl.children[1];
     if (this.pomodoroState && !this.pomodoroHidden) {
-      const handled = await this.renderPomodoro(root2);
+      const handled = await this.renderPomodoro(root7);
       if (handled)
         return;
     }
-    const prevRootScroll = root2.scrollTop;
+    const prevRootScroll = root7.scrollTop;
     const prevTimelineScrolls = Array.from(
-      root2.querySelectorAll(".dp-timeline-wrap")
+      root7.querySelectorAll(".dp-timeline-wrap")
     ).map((el) => el.scrollTop);
-    root2.empty();
-    root2.addClass("today-root");
-    if (!root2.hasAttribute("tabindex"))
-      root2.setAttribute("tabindex", "-1");
+    root7.empty();
+    root7.addClass("today-root");
+    if (!root7.hasAttribute("tabindex"))
+      root7.setAttribute("tabindex", "-1");
     const fallback2 = {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
@@ -3747,7 +3747,7 @@ var TodayView = class extends import_obsidian5.ItemView {
     const activeFile = this.app.workspace.getActiveFile();
     this.lastActiveFilePath = (_e = activeFile == null ? void 0 : activeFile.path) != null ? _e : null;
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
-    this.renderDateNav(root2, displayFile);
+    this.renderDateNav(root7, displayFile);
     const colorMap = resolveProjectColors(
       tasks.filter(
         (t) => t.project !== null
@@ -3760,7 +3760,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       fallback2
     );
     this.renderSection(
-      root2,
+      root7,
       this.formatDateLabel(this.selectedDate),
       "",
       displayFile,
@@ -3774,9 +3774,9 @@ var TodayView = class extends import_obsidian5.ItemView {
       intention,
       quote
     );
-    this.renderTimelineHints(root2);
-    root2.scrollTop = prevRootScroll;
-    const newTimelines = root2.querySelectorAll(".dp-timeline-wrap");
+    this.renderTimelineHints(root7);
+    root7.scrollTop = prevRootScroll;
+    const newTimelines = root7.querySelectorAll(".dp-timeline-wrap");
     newTimelines.forEach((el, i) => {
       const prev = prevTimelineScrolls[i];
       if (prev !== void 0)
@@ -3784,10 +3784,10 @@ var TodayView = class extends import_obsidian5.ItemView {
     });
     this.hasRendered = true;
   }
-  renderTimelineHints(root2) {
+  renderTimelineHints(root7) {
     if (!this.hintsVisible)
       return;
-    const overlay = root2.createDiv({ cls: "dp-hints-overlay" });
+    const overlay = root7.createDiv({ cls: "dp-hints-overlay" });
     overlay.addEventListener("click", (ev) => {
       if (ev.target === overlay) {
         this.hintsVisible = false;
@@ -4058,7 +4058,7 @@ var TodayView = class extends import_obsidian5.ItemView {
       if (openActiveTarget) {
         if (subtitle || intention)
           sub.createSpan({ cls: "dp-subtitle-sep", text: "\u2022" });
-        const link = sub.createEl("a", {
+        const link2 = sub.createEl("a", {
           cls: "dp-subtitle-link",
           text: "Open Active Note",
           attr: {
@@ -4067,7 +4067,7 @@ var TodayView = class extends import_obsidian5.ItemView {
             title: openActiveTarget.path
           }
         });
-        link.addEventListener("click", (ev) => {
+        link2.addEventListener("click", (ev) => {
           ev.preventDefault();
           this.overrideFilePath = openActiveTarget.path;
           this.scheduleRender();
@@ -5584,29 +5584,29 @@ var TodayView = class extends import_obsidian5.ItemView {
       prefixes,
       this.plugin.settings.defaultDurationMin
     );
-    let current = (_a5 = fresh.find((t) => t.lineNumber === task.lineNumber)) != null ? _a5 : fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
-    if (!current) {
+    let current2 = (_a5 = fresh.find((t) => t.lineNumber === task.lineNumber)) != null ? _a5 : fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
+    if (!current2) {
       new import_obsidian5.Notice("Couldn't locate the task to migrate.");
       return false;
     }
-    const existingId = parseTaskId(current.body, prefixes);
+    const existingId = parseTaskId(current2.body, prefixes);
     const taskId = existingId != null ? existingId : generateTaskId(this.plugin.settings.taskIdLength);
     const orderRe = new RegExp(
       `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`
     );
-    let newParentLine = current.rawLine.replace(orderRe, "");
+    let newParentLine = current2.rawLine.replace(orderRe, "");
     newParentLine = setTaskChecked(newParentLine, false);
     newParentLine = setTaskIdTag(newParentLine, taskId, prefixes);
-    const uncheckedSubLines = current.subtasks.filter((s) => !s.checked).map((s) => s.rawLine);
+    const uncheckedSubLines = current2.subtasks.filter((s) => !s.checked).map((s) => s.rawLine);
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
-      if (current.lineNumber < lines.length) {
-        let parent = lines[current.lineNumber];
+      if (current2.lineNumber < lines.length) {
+        let parent = lines[current2.lineNumber];
         parent = setTaskChecked(parent, true);
         parent = setTaskIdTag(parent, taskId, prefixes);
-        lines[current.lineNumber] = parent;
+        lines[current2.lineNumber] = parent;
       }
-      const removeNumbers = current.subtasks.filter((s) => !s.checked).map((s) => s.lineNumber).sort((a, b) => b - a);
+      const removeNumbers = current2.subtasks.filter((s) => !s.checked).map((s) => s.lineNumber).sort((a, b) => b - a);
       for (const n of removeNumbers) {
         if (n < lines.length)
           lines.splice(n, 1);
@@ -6138,7 +6138,7 @@ var TodayView = class extends import_obsidian5.ItemView {
   }
   // Returns true if the pomodoro UI handled the render, false if the caller
   // should fall through to the normal timeline render (task gone, etc.).
-  async renderPomodoro(root2) {
+  async renderPomodoro(root7) {
     const state2 = this.pomodoroState;
     if (!state2)
       return false;
@@ -6191,11 +6191,11 @@ var TodayView = class extends import_obsidian5.ItemView {
         state2.pausedRemainingMs = 0;
       }
     }
-    root2.empty();
-    root2.addClass("today-root");
-    if (!root2.hasAttribute("tabindex"))
-      root2.setAttribute("tabindex", "-1");
-    const wrap = root2.createDiv({ cls: "dp-pomo" });
+    root7.empty();
+    root7.addClass("today-root");
+    if (!root7.hasAttribute("tabindex"))
+      root7.setAttribute("tabindex", "-1");
+    const wrap = root7.createDiv({ cls: "dp-pomo" });
     const topBar = wrap.createDiv({ cls: "dp-pomo-topbar" });
     const editTask = topBar.createEl("button", {
       cls: "dp-pomo-iconbtn",
@@ -6352,12 +6352,12 @@ var TodayView = class extends import_obsidian5.ItemView {
       addHint("x", "close");
       addHint("?", "toggle hints");
     }
-    const doc = root2.ownerDocument;
+    const doc = root7.ownerDocument;
     const active = doc == null ? void 0 : doc.activeElement;
     const focusElsewhere = !!active && active !== (doc == null ? void 0 : doc.body) && !this.containerEl.contains(active);
     const isEditable = !!active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
-    if (!focusElsewhere && !isEditable && active !== root2) {
-      root2.focus({ preventScroll: true });
+    if (!focusElsewhere && !isEditable && active !== root7) {
+      root7.focus({ preventScroll: true });
     }
     return true;
   }
@@ -7268,8 +7268,8 @@ var TaskEditModal = class extends import_obsidian5.Modal {
           commit: (key2, start, cursor) => {
             const person = personMap.get(key2);
             if (person) {
-              const link2 = buildPersonLinkInsert(this.app, person.path);
-              replaceTriggerRange(start, cursor, link2 + " ");
+              const link3 = buildPersonLinkInsert(this.app, person.path);
+              replaceTriggerRange(start, cursor, link3 + " ");
               return;
             }
             const d = dateMap.get(key2);
@@ -7277,14 +7277,14 @@ var TaskEditModal = class extends import_obsidian5.Modal {
               replaceTriggerRange(start, cursor, "");
               return;
             }
-            const link = buildDateLinkInsert(
+            const link2 = buildDateLinkInsert(
               this.app,
               d,
               this.opts.dailyNoteFormat,
               this.opts.dailyNoteFolder,
               fmt
             );
-            replaceTriggerRange(start, cursor, link + " ");
+            replaceTriggerRange(start, cursor, link2 + " ");
           }
         };
       })()
@@ -7489,13 +7489,13 @@ var TaskEditModal = class extends import_obsidian5.Modal {
       });
       timeChip.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        const current = parseTime(sub.text, prefixes);
+        const current2 = parseTime(sub.text, prefixes);
         const editor = row2.createEl("input", {
           type: "text",
           cls: "dp-edit-subtask-time-input",
           attr: { placeholder: "e.g. 7p, 6:30p" }
         });
-        editor.value = current === null ? "" : formatClockShort(current);
+        editor.value = current2 === null ? "" : formatClockShort(current2);
         timeChip.style.display = "none";
         editor.focus();
         editor.select();
@@ -7521,7 +7521,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
             }
             totalMin = parsed;
           }
-          if (totalMin === current)
+          if (totalMin === current2)
             return;
           sub.rawLine = totalMin === null ? removeTimeTag(sub.rawLine, prefixes) : setTimeTag(sub.rawLine, totalMin, prefixes);
           const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
@@ -7545,13 +7545,13 @@ var TaskEditModal = class extends import_obsidian5.Modal {
       });
       durChip.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        const current = parseDuration(sub.text, prefixes);
+        const current2 = parseDuration(sub.text, prefixes);
         const editor = row2.createEl("input", {
           type: "text",
           cls: "dp-edit-subtask-time-input",
           attr: { placeholder: "e.g. 30m, 1h30m" }
         });
-        editor.value = current === null ? "" : formatCompactDuration(current);
+        editor.value = current2 === null ? "" : formatCompactDuration(current2);
         durChip.style.display = "none";
         editor.focus();
         editor.select();
@@ -7575,7 +7575,7 @@ var TaskEditModal = class extends import_obsidian5.Modal {
             }
             totalMin = parsed;
           }
-          if (totalMin === current)
+          if (totalMin === current2)
             return;
           sub.rawLine = totalMin === null ? removeDurationTag(sub.rawLine, prefixes) : setDurationTag(sub.rawLine, totalMin, prefixes);
           const m = /^\s*-\s*\[[^\]]\]\s+(.*)$/.exec(sub.rawLine);
@@ -8566,7 +8566,7 @@ function isMigrationRoot(taskLines, i) {
   }
   return true;
 }
-function appendBlockToPlan(subtree, root2, date, prefixes, idLength, edits, inboxLines) {
+function appendBlockToPlan(subtree, root7, date, prefixes, idLength, edits, inboxLines) {
   for (const line of subtree) {
     let id = parseTaskId(line.body, prefixes);
     let updatedSource = line.rawLine;
@@ -8575,7 +8575,7 @@ function appendBlockToPlan(subtree, root2, date, prefixes, idLength, edits, inbo
       updatedSource = setTaskIdTag(updatedSource, id, prefixes);
     }
     const migratedSource = setTaskMigrated(updatedSource);
-    const rebasedIndent = stripIndentPrefix(line.indent, root2.indent);
+    const rebasedIndent = stripIndentPrefix(line.indent, root7.indent);
     const sourceBodyMatch = TASK_LINE2.exec(updatedSource);
     const inboxBody = sourceBodyMatch ? sourceBodyMatch[3] : line.body;
     let inboxLine = `${rebasedIndent}- [ ] ${inboxBody}`;
@@ -8686,10 +8686,10 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
     }, 100);
   }
   async render() {
-    const root2 = this.containerEl.children[1];
-    root2.empty();
-    root2.addClass("today-root");
-    root2.addClass("dp-habit-stats");
+    const root7 = this.containerEl.children[1];
+    root7.empty();
+    root7.addClass("today-root");
+    root7.addClass("dp-habit-stats");
     const settings = this.plugin.settings;
     const fallback2 = {
       folder: settings.dailyNoteFolderFallback,
@@ -8699,12 +8699,12 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
       dateLinkFormat: settings.dateLinkFormat,
       quotesFile: settings.quotesFile
     };
-    const heading = root2.createDiv({ cls: "dp-habit-stats-header" });
+    const heading = root7.createDiv({ cls: "dp-habit-stats-header" });
     heading.createEl("h3", { text: "Habit stats" });
-    this.renderTabs(root2);
+    this.renderTabs(root7);
     const { habits, goals } = await this.loadHabitsAndGoals();
     if (habits.length === 0 && goals.length === 0) {
-      root2.createDiv({
+      root7.createDiv({
         cls: "dp-habit-stats-empty",
         text: `No habits found. Add tags like #${settings.habitPrefix}/day/<slug> to ${settings.habitsFile}.`
       });
@@ -8713,7 +8713,7 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
     const today = startOfDay(new Date());
     const window2 = settings.habitsStatsWindow;
     if (this.activeTab === "workouts") {
-      await this.renderWorkoutLog(root2, today, window2, fallback2);
+      await this.renderWorkoutLog(root7, today, window2, fallback2);
       return;
     }
     const dayBuckets = this.buildDayBuckets(today, window2);
@@ -8743,9 +8743,9 @@ var HabitsStatsView = class extends import_obsidian7.ItemView {
       goals,
       fallback2
     );
-    this.renderSection(root2, daySection);
-    this.renderSection(root2, weekSection);
-    this.renderSection(root2, monthSection);
+    this.renderSection(root7, daySection);
+    this.renderSection(root7, weekSection);
+    this.renderSection(root7, monthSection);
   }
   renderTabs(parent) {
     const tabsEl = parent.createDiv({ cls: "dp-habit-stats-tabs" });
@@ -9140,20 +9140,20 @@ ${cell.reps}/${cell.target} reps (${pct}%)`;
 };
 function buildMonthBands(buckets) {
   const out = [];
-  let current = null;
+  let current2 = null;
   for (const b of buckets) {
     const key2 = `${b.start.getFullYear()}-${b.start.getMonth()}`;
-    if (current && current.key === key2) {
-      current.span++;
+    if (current2 && current2.key === key2) {
+      current2.span++;
     } else {
-      if (current)
-        out.push({ label: current.label, span: current.span });
+      if (current2)
+        out.push({ label: current2.label, span: current2.span });
       const label = b.start.toLocaleDateString(void 0, { month: "short" });
-      current = { key: key2, label, span: 1 };
+      current2 = { key: key2, label, span: 1 };
     }
   }
-  if (current)
-    out.push({ label: current.label, span: current.span });
+  if (current2)
+    out.push({ label: current2.label, span: current2.span });
   return out;
 }
 function quintile(count) {
@@ -9204,7 +9204,7 @@ function formatMonthRange(start, endExclusive) {
 }
 
 // src/multiDayView.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // node_modules/esm-env/dev-fallback.js
 var _a, _b;
@@ -9219,6 +9219,7 @@ var array_from = Array.from;
 var object_keys = Object.keys;
 var define_property = Object.defineProperty;
 var get_descriptor = Object.getOwnPropertyDescriptor;
+var get_descriptors = Object.getOwnPropertyDescriptors;
 var object_prototype = Object.prototype;
 var array_prototype = Array.prototype;
 var get_prototype_of = Object.getPrototypeOf;
@@ -9321,6 +9322,28 @@ https://svelte.dev/e/derived_references_self`);
     throw error;
   } else {
     throw new Error(`https://svelte.dev/e/derived_references_self`);
+  }
+}
+function each_key_duplicate(a, b, value) {
+  if (dev_fallback_default) {
+    const error = new Error(`each_key_duplicate
+${value ? `Keyed each block has duplicate key \`${value}\` at indexes ${a} and ${b}` : `Keyed each block has duplicate key at indexes ${a} and ${b}`}
+https://svelte.dev/e/each_key_duplicate`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/each_key_duplicate`);
+  }
+}
+function each_key_volatile(index2, a, b) {
+  if (dev_fallback_default) {
+    const error = new Error(`each_key_volatile
+Keyed each block has key that is not idempotent \u2014 the key for item at index ${index2} was \`${a}\` but is now \`${b}\`. Keys must be the same each time for a given item
+https://svelte.dev/e/each_key_volatile`);
+    error.name = "Svelte error";
+    throw error;
+  } else {
+    throw new Error(`https://svelte.dev/e/each_key_volatile`);
   }
 }
 function effect_in_teardown(rune) {
@@ -9446,6 +9469,7 @@ https://svelte.dev/e/svelte_boundary_reset_onerror`);
 }
 
 // node_modules/svelte/src/constants.js
+var EACH_ITEM_REACTIVE = 1;
 var EACH_INDEX_REACTIVE = 1 << 1;
 var EACH_IS_CONTROLLED = 1 << 2;
 var EACH_IS_ANIMATED = 1 << 3;
@@ -9501,6 +9525,15 @@ function derived_inert() {
 https://svelte.dev/e/derived_inert`, bold, normal);
   } else {
     console.warn(`https://svelte.dev/e/derived_inert`);
+  }
+}
+function hydration_attribute_changed(attribute, html2, value) {
+  if (dev_fallback_default) {
+    console.warn(`%c[svelte] hydration_attribute_changed
+%cThe \`${attribute}\` attribute on \`${html2}\` changed its value between server and client renders. The client value, \`${value}\`, will be ignored in favour of the server value
+https://svelte.dev/e/hydration_attribute_changed`, bold, normal);
+  } else {
+    console.warn(`https://svelte.dev/e/hydration_attribute_changed`);
   }
 }
 function hydration_mismatch(location) {
@@ -10351,11 +10384,11 @@ process_fn = function() {
   var effects = collected_effects = [];
   var render_effects = [];
   var updates = legacy_updates = [];
-  for (const root2 of roots) {
+  for (const root7 of roots) {
     try {
-      __privateMethod(this, _traverse, traverse_fn).call(this, root2, effects, render_effects);
+      __privateMethod(this, _traverse, traverse_fn).call(this, root7, effects, render_effects);
     } catch (e) {
-      reset_all(root2);
+      reset_all(root7);
       throw e;
     }
   }
@@ -10412,9 +10445,9 @@ process_fn = function() {
   }
 };
 _traverse = new WeakSet();
-traverse_fn = function(root2, effects, render_effects) {
-  root2.f ^= CLEAN;
-  var effect2 = root2.first;
+traverse_fn = function(root7, effects, render_effects) {
+  root7.f ^= CLEAN;
+  var effect2 = root7.first;
   while (effect2 !== null) {
     var flags2 = effect2.f;
     var is_branch = (flags2 & (BRANCH_EFFECT | ROOT_EFFECT)) !== 0;
@@ -10520,8 +10553,8 @@ commit_fn = function() {
       }
       if (__privateGet(batch, _roots).length > 0) {
         batch.apply();
-        for (var root2 of __privateGet(batch, _roots)) {
-          __privateMethod(_a5 = batch, _traverse, traverse_fn).call(_a5, root2, [], []);
+        for (var root7 of __privateGet(batch, _roots)) {
+          __privateMethod(_a5 = batch, _traverse, traverse_fn).call(_a5, root7, [], []);
         }
         __privateSet(batch, _roots, []);
       }
@@ -12172,6 +12205,28 @@ function child(node, is_text) {
   set_hydrate_node(child2);
   return child2;
 }
+function first_child(node, is_text = false) {
+  var _a5, _b3;
+  if (!hydrating) {
+    var first = get_first_child(node);
+    if (first instanceof Comment && first.data === "")
+      return get_next_sibling(first);
+    return first;
+  }
+  if (is_text) {
+    if (((_a5 = hydrate_node) == null ? void 0 : _a5.nodeType) !== TEXT_NODE) {
+      var text2 = create_text();
+      (_b3 = hydrate_node) == null ? void 0 : _b3.before(text2);
+      set_hydrate_node(text2);
+      return text2;
+    }
+    merge_text_nodes(
+      /** @type {Text} */
+      hydrate_node
+    );
+  }
+  return hydrate_node;
+}
 function sibling(node, count = 1, is_text = false) {
   let next_sibling = hydrating ? hydrate_node : node;
   var last_sibling;
@@ -12683,7 +12738,7 @@ function is_dirty(reaction) {
   }
   return false;
 }
-function schedule_possible_effect_self_invalidation(signal, effect2, root2 = true) {
+function schedule_possible_effect_self_invalidation(signal, effect2, root7 = true) {
   var reactions = signal.reactions;
   if (reactions === null)
     return;
@@ -12700,7 +12755,7 @@ function schedule_possible_effect_self_invalidation(signal, effect2, root2 = tru
         false
       );
     } else if (effect2 === reaction) {
-      if (root2) {
+      if (root7) {
         set_signal_status(reaction, DIRTY);
       } else if ((reaction.f & CLEAN) !== 0) {
         set_signal_status(reaction, MAYBE_DIRTY);
@@ -13139,6 +13194,38 @@ var RUNES = (
 var event_symbol = Symbol("events");
 var all_registered_events = /* @__PURE__ */ new Set();
 var root_event_handles = /* @__PURE__ */ new Set();
+function create_event(event_name, dom, handler, options = {}) {
+  function target_handler(event2) {
+    if (!options.capture) {
+      handle_event_propagation.call(dom, event2);
+    }
+    if (!event2.cancelBubble) {
+      return without_reactive_context(() => {
+        return handler == null ? void 0 : handler.call(this, event2);
+      });
+    }
+  }
+  if (event_name.startsWith("pointer") || event_name.startsWith("touch") || event_name === "wheel") {
+    queue_micro_task(() => {
+      dom.addEventListener(event_name, target_handler, options);
+    });
+  } else {
+    dom.addEventListener(event_name, target_handler, options);
+  }
+  return target_handler;
+}
+function event(event_name, dom, handler, capture2, passive2) {
+  var options = { capture: capture2, passive: passive2 };
+  var target_handler = create_event(event_name, dom, handler, options);
+  if (dom === document.body || // @ts-ignore
+  dom === window || // @ts-ignore
+  dom === document || // Firefox has quirky behavior, it can happen that we still get "canplay" events when the element is already removed
+  dom instanceof HTMLMediaElement) {
+    teardown(() => {
+      dom.removeEventListener(event_name, target_handler, options);
+    });
+  }
+}
 function delegated(event_name, element2, handler) {
   var _a5;
   ((_a5 = element2[event_symbol]) != null ? _a5 : element2[event_symbol] = {})[event_name] = handler;
@@ -13332,6 +13419,14 @@ function append(anchor, dom) {
 
 // node_modules/svelte/src/internal/client/render.js
 var should_intro = true;
+function set_text(text2, value) {
+  var _a5;
+  var str = value == null ? "" : typeof value === "object" ? `${value}` : value;
+  if (str !== ((_a5 = text2.__t) != null ? _a5 : text2.__t = text2.nodeValue)) {
+    text2.__t = str;
+    text2.nodeValue = `${str}`;
+  }
+}
 function mount(component2, options) {
   return _mount(component2, options);
 }
@@ -13726,6 +13821,491 @@ function if_block(node, fn, elseif = false) {
 // node_modules/svelte/src/internal/client/dom/blocks/key.js
 var NAN = Symbol("NaN");
 
+// node_modules/svelte/src/internal/client/dom/blocks/each.js
+function index(_, i) {
+  return i;
+}
+function pause_effects(state2, to_destroy, controlled_anchor) {
+  var _a5;
+  var transitions = [];
+  var length = to_destroy.length;
+  var group;
+  var remaining = to_destroy.length;
+  for (var i = 0; i < length; i++) {
+    let effect2 = to_destroy[i];
+    pause_effect(
+      effect2,
+      () => {
+        if (group) {
+          group.pending.delete(effect2);
+          group.done.add(effect2);
+          if (group.pending.size === 0) {
+            var groups = (
+              /** @type {Set<EachOutroGroup>} */
+              state2.outrogroups
+            );
+            destroy_effects(state2, array_from(group.done));
+            groups.delete(group);
+            if (groups.size === 0) {
+              state2.outrogroups = null;
+            }
+          }
+        } else {
+          remaining -= 1;
+        }
+      },
+      false
+    );
+  }
+  if (remaining === 0) {
+    var fast_path = transitions.length === 0 && controlled_anchor !== null;
+    if (fast_path) {
+      var anchor = (
+        /** @type {Element} */
+        controlled_anchor
+      );
+      var parent_node = (
+        /** @type {Element} */
+        anchor.parentNode
+      );
+      clear_text_content(parent_node);
+      parent_node.append(anchor);
+      state2.items.clear();
+    }
+    destroy_effects(state2, to_destroy, !fast_path);
+  } else {
+    group = {
+      pending: new Set(to_destroy),
+      done: /* @__PURE__ */ new Set()
+    };
+    ((_a5 = state2.outrogroups) != null ? _a5 : state2.outrogroups = /* @__PURE__ */ new Set()).add(group);
+  }
+}
+function destroy_effects(state2, to_destroy, remove_dom = true) {
+  var preserved_effects;
+  if (state2.pending.size > 0) {
+    preserved_effects = /* @__PURE__ */ new Set();
+    for (const keys of state2.pending.values()) {
+      for (const key2 of keys) {
+        preserved_effects.add(
+          /** @type {EachItem} */
+          state2.items.get(key2).e
+        );
+      }
+    }
+  }
+  for (var i = 0; i < to_destroy.length; i++) {
+    var e = to_destroy[i];
+    if (preserved_effects == null ? void 0 : preserved_effects.has(e)) {
+      e.f |= EFFECT_OFFSCREEN;
+      const fragment = document.createDocumentFragment();
+      move_effect(e, fragment);
+    } else {
+      destroy_effect(to_destroy[i], remove_dom);
+    }
+  }
+}
+var offscreen_anchor;
+function each(node, flags2, get_collection, get_key, render_fn2, fallback_fn = null) {
+  var anchor = node;
+  var items = /* @__PURE__ */ new Map();
+  var is_controlled = (flags2 & EACH_IS_CONTROLLED) !== 0;
+  if (is_controlled) {
+    var parent_node = (
+      /** @type {Element} */
+      node
+    );
+    anchor = hydrating ? set_hydrate_node(get_first_child(parent_node)) : parent_node.appendChild(create_text());
+  }
+  if (hydrating) {
+    hydrate_next();
+  }
+  var fallback2 = null;
+  var each_array = derived_safe_equal(() => {
+    var collection = get_collection();
+    return is_array(collection) ? collection : collection == null ? [] : array_from(collection);
+  });
+  if (dev_fallback_default) {
+    tag(each_array, "{#each ...}");
+  }
+  var array;
+  var pending2 = /* @__PURE__ */ new Map();
+  var first_run = true;
+  function commit(batch) {
+    if ((state2.effect.f & DESTROYED) !== 0) {
+      return;
+    }
+    state2.pending.delete(batch);
+    state2.fallback = fallback2;
+    reconcile(state2, array, anchor, flags2, get_key);
+    if (fallback2 !== null) {
+      if (array.length === 0) {
+        if ((fallback2.f & EFFECT_OFFSCREEN) === 0) {
+          resume_effect(fallback2);
+        } else {
+          fallback2.f ^= EFFECT_OFFSCREEN;
+          move(fallback2, null, anchor);
+        }
+      } else {
+        pause_effect(fallback2, () => {
+          fallback2 = null;
+        });
+      }
+    }
+  }
+  function discard(batch) {
+    state2.pending.delete(batch);
+  }
+  var effect2 = block(() => {
+    array = /** @type {V[]} */
+    get2(each_array);
+    var length = array.length;
+    let mismatch = false;
+    if (hydrating) {
+      var is_else = read_hydration_instruction(anchor) === HYDRATION_START_ELSE;
+      if (is_else !== (length === 0)) {
+        anchor = skip_nodes();
+        set_hydrate_node(anchor);
+        set_hydrating(false);
+        mismatch = true;
+      }
+    }
+    var keys = /* @__PURE__ */ new Set();
+    var batch = (
+      /** @type {Batch} */
+      current_batch
+    );
+    var defer = should_defer_append();
+    for (var index2 = 0; index2 < length; index2 += 1) {
+      if (hydrating && hydrate_node.nodeType === COMMENT_NODE && /** @type {Comment} */
+      hydrate_node.data === HYDRATION_END) {
+        anchor = /** @type {Comment} */
+        hydrate_node;
+        mismatch = true;
+        set_hydrating(false);
+      }
+      var value = array[index2];
+      var key2 = get_key(value, index2);
+      if (dev_fallback_default) {
+        var key_again = get_key(value, index2);
+        if (key2 !== key_again) {
+          each_key_volatile(String(index2), String(key2), String(key_again));
+        }
+      }
+      var item = first_run ? null : items.get(key2);
+      if (item) {
+        if (item.v)
+          internal_set(item.v, value);
+        if (item.i)
+          internal_set(item.i, index2);
+        if (defer) {
+          batch.unskip_effect(item.e);
+        }
+      } else {
+        item = create_item(
+          items,
+          first_run ? anchor : offscreen_anchor != null ? offscreen_anchor : offscreen_anchor = create_text(),
+          value,
+          key2,
+          index2,
+          render_fn2,
+          flags2,
+          get_collection
+        );
+        if (!first_run) {
+          item.e.f |= EFFECT_OFFSCREEN;
+        }
+        items.set(key2, item);
+      }
+      keys.add(key2);
+    }
+    if (length === 0 && fallback_fn && !fallback2) {
+      if (first_run) {
+        fallback2 = branch(() => fallback_fn(anchor));
+      } else {
+        fallback2 = branch(() => fallback_fn(offscreen_anchor != null ? offscreen_anchor : offscreen_anchor = create_text()));
+        fallback2.f |= EFFECT_OFFSCREEN;
+      }
+    }
+    if (length > keys.size) {
+      if (dev_fallback_default) {
+        validate_each_keys(array, get_key);
+      } else {
+        each_key_duplicate("", "", "");
+      }
+    }
+    if (hydrating && length > 0) {
+      set_hydrate_node(skip_nodes());
+    }
+    if (!first_run) {
+      pending2.set(batch, keys);
+      if (defer) {
+        for (const [key3, item2] of items) {
+          if (!keys.has(key3)) {
+            batch.skip_effect(item2.e);
+          }
+        }
+        batch.oncommit(commit);
+        batch.ondiscard(discard);
+      } else {
+        commit(batch);
+      }
+    }
+    if (mismatch) {
+      set_hydrating(true);
+    }
+    get2(each_array);
+  });
+  var state2 = { effect: effect2, flags: flags2, items, pending: pending2, outrogroups: null, fallback: fallback2 };
+  first_run = false;
+  if (hydrating) {
+    anchor = hydrate_node;
+  }
+}
+function skip_to_branch(effect2) {
+  while (effect2 !== null && (effect2.f & BRANCH_EFFECT) === 0) {
+    effect2 = effect2.next;
+  }
+  return effect2;
+}
+function reconcile(state2, array, anchor, flags2, get_key) {
+  var _a5, _b3, _c2, _d, _e, _f, _g, _h, _i;
+  var is_animated = (flags2 & EACH_IS_ANIMATED) !== 0;
+  var length = array.length;
+  var items = state2.items;
+  var current2 = skip_to_branch(state2.effect.first);
+  var seen;
+  var prev = null;
+  var to_animate;
+  var matched = [];
+  var stashed = [];
+  var value;
+  var key2;
+  var effect2;
+  var i;
+  if (is_animated) {
+    for (i = 0; i < length; i += 1) {
+      value = array[i];
+      key2 = get_key(value, i);
+      effect2 = /** @type {EachItem} */
+      items.get(key2).e;
+      if ((effect2.f & EFFECT_OFFSCREEN) === 0) {
+        (_b3 = (_a5 = effect2.nodes) == null ? void 0 : _a5.a) == null ? void 0 : _b3.measure();
+        (to_animate != null ? to_animate : to_animate = /* @__PURE__ */ new Set()).add(effect2);
+      }
+    }
+  }
+  for (i = 0; i < length; i += 1) {
+    value = array[i];
+    key2 = get_key(value, i);
+    effect2 = /** @type {EachItem} */
+    items.get(key2).e;
+    if (state2.outrogroups !== null) {
+      for (const group of state2.outrogroups) {
+        group.pending.delete(effect2);
+        group.done.delete(effect2);
+      }
+    }
+    if ((effect2.f & INERT) !== 0) {
+      resume_effect(effect2);
+      if (is_animated) {
+        (_d = (_c2 = effect2.nodes) == null ? void 0 : _c2.a) == null ? void 0 : _d.unfix();
+        (to_animate != null ? to_animate : to_animate = /* @__PURE__ */ new Set()).delete(effect2);
+      }
+    }
+    if ((effect2.f & EFFECT_OFFSCREEN) !== 0) {
+      effect2.f ^= EFFECT_OFFSCREEN;
+      if (effect2 === current2) {
+        move(effect2, null, anchor);
+      } else {
+        var next2 = prev ? prev.next : current2;
+        if (effect2 === state2.effect.last) {
+          state2.effect.last = effect2.prev;
+        }
+        if (effect2.prev)
+          effect2.prev.next = effect2.next;
+        if (effect2.next)
+          effect2.next.prev = effect2.prev;
+        link(state2, prev, effect2);
+        link(state2, effect2, next2);
+        move(effect2, next2, anchor);
+        prev = effect2;
+        matched = [];
+        stashed = [];
+        current2 = skip_to_branch(prev.next);
+        continue;
+      }
+    }
+    if (effect2 !== current2) {
+      if (seen !== void 0 && seen.has(effect2)) {
+        if (matched.length < stashed.length) {
+          var start = stashed[0];
+          var j;
+          prev = start.prev;
+          var a = matched[0];
+          var b = matched[matched.length - 1];
+          for (j = 0; j < matched.length; j += 1) {
+            move(matched[j], start, anchor);
+          }
+          for (j = 0; j < stashed.length; j += 1) {
+            seen.delete(stashed[j]);
+          }
+          link(state2, a.prev, b.next);
+          link(state2, prev, a);
+          link(state2, b, start);
+          current2 = start;
+          prev = b;
+          i -= 1;
+          matched = [];
+          stashed = [];
+        } else {
+          seen.delete(effect2);
+          move(effect2, current2, anchor);
+          link(state2, effect2.prev, effect2.next);
+          link(state2, effect2, prev === null ? state2.effect.first : prev.next);
+          link(state2, prev, effect2);
+          prev = effect2;
+        }
+        continue;
+      }
+      matched = [];
+      stashed = [];
+      while (current2 !== null && current2 !== effect2) {
+        (seen != null ? seen : seen = /* @__PURE__ */ new Set()).add(current2);
+        stashed.push(current2);
+        current2 = skip_to_branch(current2.next);
+      }
+      if (current2 === null) {
+        continue;
+      }
+    }
+    if ((effect2.f & EFFECT_OFFSCREEN) === 0) {
+      matched.push(effect2);
+    }
+    prev = effect2;
+    current2 = skip_to_branch(effect2.next);
+  }
+  if (state2.outrogroups !== null) {
+    for (const group of state2.outrogroups) {
+      if (group.pending.size === 0) {
+        destroy_effects(state2, array_from(group.done));
+        (_e = state2.outrogroups) == null ? void 0 : _e.delete(group);
+      }
+    }
+    if (state2.outrogroups.size === 0) {
+      state2.outrogroups = null;
+    }
+  }
+  if (current2 !== null || seen !== void 0) {
+    var to_destroy = [];
+    if (seen !== void 0) {
+      for (effect2 of seen) {
+        if ((effect2.f & INERT) === 0) {
+          to_destroy.push(effect2);
+        }
+      }
+    }
+    while (current2 !== null) {
+      if ((current2.f & INERT) === 0 && current2 !== state2.fallback) {
+        to_destroy.push(current2);
+      }
+      current2 = skip_to_branch(current2.next);
+    }
+    var destroy_length = to_destroy.length;
+    if (destroy_length > 0) {
+      var controlled_anchor = (flags2 & EACH_IS_CONTROLLED) !== 0 && length === 0 ? anchor : null;
+      if (is_animated) {
+        for (i = 0; i < destroy_length; i += 1) {
+          (_g = (_f = to_destroy[i].nodes) == null ? void 0 : _f.a) == null ? void 0 : _g.measure();
+        }
+        for (i = 0; i < destroy_length; i += 1) {
+          (_i = (_h = to_destroy[i].nodes) == null ? void 0 : _h.a) == null ? void 0 : _i.fix();
+        }
+      }
+      pause_effects(state2, to_destroy, controlled_anchor);
+    }
+  }
+  if (is_animated) {
+    queue_micro_task(() => {
+      var _a6, _b4;
+      if (to_animate === void 0)
+        return;
+      for (effect2 of to_animate) {
+        (_b4 = (_a6 = effect2.nodes) == null ? void 0 : _a6.a) == null ? void 0 : _b4.apply();
+      }
+    });
+  }
+}
+function create_item(items, anchor, value, key2, index2, render_fn2, flags2, get_collection) {
+  var v = (flags2 & EACH_ITEM_REACTIVE) !== 0 ? (flags2 & EACH_ITEM_IMMUTABLE) === 0 ? mutable_source(value, false, false) : source(value) : null;
+  var i = (flags2 & EACH_INDEX_REACTIVE) !== 0 ? source(index2) : null;
+  if (dev_fallback_default && v) {
+    v.trace = () => {
+      var _a5;
+      get_collection()[(_a5 = i == null ? void 0 : i.v) != null ? _a5 : index2];
+    };
+  }
+  return {
+    v,
+    i,
+    e: branch(() => {
+      render_fn2(anchor, v != null ? v : value, i != null ? i : index2, get_collection);
+      return () => {
+        items.delete(key2);
+      };
+    })
+  };
+}
+function move(effect2, next2, anchor) {
+  if (!effect2.nodes)
+    return;
+  var node = effect2.nodes.start;
+  var end = effect2.nodes.end;
+  var dest = next2 && (next2.f & EFFECT_OFFSCREEN) === 0 ? (
+    /** @type {EffectNodes} */
+    next2.nodes.start
+  ) : anchor;
+  while (node !== null) {
+    var next_node = (
+      /** @type {TemplateNode} */
+      get_next_sibling(node)
+    );
+    dest.before(node);
+    if (node === end) {
+      return;
+    }
+    node = next_node;
+  }
+}
+function link(state2, prev, next2) {
+  if (prev === null) {
+    state2.effect.first = next2;
+  } else {
+    prev.next = next2;
+  }
+  if (next2 === null) {
+    state2.effect.last = prev;
+  } else {
+    next2.prev = prev;
+  }
+}
+function validate_each_keys(array, key_fn) {
+  const keys = /* @__PURE__ */ new Map();
+  const length = array.length;
+  for (let i = 0; i < length; i++) {
+    const key2 = key_fn(array[i], i);
+    if (keys.has(key2)) {
+      const a = String(keys.get(key2));
+      const b = String(i);
+      let k = String(key2);
+      if (k.startsWith("[object "))
+        k = null;
+      each_key_duplicate(a, b, k);
+    }
+    keys.set(key2, i);
+  }
+}
+
 // node_modules/svelte/src/internal/shared/attributes.js
 var whitespace = [..." 	\n\r\f\xA0\v\uFEFF"];
 function to_class(value, hash2, directives) {
@@ -13752,6 +14332,99 @@ function to_class(value, hash2, directives) {
     }
   }
   return classname === "" ? null : classname;
+}
+function append_styles(styles, important = false) {
+  var separator = important ? " !important;" : ";";
+  var css = "";
+  for (var key2 of Object.keys(styles)) {
+    var value = styles[key2];
+    if (value != null && value !== "") {
+      css += " " + key2 + ": " + value + separator;
+    }
+  }
+  return css;
+}
+function to_css_name(name) {
+  if (name[0] !== "-" || name[1] !== "-") {
+    return name.toLowerCase();
+  }
+  return name;
+}
+function to_style(value, styles) {
+  if (styles) {
+    var new_style = "";
+    var normal_styles;
+    var important_styles;
+    if (Array.isArray(styles)) {
+      normal_styles = styles[0];
+      important_styles = styles[1];
+    } else {
+      normal_styles = styles;
+    }
+    if (value) {
+      value = String(value).replaceAll(/\s*\/\*.*?\*\/\s*/g, "").trim();
+      var in_str = false;
+      var in_apo = 0;
+      var in_comment = false;
+      var reserved_names = [];
+      if (normal_styles) {
+        reserved_names.push(...Object.keys(normal_styles).map(to_css_name));
+      }
+      if (important_styles) {
+        reserved_names.push(...Object.keys(important_styles).map(to_css_name));
+      }
+      var start_index = 0;
+      var name_index = -1;
+      const len = value.length;
+      for (var i = 0; i < len; i++) {
+        var c = value[i];
+        if (in_comment) {
+          if (c === "/" && value[i - 1] === "*") {
+            in_comment = false;
+          }
+        } else if (in_str) {
+          if (in_str === c) {
+            in_str = false;
+          }
+        } else if (c === "/" && value[i + 1] === "*") {
+          in_comment = true;
+        } else if (c === '"' || c === "'") {
+          in_str = c;
+        } else if (c === "(") {
+          in_apo++;
+        } else if (c === ")") {
+          in_apo--;
+        }
+        if (!in_comment && in_str === false && in_apo === 0) {
+          if (c === ":" && name_index === -1) {
+            name_index = i;
+          } else if (c === ";" || i === len - 1) {
+            if (name_index !== -1) {
+              var name = to_css_name(value.substring(start_index, name_index).trim());
+              if (!reserved_names.includes(name)) {
+                if (c !== ";") {
+                  i++;
+                }
+                var property = value.substring(start_index, i).trim();
+                new_style += " " + property + ";";
+              }
+            }
+            start_index = i + 1;
+            name_index = -1;
+          }
+        }
+      }
+    }
+    if (normal_styles) {
+      new_style += append_styles(normal_styles);
+    }
+    if (important_styles) {
+      new_style += append_styles(important_styles, true);
+    }
+    new_style = new_style.trim();
+    return new_style === "" ? null : new_style;
+  }
+  return value == null ? null : String(value);
 }
 
 // node_modules/svelte/src/internal/client/dom/elements/class.js
@@ -13780,11 +14453,138 @@ function set_class(dom, is_html, value, hash2, prev_classes, next_classes) {
   return next_classes;
 }
 
+// node_modules/svelte/src/internal/client/dom/elements/style.js
+function update_styles(dom, prev = {}, next2, priority) {
+  for (var key2 in next2) {
+    var value = next2[key2];
+    if (prev[key2] !== value) {
+      if (next2[key2] == null) {
+        dom.style.removeProperty(key2);
+      } else {
+        dom.style.setProperty(key2, value, priority);
+      }
+    }
+  }
+}
+function set_style(dom, value, prev_styles, next_styles) {
+  var prev = dom.__style;
+  if (hydrating || prev !== value) {
+    var next_style_attr = to_style(value, next_styles);
+    if (!hydrating || next_style_attr !== dom.getAttribute("style")) {
+      if (next_style_attr == null) {
+        dom.removeAttribute("style");
+      } else {
+        dom.style.cssText = next_style_attr;
+      }
+    }
+    dom.__style = value;
+  } else if (next_styles) {
+    if (Array.isArray(next_styles)) {
+      update_styles(dom, prev_styles == null ? void 0 : prev_styles[0], next_styles[0]);
+      update_styles(dom, prev_styles == null ? void 0 : prev_styles[1], next_styles[1], "important");
+    } else {
+      update_styles(dom, prev_styles, next_styles);
+    }
+  }
+  return next_styles;
+}
+
 // node_modules/svelte/src/internal/client/dom/elements/attributes.js
 var CLASS = Symbol("class");
 var STYLE = Symbol("style");
 var IS_CUSTOM_ELEMENT = Symbol("is custom element");
 var IS_HTML = Symbol("is html");
+var LINK_TAG = IS_XHTML ? "link" : "LINK";
+function set_attribute2(element2, attribute, value, skip_warning) {
+  var attributes = get_attributes(element2);
+  if (hydrating) {
+    attributes[attribute] = element2.getAttribute(attribute);
+    if (attribute === "src" || attribute === "srcset" || attribute === "href" && element2.nodeName === LINK_TAG) {
+      if (!skip_warning) {
+        check_src_in_dev_hydration(element2, attribute, value != null ? value : "");
+      }
+      return;
+    }
+  }
+  if (attributes[attribute] === (attributes[attribute] = value))
+    return;
+  if (attribute === "loading") {
+    element2[LOADING_ATTR_SYMBOL] = value;
+  }
+  if (value == null) {
+    element2.removeAttribute(attribute);
+  } else if (typeof value !== "string" && get_setters(element2).includes(attribute)) {
+    element2[attribute] = value;
+  } else {
+    element2.setAttribute(attribute, value);
+  }
+}
+function get_attributes(element2) {
+  var _a5;
+  return (
+    /** @type {Record<string | symbol, unknown>} **/
+    // @ts-expect-error
+    (_a5 = element2.__attributes) != null ? _a5 : element2.__attributes = {
+      [IS_CUSTOM_ELEMENT]: element2.nodeName.includes("-"),
+      [IS_HTML]: element2.namespaceURI === NAMESPACE_HTML
+    }
+  );
+}
+var setters_cache = /* @__PURE__ */ new Map();
+function get_setters(element2) {
+  var cache_key = element2.getAttribute("is") || element2.nodeName;
+  var setters = setters_cache.get(cache_key);
+  if (setters)
+    return setters;
+  setters_cache.set(cache_key, setters = []);
+  var descriptors;
+  var proto = element2;
+  var element_proto = Element.prototype;
+  while (element_proto !== proto) {
+    descriptors = get_descriptors(proto);
+    for (var key2 in descriptors) {
+      if (descriptors[key2].set) {
+        setters.push(key2);
+      }
+    }
+    proto = get_prototype_of(proto);
+  }
+  return setters;
+}
+function check_src_in_dev_hydration(element2, attribute, value) {
+  var _a5;
+  if (!dev_fallback_default)
+    return;
+  if (attribute === "srcset" && srcset_url_equal(element2, value))
+    return;
+  if (src_url_equal((_a5 = element2.getAttribute(attribute)) != null ? _a5 : "", value))
+    return;
+  hydration_attribute_changed(
+    attribute,
+    element2.outerHTML.replace(element2.innerHTML, element2.innerHTML && "..."),
+    String(value)
+  );
+}
+function src_url_equal(element_src, url) {
+  if (element_src === url)
+    return true;
+  return new URL(element_src, document.baseURI).href === new URL(url, document.baseURI).href;
+}
+function split_srcset(srcset) {
+  return srcset.split(",").map((src) => src.trim().split(" ").filter(Boolean));
+}
+function srcset_url_equal(element2, srcset) {
+  var element_urls = split_srcset(element2.srcset);
+  var urls = split_srcset(srcset);
+  return urls.length === element_urls.length && urls.every(
+    ([url, width], i) => width === element_urls[i][1] && // We need to test both ways because Vite will create an a full URL with
+    // `new URL(asset, import.meta.url).href` for the client when `base: './'`, and the
+    // relative URLs inside srcset are not automatically resolved to absolute URLs by
+    // browsers (in contrast to img.src). This means both SSR and DOM code could
+    // contain relative or absolute URLs.
+    (src_url_equal(element_urls[i][0], url) || src_url_equal(url, element_urls[i][0]))
+  );
+}
 
 // node_modules/svelte/src/internal/client/dom/elements/bindings/size.js
 var _listeners, _observer, _options, _getObserver, getObserver_fn;
@@ -14425,10 +15225,485 @@ function buildWindowColorMap(days, inbox, projectColors) {
       all.push({ project: t.project, subproject: t.subproject });
   return resolveProjectColors(all, projectColors);
 }
+function colorFor(task, colorMap) {
+  return getTaskColor(task.project, task.subproject, colorMap);
+}
+
+// src/multiday/SummaryBar.svelte
+var root_1 = from_html(`<div class="dp-md-summary-empty">No scheduled time in this window.</div>`);
+var root_3 = from_html(`<div class="dp-md-summary-seg"></div>`);
+var root_4 = from_html(`<span class="dp-md-summary-chip"><span class="dp-md-summary-dot"></span> <span class="dp-md-summary-name"> </span> <span class="dp-md-summary-min"> </span></span>`);
+var root_2 = from_html(`<div class="dp-md-summary-bar"></div> <div class="dp-md-summary-legend"><span class="dp-md-summary-total"> </span> <!></div>`, 1);
+var root = from_html(`<div class="dp-md-summary"><!></div>`);
+function SummaryBar($$anchor, $$props) {
+  push($$props, true);
+  function fmtMin(min) {
+    if (min <= 0)
+      return "0m";
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0)
+      return `${m}m`;
+    if (m === 0)
+      return `${h}h`;
+    return `${h}h ${m}m`;
+  }
+  var div = root();
+  var node = child(div);
+  {
+    var consequent = ($$anchor2) => {
+      var div_1 = root_1();
+      append($$anchor2, div_1);
+    };
+    var alternate = ($$anchor2) => {
+      var fragment = root_2();
+      var div_2 = first_child(fragment);
+      each(div_2, 21, () => $$props.summary.byProject, index, ($$anchor3, p) => {
+        var div_3 = root_3();
+        let styles;
+        template_effect(
+          ($0) => {
+            var _a5;
+            set_attribute2(div_3, "title", `${(_a5 = get2(p).project) != null ? _a5 : ""} \xB7 ${$0 != null ? $0 : ""}`);
+            styles = set_style(div_3, "", styles, {
+              width: `${get2(p).minutes / $$props.summary.totalMin * 100}%`,
+              background: get2(p).color
+            });
+          },
+          [() => fmtMin(get2(p).minutes)]
+        );
+        append($$anchor3, div_3);
+      });
+      reset(div_2);
+      var div_4 = sibling(div_2, 2);
+      var span = child(div_4);
+      var text2 = child(span);
+      reset(span);
+      var node_1 = sibling(span, 2);
+      each(node_1, 17, () => $$props.summary.byProject, index, ($$anchor3, p) => {
+        var span_1 = root_4();
+        var span_2 = child(span_1);
+        let styles_1;
+        var span_3 = sibling(span_2, 2);
+        var text_1 = child(span_3, true);
+        reset(span_3);
+        var span_4 = sibling(span_3, 2);
+        var text_2 = child(span_4, true);
+        reset(span_4);
+        reset(span_1);
+        template_effect(
+          ($0) => {
+            styles_1 = set_style(span_2, "", styles_1, { background: get2(p).color });
+            set_text(text_1, get2(p).project);
+            set_text(text_2, $0);
+          },
+          [() => fmtMin(get2(p).minutes)]
+        );
+        append($$anchor3, span_1);
+      });
+      reset(div_4);
+      template_effect(($0) => set_text(text2, `${$0 != null ? $0 : ""} total`), [() => fmtMin($$props.summary.totalMin)]);
+      append($$anchor2, fragment);
+    };
+    if_block(node, ($$render) => {
+      if ($$props.summary.totalMin === 0)
+        $$render(consequent);
+      else
+        $$render(alternate, -1);
+    });
+  }
+  reset(div);
+  append($$anchor, div);
+  pop();
+}
+
+// src/multiday/InboxPanel.svelte
+var import_obsidian9 = require("obsidian");
+
+// src/multiday/dragStore.ts
+var current = null;
+function setDrag(state2) {
+  current = state2;
+}
+function getDrag() {
+  return current;
+}
+
+// src/multiday/InboxPanel.svelte
+var root_12 = from_html(`<div class="dp-md-inbox-empty">No inbox file at this path.</div>`);
+var root_22 = from_html(`<div class="dp-md-inbox-empty">Inbox is clear.</div>`);
+var root_42 = from_html(`<li class="dp-md-inbox-item"><span class="dp-md-inbox-dot"></span> <span class="dp-md-inbox-text"> </span></li>`);
+var root_32 = from_html(`<ul class="dp-md-inbox-list"></ul>`);
+var root2 = from_html(`<div class="dp-md-inbox"><div class="dp-md-inbox-header"><span class="dp-md-inbox-title">Inbox</span> <span class="dp-md-inbox-count"> </span></div> <!></div>`);
+function InboxPanel($$anchor, $$props) {
+  push($$props, true);
+  function onDragStart(ev, task) {
+    if (!ev.dataTransfer)
+      return;
+    setDrag({ task, fromInbox: true });
+    ev.dataTransfer.setData("text/plain", task.rawLine);
+    ev.dataTransfer.effectAllowed = "move";
+  }
+  function onDragEnd() {
+    setDrag(null);
+  }
+  async function openTask(task) {
+    if (!$$props.file)
+      return;
+    const leaf = $$props.plugin.app.workspace.getLeaf(false);
+    await leaf.openFile($$props.file, { eState: { line: task.lineNumber } });
+  }
+  function bodyText(task) {
+    return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
+  }
+  var div = root2();
+  var div_1 = child(div);
+  var span = sibling(child(div_1), 2);
+  var text2 = child(span, true);
+  reset(span);
+  reset(div_1);
+  var node = sibling(div_1, 2);
+  {
+    var consequent = ($$anchor2) => {
+      var div_2 = root_12();
+      append($$anchor2, div_2);
+    };
+    var consequent_1 = ($$anchor2) => {
+      var div_3 = root_22();
+      append($$anchor2, div_3);
+    };
+    var alternate = ($$anchor2) => {
+      var ul = root_32();
+      each(ul, 21, () => $$props.tasks, (task) => task.lineNumber, ($$anchor3, task) => {
+        const color = user_derived(() => colorFor(get2(task), $$props.colorMap));
+        var li = root_42();
+        set_attribute2(li, "draggable", true);
+        var span_1 = child(li);
+        let styles;
+        var span_2 = sibling(span_1, 2);
+        var text_1 = child(span_2, true);
+        reset(span_2);
+        reset(li);
+        template_effect(
+          ($0) => {
+            var _a5, _b3;
+            styles = set_style(span_1, "", styles, {
+              background: (_a5 = get2(color)) != null ? _a5 : "transparent",
+              "border-color": (_b3 = get2(color)) != null ? _b3 : "var(--background-modifier-border)"
+            });
+            set_text(text_1, $0);
+          },
+          [() => bodyText(get2(task))]
+        );
+        event("dragstart", li, (ev) => onDragStart(ev, get2(task)));
+        event("dragend", li, onDragEnd);
+        delegated("click", li, () => openTask(get2(task)));
+        append($$anchor3, li);
+      });
+      reset(ul);
+      append($$anchor2, ul);
+    };
+    if_block(node, ($$render) => {
+      if (!$$props.file)
+        $$render(consequent);
+      else if ($$props.tasks.length === 0)
+        $$render(consequent_1, 1);
+      else
+        $$render(alternate, -1);
+    });
+  }
+  reset(div);
+  template_effect(() => set_text(text2, $$props.tasks.length));
+  append($$anchor, div);
+  pop();
+}
+delegate(["click"]);
+
+// src/multiday/DayColumn.svelte
+var import_obsidian10 = require("obsidian");
+
+// src/multiday/MiniTimeline.svelte
+var root_13 = from_html(`<div class="dp-md-timeline-hour"><span class="dp-md-timeline-hour-label"> </span></div>`);
+var root_23 = from_html(`<button><span class="dp-md-timeline-block-text"> </span></button>`);
+var root3 = from_html(`<div class="dp-md-timeline"><!> <!></div>`);
+function MiniTimeline($$anchor, $$props) {
+  push($$props, true);
+  var _a5;
+  var _b3;
+  const startHour = user_derived(() => (_a5 = $$props.plugin.settings.visibleStartHour) !== null && _a5 !== void 0 ? _a5 : 6);
+  const endHour = user_derived(() => (_b3 = $$props.plugin.settings.visibleEndHour) !== null && _b3 !== void 0 ? _b3 : 22);
+  const startMin = user_derived(() => get2(startHour) * 60);
+  const endMin = user_derived(() => get2(endHour) * 60);
+  const totalMin = user_derived(() => get2(endMin) - get2(startMin));
+  const PX_PER_MIN = 0.5;
+  const heightPx = user_derived(() => get2(totalMin) * PX_PER_MIN);
+  const hourMarks = user_derived(() => {
+    const out = [];
+    for (let h = get2(startHour); h <= get2(endHour); h++)
+      out.push(h);
+    return out;
+  });
+  function blockTop(task) {
+    var _a6;
+    const s = (_a6 = task.startMin) !== null && _a6 !== void 0 ? _a6 : get2(startMin);
+    return Math.max(0, (s - get2(startMin)) * PX_PER_MIN);
+  }
+  function blockHeight(task) {
+    var _a6;
+    const s = (_a6 = task.startMin) !== null && _a6 !== void 0 ? _a6 : get2(startMin);
+    const end = Math.min(get2(endMin), s + task.durationMin);
+    return Math.max(8, (end - Math.max(get2(startMin), s)) * PX_PER_MIN);
+  }
+  function fmtClock(min) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    const hh = (h + 11) % 12 + 1;
+    const mm = m.toString().padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+  function bodyText(task) {
+    return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
+  }
+  var div = root3();
+  let styles;
+  var node = child(div);
+  each(node, 17, () => get2(hourMarks), index, ($$anchor2, h) => {
+    var div_1 = root_13();
+    let styles_1;
+    var span = child(div_1);
+    var text2 = child(span, true);
+    reset(span);
+    reset(div_1);
+    template_effect(() => {
+      styles_1 = set_style(div_1, "", styles_1, { top: `${(get2(h) * 60 - get2(startMin)) * PX_PER_MIN}px` });
+      set_text(text2, get2(h));
+    });
+    append($$anchor2, div_1);
+  });
+  var node_1 = sibling(node, 2);
+  each(node_1, 17, () => $$props.tasks, (task) => task.lineNumber, ($$anchor2, task) => {
+    const color = user_derived(() => colorFor(get2(task), $$props.colorMap));
+    const top = user_derived(() => blockTop(get2(task)));
+    const height = user_derived(() => blockHeight(get2(task)));
+    var button = root_23();
+    let styles_2;
+    var span_1 = child(button);
+    var text_1 = child(span_1, true);
+    reset(span_1);
+    reset(button);
+    template_effect(
+      ($0, $1, $2) => {
+        var _a6, _b4, _c2;
+        set_class(button, 1, "dp-md-timeline-block" + (get2(task).checked ? " is-done" : ""));
+        set_attribute2(button, "title", `${$0 != null ? $0 : ""} \xB7 ${$1 != null ? $1 : ""}`);
+        styles_2 = set_style(button, "", styles_2, {
+          top: `${(_a6 = get2(top)) != null ? _a6 : ""}px`,
+          height: `${(_b4 = get2(height)) != null ? _b4 : ""}px`,
+          background: (_c2 = get2(color)) != null ? _c2 : "var(--background-modifier-border)"
+        });
+        set_text(text_1, $2);
+      },
+      [
+        () => {
+          var _a6;
+          return fmtClock((_a6 = get2(task).startMin) != null ? _a6 : 0);
+        },
+        () => bodyText(get2(task)),
+        () => bodyText(get2(task))
+      ]
+    );
+    delegated("click", button, () => $$props.onClickTask(get2(task)));
+    append($$anchor2, button);
+  });
+  reset(div);
+  template_effect(() => {
+    var _a6;
+    return styles = set_style(div, "", styles, { height: `${(_a6 = get2(heightPx)) != null ? _a6 : ""}px` });
+  });
+  append($$anchor, div);
+  pop();
+}
+delegate(["click"]);
+
+// src/multiday/DayColumn.svelte
+var root_14 = from_html(`<div class="dp-md-unsched-empty">\u2014</div>`);
+var root_33 = from_html(`<li><span class="dp-md-unsched-dot"></span> <span class="dp-md-unsched-text"> </span></li>`);
+var root_24 = from_html(`<ul class="dp-md-unsched-list"></ul>`);
+var root4 = from_html(`<div role="region" aria-label="Day column"><div class="dp-md-day-header"><button class="dp-md-day-link"> </button> <span class="dp-md-day-count"> </span></div> <!> <div class="dp-md-unsched"><!></div></div>`);
+function DayColumn($$anchor, $$props) {
+  push($$props, true);
+  let dragOver = state(false);
+  const isToday = user_derived(() => sameDay($$props.day.date, new Date()));
+  const scheduled = user_derived(() => $$props.day.tasks.filter((t) => t.startMin !== null));
+  const unscheduled = user_derived(() => $$props.day.tasks.filter((t) => t.startMin === null));
+  function fmtHeader(d) {
+    return d.toLocaleDateString(void 0, { weekday: "short", month: "short", day: "numeric" });
+  }
+  async function openDay(ev) {
+    ev.preventDefault();
+    if ($$props.day.file) {
+      const leaf = $$props.plugin.app.workspace.getLeaf(false);
+      await leaf.openFile($$props.day.file);
+    } else {
+      await $$props.plugin.app.workspace.openLinkText($$props.day.path, "");
+    }
+  }
+  async function openTask(task) {
+    if (!$$props.day.file)
+      return;
+    const leaf = $$props.plugin.app.workspace.getLeaf(false);
+    await leaf.openFile($$props.day.file, { eState: { line: task.lineNumber } });
+  }
+  function onDragOver(ev) {
+    const drag = getDrag();
+    if (!drag || !drag.fromInbox)
+      return;
+    ev.preventDefault();
+    if (ev.dataTransfer)
+      ev.dataTransfer.dropEffect = "move";
+    set(dragOver, true);
+  }
+  function onDragLeave() {
+    set(dragOver, false);
+  }
+  async function onDrop(ev) {
+    ev.preventDefault();
+    set(dragOver, false);
+    const drag = getDrag();
+    if (!drag || !drag.fromInbox)
+      return;
+    if (!$$props.inboxFile)
+      return;
+    const fallback2 = buildFallback($$props.plugin.settings);
+    await moveTaskBetweenDailyNotes($$props.plugin.app, $$props.inboxFile, drag.task, $$props.day.date, fallback2);
+    await $$props.onMoved();
+  }
+  function bodyText(task) {
+    return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
+  }
+  var div = root4();
+  var div_1 = child(div);
+  var button = child(div_1);
+  var text2 = child(button, true);
+  reset(button);
+  var span = sibling(button, 2);
+  var text_1 = child(span, true);
+  reset(span);
+  reset(div_1);
+  var node = sibling(div_1, 2);
+  MiniTimeline(node, {
+    get plugin() {
+      return $$props.plugin;
+    },
+    get tasks() {
+      return get2(scheduled);
+    },
+    get colorMap() {
+      return $$props.colorMap;
+    },
+    onClickTask: openTask
+  });
+  var div_2 = sibling(node, 2);
+  var node_1 = child(div_2);
+  {
+    var consequent = ($$anchor2) => {
+      var div_3 = root_14();
+      append($$anchor2, div_3);
+    };
+    var alternate = ($$anchor2) => {
+      var ul = root_24();
+      each(ul, 21, () => get2(unscheduled), (task) => task.lineNumber, ($$anchor3, task) => {
+        const color = user_derived(() => colorFor(get2(task), $$props.colorMap));
+        var li = root_33();
+        var span_1 = child(li);
+        let styles;
+        var span_2 = sibling(span_1, 2);
+        var text_2 = child(span_2, true);
+        reset(span_2);
+        reset(li);
+        template_effect(
+          ($0) => {
+            var _a5, _b3;
+            set_class(li, 1, "dp-md-unsched-item" + (get2(task).checked ? " is-done" : ""));
+            styles = set_style(span_1, "", styles, {
+              background: (_a5 = get2(color)) != null ? _a5 : "transparent",
+              "border-color": (_b3 = get2(color)) != null ? _b3 : "var(--background-modifier-border)"
+            });
+            set_text(text_2, $0);
+          },
+          [() => bodyText(get2(task))]
+        );
+        delegated("click", li, () => openTask(get2(task)));
+        append($$anchor3, li);
+      });
+      reset(ul);
+      append($$anchor2, ul);
+    };
+    if_block(node_1, ($$render) => {
+      if (get2(unscheduled).length === 0)
+        $$render(consequent);
+      else
+        $$render(alternate, -1);
+    });
+  }
+  reset(div_2);
+  reset(div);
+  template_effect(
+    ($0) => {
+      set_class(div, 1, "dp-md-day" + (get2(isToday) ? " is-today" : "") + (get2(dragOver) ? " is-drop-target" : ""));
+      set_text(text2, $0);
+      set_text(text_1, $$props.day.tasks.length);
+    },
+    [() => fmtHeader($$props.day.date)]
+  );
+  event("dragover", div, onDragOver);
+  event("dragleave", div, onDragLeave);
+  event("drop", div, onDrop);
+  delegated("click", button, openDay);
+  append($$anchor, div);
+  pop();
+}
+delegate(["click"]);
+
+// src/multiday/DayGrid.svelte
+var root5 = from_html(`<div class="dp-md-grid"></div>`);
+function DayGrid($$anchor, $$props) {
+  push($$props, true);
+  var div = root5();
+  let styles;
+  each(div, 21, () => $$props.days, (day) => day.path, ($$anchor2, day) => {
+    DayColumn($$anchor2, {
+      get plugin() {
+        return $$props.plugin;
+      },
+      get day() {
+        return get2(day);
+      },
+      get colorMap() {
+        return $$props.colorMap;
+      },
+      get inboxFile() {
+        return $$props.inboxFile;
+      },
+      get onMoved() {
+        return $$props.onMoved;
+      }
+    });
+  });
+  reset(div);
+  template_effect(() => {
+    var _a5;
+    return styles = set_style(div, "", styles, {
+      "grid-template-columns": `repeat(${(_a5 = $$props.days.length) != null ? _a5 : ""}, minmax(0, 1fr))`
+    });
+  });
+  append($$anchor, div);
+  pop();
+}
 
 // src/multiday/MultiDayApp.svelte
-var root_1 = from_html(`<div class="dp-md-loading">Loading\u2026</div>`);
-var root = from_html(`<div class="dp-md-root"><div class="dp-md-header"><div class="dp-md-nav"><button class="dp-md-nav-btn" aria-label="Previous">\u2039</button> <button class="dp-md-today-btn">Today</button> <button class="dp-md-nav-btn" aria-label="Next">\u203A</button></div> <div class="dp-md-count-toggle"><button>3</button> <button>7</button></div></div> <!> <div class="dp-md-body"><!> <!></div> <!></div>`);
+var root_15 = from_html(`<div class="dp-md-loading">Loading\u2026</div>`);
+var root6 = from_html(`<div class="dp-md-root"><div class="dp-md-header"><div class="dp-md-nav"><button class="dp-md-nav-btn" aria-label="Previous">\u2039</button> <button class="dp-md-today-btn">Today</button> <button class="dp-md-nav-btn" aria-label="Next">\u203A</button></div> <div class="dp-md-count-toggle"><button>3</button> <button>7</button></div></div> <!> <div class="dp-md-body"><!> <!></div> <!></div>`);
 function MultiDayApp($$anchor, $$props) {
   push($$props, true);
   var _a5;
@@ -14470,7 +15745,7 @@ function MultiDayApp($$anchor, $$props) {
   async function handleDropRefresh() {
     await refresh();
   }
-  var div = root();
+  var div = root6();
   var div_1 = child(div);
   var div_2 = child(div_1);
   var button = child(div_2);
@@ -14524,7 +15799,7 @@ function MultiDayApp($$anchor, $$props) {
   var node_3 = sibling(div_4, 2);
   {
     var consequent = ($$anchor2) => {
-      var div_5 = root_1();
+      var div_5 = root_15();
       append($$anchor2, div_5);
     };
     if_block(node_3, ($$render) => {
@@ -14549,7 +15824,7 @@ delegate(["click"]);
 
 // src/multiDayView.ts
 var VIEW_TYPE_MULTI_DAY = "today-multi-day";
-var MultiDayView = class extends import_obsidian9.ItemView {
+var MultiDayView = class extends import_obsidian11.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.app$ = null;
@@ -14567,12 +15842,12 @@ var MultiDayView = class extends import_obsidian9.ItemView {
     return "calendar-range";
   }
   async onOpen() {
-    const root2 = this.containerEl.children[1];
-    root2.empty();
-    root2.addClass("today-root");
-    root2.addClass("dp-multiday");
+    const root7 = this.containerEl.children[1];
+    root7.empty();
+    root7.addClass("today-root");
+    root7.addClass("dp-multiday");
     this.app$ = mount(MultiDayApp, {
-      target: root2,
+      target: root7,
       props: {
         plugin: this.plugin,
         registerRefresh: (fn) => {
@@ -14610,13 +15885,13 @@ var MultiDayView = class extends import_obsidian9.ItemView {
 };
 
 // src/main.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian10.Plugin {
+var TodayPlugin = class extends import_obsidian12.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    if (import_obsidian10.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian12.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
@@ -14656,6 +15931,7 @@ var TodayPlugin = class extends import_obsidian10.Plugin {
     this.addCommand({
       id: "open-multi-day",
       name: "Open multi-day view",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "M" }],
       callback: () => void this.activateMultiDayView()
     });
     this.addCommand({
@@ -14682,7 +15958,7 @@ var TodayPlugin = class extends import_obsidian10.Plugin {
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian10.TFile))
+        if (!(af instanceof import_obsidian12.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -14749,7 +16025,7 @@ var TodayPlugin = class extends import_obsidian10.Plugin {
     }
   }
   async openDailyNoteForOffset(dayOffset) {
-    const target = (0, import_obsidian11.moment)().startOf("day").add(dayOffset, "day").toDate();
+    const target = (0, import_obsidian13.moment)().startOf("day").add(dayOffset, "day").toDate();
     const fallback2 = {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
@@ -14801,7 +16077,7 @@ var TodayPlugin = class extends import_obsidian10.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
 };
-var InlineSuggest = class extends import_obsidian10.EditorSuggest {
+var InlineSuggest = class extends import_obsidian12.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -14893,7 +16169,7 @@ var InlineSuggest = class extends import_obsidian10.EditorSuggest {
       const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian11.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian13.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,

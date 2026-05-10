@@ -4098,6 +4098,11 @@
     font-size: 0.9rem;
     text-decoration: none;
     cursor: pointer;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    text-align: left;
+    font-family: inherit;
   }
 
   .dp-md-day-link:hover {

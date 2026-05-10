@@ -97,11 +97,10 @@
   aria-label="Day column"
 >
   <div class="dp-md-day-header">
-    <a
+    <button
       class="dp-md-day-link"
-      href="#"
       onclick={openDay}
-    >{fmtHeader(day.date)}</a>
+    >{fmtHeader(day.date)}</button>
     <span class="dp-md-day-count">{day.tasks.length}</span>
   </div>
 
@@ -119,6 +118,8 @@
       <ul class="dp-md-unsched-list">
         {#each unscheduled as task (task.lineNumber)}
           {@const color = colorFor(task, colorMap)}
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
           <li
             class={"dp-md-unsched-item" + (task.checked ? " is-done" : "")}
             onclick={() => openTask(task)}

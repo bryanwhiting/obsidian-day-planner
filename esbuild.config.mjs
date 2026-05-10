@@ -35,7 +35,12 @@ const ctx = await esbuild.context({
   conditions: ["svelte", "browser"],
   plugins: [
     esbuildSvelte({
-      preprocess: sveltePreprocess(),
+      preprocess: sveltePreprocess({
+        // Force verbatimModuleSyntax so TypeScript inside .svelte files
+        // doesn't elide component imports it can't see referenced (template
+        // usage is invisible to the TS transpiler).
+        typescript: { compilerOptions: { verbatimModuleSyntax: true } },
+      }),
       compilerOptions: { css: "injected" },
     }),
   ],

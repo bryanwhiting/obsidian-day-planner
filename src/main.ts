@@ -99,6 +99,7 @@ export default class TodayPlugin extends Plugin {
     this.addCommand({
       id: "open-multi-day",
       name: "Open multi-day view",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "M" }],
       callback: () => void this.activateMultiDayView(),
     });
 
