@@ -1240,6 +1240,7 @@ var DEFAULT_SETTINGS = {
   dailyNoteTemplate: "",
   dailyNoteTemplatesByDay: { ...DEFAULT_WEEKDAY_TEMPLATES },
   quotesFile: "daily/_quotes.md",
+  addCreatedTagToFrontmatter: true,
   defaultDurationMin: 15,
   quickDurationsMin: [15, 30, 45, 60, 90, 120],
   projectColors: [],
@@ -1729,6 +1730,22 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    const createdTagDesc = document.createDocumentFragment();
+    createdTagDesc.append(
+      "When a daily note is created, inject a ",
+      makeCode(`#${this.plugin.settings.prefixes.taskCreated}/YYYY-MM-DD`),
+      " tag (today's wall-clock date) into the frontmatter ",
+      makeCode("tags:"),
+      " property. Creates the frontmatter block if the template doesn't already have one. Mirrors the ",
+      makeCode(`#${this.plugin.settings.prefixes.taskCreated}/`),
+      " stamp written onto new tasks."
+    );
+    new import_obsidian2.Setting(containerEl).setName("Stamp creation date in frontmatter tags").setDesc(createdTagDesc).addToggle(
+      (t) => t.setValue(this.plugin.settings.addCreatedTagToFrontmatter).onChange(async (v) => {
+        this.plugin.settings.addCreatedTagToFrontmatter = v;
+        await this.plugin.saveSettings();
+      })
+    );
     new import_obsidian2.Setting(containerEl).setName("Per-weekday templates").setHeading();
     const weekdayDesc = containerEl.createEl("p", {
       cls: "setting-item-description"
@@ -2703,7 +2720,11 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
     (_a = fallback.dateLinkFormat) != null ? _a : "",
     quote
   );
-  const initialContent = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
+  const withDurations = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
+  const initialContent = fallback.addCreatedTag && fallback.prefixes ? addFrontmatterTag(
+    withDurations,
+    `${fallback.prefixes.taskCreated}/${todayDateStr()}`
+  ) : withDurations;
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify)
     new import_obsidian3.Notice(`Created ${resolved.path}`);
@@ -2739,7 +2760,11 @@ async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
     (_d = fallback.dateLinkFormat) != null ? _d : "",
     quote
   );
-  const finalContent = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
+  const withDurations = fallback.prefixes ? applyComputedParentDurations(expanded, fallback.prefixes) : expanded;
+  const finalContent = fallback.addCreatedTag && fallback.prefixes ? addFrontmatterTag(
+    withDurations,
+    `${fallback.prefixes.taskCreated}/${todayDateStr()}`
+  ) : withDurations;
   await app.vault.modify(file, finalContent);
 }
 function stripSlashes(s) {
@@ -2908,6 +2933,76 @@ function listDailyNotes(app, options) {
 }
 function todayDateStr() {
   return toIsoDateStr(new Date());
+}
+function addFrontmatterTag(content, tag) {
+  const fmRe = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
+  const match = content.match(fmRe);
+  if (!match) {
+    return `---
+tags:
+  - ${tag}
+---
+
+${content}`;
+  }
+  const fmBody = match[1];
+  const fmTerminator = match[2];
+  const after = content.slice(match[0].length);
+  const lines = fmBody.split(/\r?\n/);
+  let tagsIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^tags\s*:/.test(lines[i])) {
+      tagsIdx = i;
+      break;
+    }
+  }
+  if (tagsIdx < 0) {
+    const insert = ["tags:", `  - ${tag}`];
+    const newBody2 = [...insert, ...lines].join("\n");
+    return `---
+${newBody2}
+---${fmTerminator}${after}`;
+  }
+  const tagsLine = lines[tagsIdx];
+  const valueMatch = tagsLine.match(/^tags\s*:\s*(.*)$/);
+  const value = valueMatch ? valueMatch[1].trim() : "";
+  if (value === "" || value === "[]") {
+    let lastBulletIdx = tagsIdx;
+    const bullets = [];
+    for (let i = tagsIdx + 1; i < lines.length; i++) {
+      const m = lines[i].match(/^\s+-\s+(.*)$/);
+      if (m) {
+        bullets.push(m[1].trim().replace(/^["']|["']$/g, ""));
+        lastBulletIdx = i;
+      } else if (lines[i].trim() === "") {
+        continue;
+      } else {
+        break;
+      }
+    }
+    if (bullets.includes(tag))
+      return content;
+    if (value === "[]")
+      lines[tagsIdx] = "tags:";
+    lines.splice(lastBulletIdx + 1, 0, `  - ${tag}`);
+  } else if (value.startsWith("[") && value.endsWith("]")) {
+    const inner = value.slice(1, -1).trim();
+    const items = inner === "" ? [] : inner.split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter((s) => s.length > 0);
+    if (items.includes(tag))
+      return content;
+    items.push(tag);
+    lines[tagsIdx] = `tags: [${items.join(", ")}]`;
+  } else {
+    const items = value.split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter((s) => s.length > 0);
+    if (items.includes(tag))
+      return content;
+    items.push(tag);
+    lines[tagsIdx] = `tags: [${items.join(", ")}]`;
+  }
+  const newBody = lines.join("\n");
+  return `---
+${newBody}
+---${fmTerminator}${after}`;
 }
 function toIsoDateStr(d) {
   const y = d.getFullYear();
@@ -4176,6 +4271,8 @@ var TodayView = class extends import_obsidian4.ItemView {
       else if (block.task.durationMin <= 30)
         el.addClass("is-narrow-2line");
     }
+    if (import_obsidian4.Platform.isMobile)
+      el.addClass("is-mobile-condensed");
     const ctx = this.findContextTag(block.task);
     const projectColor = getTaskColor(
       block.task.project,
@@ -4201,7 +4298,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       (0, import_obsidian4.setIcon)(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
     }
-    const compactTime = narrow && block.task.durationMin <= 30 && block.task.startMin !== null;
+    const compactTime = block.task.startMin !== null && (import_obsidian4.Platform.isMobile || narrow && block.task.durationMin <= 30);
     meta.createSpan({
       cls: "dp-block-time",
       text: compactTime ? this.fmtClock(block.task.startMin) : this.formatBlockTime(block.task)
@@ -8989,7 +9086,9 @@ var TodayPlugin = class extends import_obsidian7.Plugin {
           template: this.settings.dailyNoteTemplate,
           templatesByDay: this.settings.dailyNoteTemplatesByDay,
           dateLinkFormat: this.settings.dateLinkFormat,
-          prefixes: this.settings.prefixes
+          prefixes: this.settings.prefixes,
+          quotesFile: this.settings.quotesFile,
+          addCreatedTag: this.settings.addCreatedTagToFrontmatter
         });
       })
     );
@@ -9054,7 +9153,8 @@ var TodayPlugin = class extends import_obsidian7.Plugin {
       templatesByDay: this.settings.dailyNoteTemplatesByDay,
       dateLinkFormat: this.settings.dateLinkFormat,
       prefixes: this.settings.prefixes,
-      quotesFile: this.settings.quotesFile
+      quotesFile: this.settings.quotesFile,
+      addCreatedTag: this.settings.addCreatedTagToFrontmatter
     };
     const file = await ensureDailyNote(this.app, target, fallback, false);
     const leaf = this.app.workspace.getLeaf(false);

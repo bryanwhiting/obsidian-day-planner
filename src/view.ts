@@ -428,6 +428,7 @@ export class TodayView extends ItemView {
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
       quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
     };
 
     const dailyResolved = await resolveDailyNote(
@@ -649,6 +650,7 @@ export class TodayView extends ItemView {
       dateLinkFormat: this.plugin.settings.dateLinkFormat,
       prefixes: this.plugin.settings.prefixes,
       quotesFile: this.plugin.settings.quotesFile,
+      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
     };
     const resolved = await resolveDailyNote(this.app, target, fallback);
     if (!resolved.file) {
@@ -1259,6 +1261,11 @@ export class TodayView extends ItemView {
       if (block.task.durationMin <= 15) el.addClass("is-narrow-mini");
       else if (block.task.durationMin <= 30) el.addClass("is-narrow-2line");
     }
+    // Mobile screens are too tight to show the full time-range/project/tags
+    // header and still leave room for the title — long titles get clipped.
+    // Mirror the overlapping-block treatment: drop everything except the
+    // start time and the title, and let the title wrap so it stays visible.
+    if (Platform.isMobile) el.addClass("is-mobile-condensed");
     const ctx = this.findContextTag(block.task);
     const projectColor = getTaskColor(
       block.task.project,
@@ -1288,9 +1295,8 @@ export class TodayView extends ItemView {
       warn.setAttribute("aria-label", "No #d/ tag — using default duration");
     }
     const compactTime =
-      narrow &&
-      block.task.durationMin <= 30 &&
-      block.task.startMin !== null;
+      block.task.startMin !== null &&
+      (Platform.isMobile || (narrow && block.task.durationMin <= 30));
     meta.createSpan({
       cls: "dp-block-time",
       text: compactTime

@@ -1473,6 +1473,38 @@
     min-width: 0;
   }
 
+  /* Mobile: timeline blocks always render condensed — start time + title
+   * only, with the title wrapping so long names stay visible. Project,
+   * tags, separators, warn icon, and context icon are hidden. Wins over
+   * the narrow/overlap variants because mobile width is tighter than any
+   * desktop overlap. */
+  .dp-block.is-mobile-condensed .dp-block-row {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 4px;
+    line-height: 1.2;
+  }
+
+  .dp-block.is-mobile-condensed .dp-block-meta {
+    flex: 0 0 auto;
+  }
+
+  .dp-block.is-mobile-condensed .dp-block-meta .dp-warn,
+  .dp-block.is-mobile-condensed .dp-block-meta .dp-block-context-icon,
+  .dp-block.is-mobile-condensed .dp-block-project-wrap,
+  .dp-block.is-mobile-condensed .dp-block-tags,
+  .dp-block.is-mobile-condensed .dp-block-sep {
+    display: none;
+  }
+
+  .dp-block.is-mobile-condensed .dp-block-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .dp-block-time {
     flex: 0 0 auto;
     font-family: var(--font-mono);
