@@ -3829,12 +3829,12 @@
   }
 }
 
+
 /* ============================================================
  *  Multi-day view (.dp-multiday)
- *  A separate ItemView showing N days side-by-side with a left
- *  inbox rail and a top summary bar. Built with Svelte components
- *  but the styles live here so Tailwind's theme tokens compose
- *  with the rest of the plugin.
+ *  3-day grid with a left inbox rail, project summary on top, and
+ *  interactive drag-and-drop between inbox / day columns / back to
+ *  the inbox.
  * ============================================================ */
 
 @layer components {
@@ -3861,15 +3861,9 @@
     gap: 4px;
   }
 
-  .dp-md-header-actions {
-    @apply inline-flex items-center;
-    gap: 8px;
-  }
-
   .dp-md-nav-btn,
   .dp-md-today-btn,
-  .dp-md-count-btn,
-  .dp-md-popout-btn {
+  .dp-md-inbox-height-toggle {
     @apply inline-flex items-center justify-center;
     border: 1px solid var(--color-hairline);
     background: transparent;
@@ -3889,27 +3883,14 @@
 
   .dp-md-nav-btn:hover,
   .dp-md-today-btn:hover,
-  .dp-md-count-btn:hover,
-  .dp-md-popout-btn:hover {
+  .dp-md-inbox-height-toggle:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
   }
 
-  .dp-md-popout-btn {
-    min-width: 28px;
-    font-size: 0.95rem;
-    line-height: 1;
-  }
-
-  .dp-md-count-toggle {
-    @apply inline-flex;
-    gap: 4px;
-  }
-
-  .dp-md-count-btn.is-active {
-    background: var(--color-accent);
-    color: var(--text-on-accent);
-    border-color: var(--color-accent);
+  .dp-md-range {
+    color: var(--color-ink-muted);
+    font-size: 0.85rem;
   }
 
   /* ---------- summary bar ---------- */
@@ -3929,28 +3910,25 @@
   }
 
   .dp-md-summary-bar {
-    @apply flex w-full overflow-hidden;
+    @apply flex;
     height: 10px;
     border-radius: 4px;
-    background: var(--color-hairline);
+    overflow: hidden;
   }
 
   .dp-md-summary-seg {
     height: 100%;
-    min-width: 1px;
   }
 
   .dp-md-summary-legend {
     @apply flex flex-wrap items-center;
-    gap: 4px 12px;
+    gap: 8px;
     font-size: 0.8rem;
-    color: var(--color-ink-muted);
   }
 
   .dp-md-summary-total {
-    color: var(--color-ink);
+    color: var(--color-ink-muted);
     font-weight: 600;
-    margin-right: 8px;
   }
 
   .dp-md-summary-chip {
@@ -3959,10 +3937,10 @@
   }
 
   .dp-md-summary-dot {
+    display: inline-block;
     width: 8px;
     height: 8px;
-    border-radius: 50%;
-    display: inline-block;
+    border-radius: 999px;
   }
 
   .dp-md-summary-name {
@@ -3973,13 +3951,13 @@
     color: var(--color-ink-muted);
   }
 
-  /* ---------- body layout ---------- */
+  /* ---------- body / two-column layout ---------- */
 
   .dp-md-body {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 10px;
-    align-items: start;
+    @apply grid;
+    grid-template-columns: minmax(180px, 230px) 1fr;
+    gap: 12px;
+    flex: 1;
     min-height: 0;
   }
 
@@ -3992,455 +3970,24 @@
     background: var(--color-paper-2);
     border: 1px solid var(--color-hairline);
     border-radius: 6px;
-    position: sticky;
-    top: 0;
-  }
-
-  .dp-md-inbox-header {
-    @apply flex items-center justify-between;
-    color: var(--color-ink-muted);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  .dp-md-inbox-title {
-    color: var(--color-ink);
-    font-weight: 600;
-  }
-
-  .dp-md-inbox-count {
-    @apply inline-flex items-center justify-center;
-    min-width: 20px;
-    height: 18px;
-    border-radius: 9px;
-    padding: 0 6px;
-    background: var(--color-hairline);
-    color: var(--color-ink);
-    font-size: 0.7rem;
-  }
-
-  .dp-md-inbox-empty {
-    color: var(--color-ink-faint);
-    font-size: 0.85rem;
-    padding: 8px 0;
-  }
-
-  .dp-md-inbox-list {
-    @apply flex flex-col;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    gap: 2px;
-  }
-
-  .dp-md-inbox-item {
-    @apply flex items-start;
-    gap: 6px;
-    padding: 4px 6px;
-    border-radius: 4px;
-    cursor: grab;
-    user-select: none;
-    font-size: 0.85rem;
-    color: var(--color-ink);
-    transition: background-color 100ms;
-  }
-
-  .dp-md-inbox-item:hover {
-    background: var(--color-surface-hover);
-  }
-
-  .dp-md-inbox-item:active {
-    cursor: grabbing;
-  }
-
-  .dp-md-inbox-dot {
-    flex: 0 0 auto;
-    width: 8px;
-    height: 8px;
-    margin-top: 5px;
-    border-radius: 50%;
-    border: 1px solid;
-  }
-
-  .dp-md-inbox-text {
-    flex: 1 1 auto;
-    line-height: 1.3;
-    word-break: break-word;
-  }
-
-  /* ---------- day grid ---------- */
-
-  .dp-md-grid {
-    display: grid;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .dp-md-day {
-    @apply flex flex-col;
-    gap: 6px;
-    padding: 8px;
-    background: var(--color-paper);
-    border: 1px solid var(--color-hairline);
-    border-radius: 6px;
-    min-width: 0;
-    transition: border-color 120ms, background-color 120ms;
-  }
-
-  .dp-md-day.is-today {
-    border-color: var(--color-accent);
-  }
-
-  .dp-md-day.is-drop-target {
-    background: var(--color-surface-hover);
-    border-color: var(--color-accent);
-    border-style: dashed;
-  }
-
-  .dp-md-day-header {
-    @apply flex items-baseline justify-between;
-    gap: 6px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--color-hairline);
-  }
-
-  .dp-md-day-link {
-    color: var(--color-ink);
-    font-weight: 600;
-    font-size: 0.9rem;
-    text-decoration: none;
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-    padding: 0;
-    text-align: left;
-    font-family: inherit;
-  }
-
-  .dp-md-day-link:hover {
-    color: var(--color-accent);
-    text-decoration: underline;
-  }
-
-  .dp-md-day-count {
-    color: var(--color-ink-faint);
-    font-size: 0.75rem;
-  }
-
-  /* ---------- mini timeline ----------
-   * Mirrors the daily-view timeline visually: a left gutter holds compact
-   * 12-hour clock labels (formatClockShort: "9p" instead of "21"), dotted
-   * hour lines stretch across the body, blocks render with the same
-   * color-mixed background + accent stripe + rounded corners as .dp-block.
-   * Overlapping tasks pack into side-by-side columns via layoutTimeline().
-   */
-
-  .dp-md-timeline {
-    position: relative;
-    padding-left: 26px;
-  }
-
-  .dp-md-timeline-row {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 0;
-  }
-
-  .dp-md-timeline-line {
-    position: absolute;
-    left: 26px;
-    right: 0;
-    top: 0;
-    border-top: 1px dotted var(--color-hairline);
-  }
-
-  .dp-md-timeline-label {
-    position: absolute;
-    left: 0;
-    top: -7px;
-    width: 22px;
-    height: 14px;
-    line-height: 14px;
-    text-align: right;
-    color: var(--color-ink-faint);
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-    padding-right: 4px;
-  }
-
-  .dp-md-timeline-blocks {
-    position: absolute;
-    top: 0;
-    left: 26px;
-    right: 0;
-    bottom: 0;
-  }
-
-  .dp-md-timeline-block {
-    --dp-color: var(--dp-md-color, var(--color-accent));
-    position: absolute;
-    border: 0;
-    border-radius: var(--radius-tab);
-    padding: 3px 6px;
-    margin: 0;
-    text-align: left;
-    overflow: hidden;
-    cursor: pointer;
-    font-family: inherit;
-    box-shadow:
-      inset 2px 0 0 0 rgba(255, 255, 255, 0.4),
-      0 1px 1px rgba(0, 0, 0, 0.08);
-    transition: filter 120ms ease;
-    display: block;
-    line-height: 1.15;
-  }
-
-  .dp-md-timeline-block:hover {
-    filter: brightness(1.06) saturate(1.05);
-  }
-
-  .dp-md-timeline-block.is-done {
-    opacity: 0.5;
-    text-decoration: line-through;
-  }
-
-  .dp-md-timeline-block-text {
-    display: block;
-    width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 500;
-  }
-
-  /* ---------- unscheduled list under each day ---------- */
-
-  .dp-md-unsched {
-    min-height: 16px;
-  }
-
-  .dp-md-unsched-empty {
-    color: var(--color-ink-faint);
-    font-size: 0.75rem;
-    padding: 4px 0;
-  }
-
-  .dp-md-unsched-list {
-    @apply flex flex-col;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    gap: 1px;
-  }
-
-  .dp-md-unsched-item {
-    @apply flex items-start;
-    gap: 6px;
-    padding: 2px 4px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    color: var(--color-ink);
-    transition: background-color 100ms;
-  }
-
-  .dp-md-unsched-item:hover {
-    background: var(--color-surface-hover);
-  }
-
-  .dp-md-unsched-item.is-done {
-    opacity: 0.5;
-    text-decoration: line-through;
-  }
-
-  .dp-md-unsched-dot {
-    flex: 0 0 auto;
-    width: 6px;
-    height: 6px;
-    margin-top: 6px;
-    border-radius: 50%;
-    border: 1px solid;
-  }
-
-  .dp-md-unsched-text {
-    flex: 1 1 auto;
-    line-height: 1.3;
-    word-break: break-word;
-  }
-
-  /* ---------- loading state ---------- */
-
-  .dp-md-loading {
-    color: var(--color-ink-faint);
-    font-size: 0.85rem;
-    padding: 8px 0;
-  }
-}
-
-/* ============================================================
- *  Multi-day 2 view (.dp-multiday2)
- *  TS-rendered companion to the Svelte multi-day view. 3-day grid
- *  with a left inbox rail, project summary on top, and interactive
- *  drag-and-drop between inbox/columns/back-to-inbox.
- * ============================================================ */
-
-@layer components {
-  .today-root.dp-multiday2 {
-    padding: 10px 12px;
-    overflow: auto;
-  }
-
-  .dp-md2-root {
-    @apply flex flex-col;
-    gap: 10px;
-    min-height: 100%;
-  }
-
-  /* ---------- header ---------- */
-
-  .dp-md2-header {
-    @apply flex items-center justify-between;
-    gap: 12px;
-  }
-
-  .dp-md2-nav {
-    @apply inline-flex items-center;
-    gap: 4px;
-  }
-
-  .dp-md2-nav-btn,
-  .dp-md2-today-btn,
-  .dp-md2-inbox-height-toggle {
-    @apply inline-flex items-center justify-center;
-    border: 1px solid var(--color-hairline);
-    background: transparent;
-    color: var(--color-ink);
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: background-color 120ms, border-color 120ms, color 120ms;
-  }
-
-  .dp-md2-nav-btn {
-    min-width: 28px;
-    font-size: 1rem;
-    line-height: 1;
-  }
-
-  .dp-md2-nav-btn:hover,
-  .dp-md2-today-btn:hover,
-  .dp-md2-inbox-height-toggle:hover {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-  }
-
-  .dp-md2-range {
-    color: var(--color-ink-muted);
-    font-size: 0.85rem;
-  }
-
-  /* ---------- summary bar ---------- */
-
-  .dp-md2-summary {
-    @apply flex flex-col;
-    gap: 6px;
-    padding: 8px 10px;
-    background: var(--color-paper-2);
-    border: 1px solid var(--color-hairline);
-    border-radius: 6px;
-  }
-
-  .dp-md2-summary-empty {
-    color: var(--color-ink-muted);
-    font-size: 0.85rem;
-  }
-
-  .dp-md2-summary-bar {
-    @apply flex;
-    height: 10px;
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .dp-md2-summary-seg {
-    height: 100%;
-  }
-
-  .dp-md2-summary-legend {
-    @apply flex flex-wrap items-center;
-    gap: 8px;
-    font-size: 0.8rem;
-  }
-
-  .dp-md2-summary-total {
-    color: var(--color-ink-muted);
-    font-weight: 600;
-  }
-
-  .dp-md2-summary-chip {
-    @apply inline-flex items-center;
-    gap: 4px;
-  }
-
-  .dp-md2-summary-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  }
-
-  .dp-md2-summary-name {
-    color: var(--color-ink);
-  }
-
-  .dp-md2-summary-min {
-    color: var(--color-ink-muted);
-  }
-
-  /* ---------- body / two-column layout ---------- */
-
-  .dp-md2-body {
-    @apply grid;
-    grid-template-columns: minmax(180px, 230px) 1fr;
-    gap: 12px;
-    flex: 1;
     min-height: 0;
   }
 
-  /* ---------- inbox rail ---------- */
-
-  .dp-md2-inbox {
-    @apply flex flex-col;
-    gap: 6px;
-    padding: 8px;
-    background: var(--color-paper-2);
-    border: 1px solid var(--color-hairline);
-    border-radius: 6px;
-    min-height: 0;
-  }
-
-  .dp-md2-inbox.is-drop-target {
+  .dp-md-inbox.is-drop-target {
     border-color: var(--color-accent);
     box-shadow: 0 0 0 2px var(--color-accent) inset;
   }
 
-  .dp-md2-inbox-header {
+  .dp-md-inbox-header {
     @apply flex items-center justify-between;
   }
 
-  .dp-md2-inbox-title {
+  .dp-md-inbox-title {
     font-weight: 600;
     color: var(--color-ink);
   }
 
-  .dp-md2-inbox-count {
+  .dp-md-inbox-count {
     color: var(--color-ink-muted);
     font-size: 0.8rem;
     background: var(--color-paper-3, var(--color-paper-2));
@@ -4448,12 +3995,12 @@
     padding: 0 8px;
   }
 
-  .dp-md2-inbox-controls {
+  .dp-md-inbox-controls {
     @apply flex items-center;
     gap: 6px;
   }
 
-  .dp-md2-inbox-search {
+  .dp-md-inbox-search {
     flex: 1;
     min-width: 0;
     border: 1px solid var(--color-hairline);
@@ -4464,17 +4011,17 @@
     font-size: 0.85rem;
   }
 
-  .dp-md2-inbox-height-toggle {
+  .dp-md-inbox-height-toggle {
     padding: 4px 8px;
     font-size: 0.75rem;
   }
 
-  .dp-md2-inbox-filters {
+  .dp-md-inbox-filters {
     @apply flex flex-wrap;
     gap: 4px;
   }
 
-  .dp-md2-filter-chip {
+  .dp-md-filter-chip {
     border: 1px solid var(--color-hairline);
     border-radius: 999px;
     padding: 1px 8px;
@@ -4484,17 +4031,17 @@
     background: transparent;
   }
 
-  .dp-md2-filter-chip:hover {
+  .dp-md-filter-chip:hover {
     color: var(--color-ink);
   }
 
-  .dp-md2-filter-chip.is-active {
+  .dp-md-filter-chip.is-active {
     background: var(--color-accent);
     color: var(--text-on-accent);
     border-color: var(--color-accent);
   }
 
-  .dp-md2-inbox-list {
+  .dp-md-inbox-list {
     @apply flex flex-col;
     gap: 4px;
     list-style: none;
@@ -4505,13 +4052,13 @@
     min-height: 0;
   }
 
-  .dp-md2-inbox-empty {
+  .dp-md-inbox-empty {
     color: var(--color-ink-faint);
     font-size: 0.8rem;
     padding: 6px 4px;
   }
 
-  .dp-md2-inbox-item {
+  .dp-md-inbox-item {
     @apply flex items-center;
     gap: 6px;
     padding: 4px 6px;
@@ -4522,19 +4069,19 @@
     overflow: hidden;
   }
 
-  .dp-md2-inbox-item:active {
+  .dp-md-inbox-item:active {
     cursor: grabbing;
   }
 
-  .dp-md2-inbox-item.is-dragging {
+  .dp-md-inbox-item.is-dragging {
     opacity: 0.4;
   }
 
-  .dp-md2-inbox-item:hover {
+  .dp-md-inbox-item:hover {
     border-color: var(--color-accent);
   }
 
-  .dp-md2-inbox-dot {
+  .dp-md-inbox-dot {
     flex: none;
     width: 8px;
     height: 8px;
@@ -4543,7 +4090,7 @@
     background: transparent;
   }
 
-  .dp-md2-inbox-text {
+  .dp-md-inbox-text {
     color: var(--color-ink);
     font-size: 0.85rem;
     line-height: 1.2;
@@ -4556,13 +4103,13 @@
 
   /* ---------- day grid ---------- */
 
-  .dp-md2-grid {
+  .dp-md-grid {
     @apply grid;
     gap: 8px;
     min-height: 0;
   }
 
-  .dp-md2-day {
+  .dp-md-day {
     @apply flex flex-col;
     border: 1px solid var(--color-hairline);
     border-radius: 6px;
@@ -4570,17 +4117,17 @@
     overflow: hidden;
   }
 
-  .dp-md2-day.is-today {
+  .dp-md-day.is-today {
     border-color: var(--color-accent);
   }
 
-  .dp-md2-day-header {
+  .dp-md-day-header {
     @apply flex items-center justify-between;
     padding: 6px 8px;
     border-bottom: 1px solid var(--color-hairline);
   }
 
-  .dp-md2-day-link {
+  .dp-md-day-link {
     background: transparent;
     border: none;
     color: var(--color-ink);
@@ -4590,24 +4137,24 @@
     font-size: 0.85rem;
   }
 
-  .dp-md2-day-link:hover {
+  .dp-md-day-link:hover {
     color: var(--color-accent);
   }
 
-  .dp-md2-day-count {
+  .dp-md-day-count {
     color: var(--color-ink-muted);
     font-size: 0.75rem;
   }
 
   /* ---------- timeline ---------- */
 
-  .dp-md2-timeline {
+  .dp-md-timeline {
     position: relative;
     flex: 1;
     overflow: auto;
   }
 
-  .dp-md2-timeline-row {
+  .dp-md-timeline-row {
     position: absolute;
     left: 0;
     right: 0;
@@ -4615,12 +4162,12 @@
     pointer-events: none;
   }
 
-  .dp-md2-timeline-line {
+  .dp-md-timeline-line {
     height: 1px;
     background: var(--color-hairline);
   }
 
-  .dp-md2-timeline-label {
+  .dp-md-timeline-label {
     position: absolute;
     top: -7px;
     left: 4px;
@@ -4630,39 +4177,39 @@
     padding: 0 2px;
   }
 
-  .dp-md2-timeline-blocks {
+  .dp-md-timeline-blocks {
     position: absolute;
     inset: 0;
     pointer-events: none;
   }
 
-  .dp-md2-timeline-block {
+  .dp-md-timeline-block {
     position: absolute;
     pointer-events: auto;
-    border: 1px solid color-mix(in srgb, var(--dp-md2-color) 70%, black);
+    border: 1px solid color-mix(in srgb, var(--dp-color) 70%, black);
     border-radius: 4px;
     padding: 2px 4px;
     cursor: grab;
     overflow: hidden;
     text-align: left;
     color: #fff;
-    background: var(--dp-md2-color);
+    background: var(--dp-color);
   }
 
-  .dp-md2-timeline-block:active {
+  .dp-md-timeline-block:active {
     cursor: grabbing;
   }
 
-  .dp-md2-timeline-block.is-dragging {
+  .dp-md-timeline-block.is-dragging {
     opacity: 0.4;
   }
 
-  .dp-md2-timeline-block.is-done {
+  .dp-md-timeline-block.is-done {
     opacity: 0.55;
     text-decoration: line-through;
   }
 
-  .dp-md2-timeline-block-text {
+  .dp-md-timeline-block-text {
     font-size: 0.7rem;
     line-height: 1.1;
     display: block;
@@ -4673,7 +4220,7 @@
 
   /* ---------- drop indicator ---------- */
 
-  .dp-md2-drop-indicator {
+  .dp-md-drop-indicator {
     position: absolute;
     left: 0;
     right: 2px;
@@ -4684,7 +4231,7 @@
     z-index: 10;
   }
 
-  .dp-md2-drop-indicator-time {
+  .dp-md-drop-indicator-time {
     position: absolute;
     top: 2px;
     left: 4px;
@@ -4727,22 +4274,10 @@
   opacity: 0.75;
 }
 
-/* Unlayered: Obsidian's default `button { background: var(--interactive-normal) }`
- * is unlayered, so a layered rule (even at higher specificity) loses to it.
- * Force the project color through on multi-day timeline blocks and keep the
- * label readable. */
 .today-root .dp-md-timeline-block,
 .today-root .dp-md-timeline-block:hover,
 .today-root .dp-md-timeline-block:focus,
 .today-root .dp-md-timeline-block:active {
   background-color: var(--dp-color);
-  color: #fff;
-}
-
-.today-root .dp-md2-timeline-block,
-.today-root .dp-md2-timeline-block:hover,
-.today-root .dp-md2-timeline-block:focus,
-.today-root .dp-md2-timeline-block:active {
-  background-color: var(--dp-md2-color);
   color: #fff;
 }
