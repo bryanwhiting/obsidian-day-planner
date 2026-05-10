@@ -41,6 +41,11 @@ export class MultiDayView extends ItemView {
         registerRefresh: (fn: () => void) => {
           this.refreshFn = fn;
         },
+        popOut: () => {
+          // Move this view's leaf into a native OS window. No-op (and
+          // returns silently) if the leaf is already in a popout.
+          this.app.workspace.moveLeafToPopout(this.leaf);
+        },
       },
     });
 

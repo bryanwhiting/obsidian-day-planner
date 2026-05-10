@@ -15712,7 +15712,7 @@ function DayGrid($$anchor, $$props) {
 
 // src/multiday/MultiDayApp.svelte
 var root_15 = from_html(`<div class="dp-md-loading">Loading\u2026</div>`);
-var root6 = from_html(`<div class="dp-md-root"><div class="dp-md-header"><div class="dp-md-nav"><button class="dp-md-nav-btn" aria-label="Previous">\u2039</button> <button class="dp-md-today-btn">Today</button> <button class="dp-md-nav-btn" aria-label="Next">\u203A</button></div> <div class="dp-md-count-toggle"><button>3</button> <button>7</button></div></div> <!> <div class="dp-md-body"><!> <!></div> <!></div>`);
+var root6 = from_html(`<div class="dp-md-root"><div class="dp-md-header"><div class="dp-md-nav"><button class="dp-md-nav-btn" aria-label="Previous">\u2039</button> <button class="dp-md-today-btn">Today</button> <button class="dp-md-nav-btn" aria-label="Next">\u203A</button></div> <div class="dp-md-header-actions"><div class="dp-md-count-toggle"><button>3</button> <button>7</button></div> <button class="dp-md-popout-btn" aria-label="Pop out into separate window" title="Pop out into separate window">\u2922</button></div></div> <!> <div class="dp-md-body"><!> <!></div> <!></div>`);
 function MultiDayApp($$anchor, $$props) {
   push($$props, true);
   var _a5;
@@ -15762,8 +15762,11 @@ function MultiDayApp($$anchor, $$props) {
   var button_2 = sibling(button_1, 2);
   reset(div_2);
   var div_3 = sibling(div_2, 2);
-  var button_3 = child(div_3);
+  var div_4 = child(div_3);
+  var button_3 = child(div_4);
   var button_4 = sibling(button_3, 2);
+  reset(div_4);
+  var button_5 = sibling(div_4, 2);
   reset(div_3);
   reset(div_1);
   var node = sibling(div_1, 2);
@@ -15772,8 +15775,8 @@ function MultiDayApp($$anchor, $$props) {
       return get2(summary);
     }
   });
-  var div_4 = sibling(node, 2);
-  var node_1 = child(div_4);
+  var div_5 = sibling(node, 2);
+  var node_1 = child(div_5);
   InboxPanel(node_1, {
     get plugin() {
       return plugin();
@@ -15804,12 +15807,12 @@ function MultiDayApp($$anchor, $$props) {
     },
     onMoved: handleDropRefresh
   });
-  reset(div_4);
-  var node_3 = sibling(div_4, 2);
+  reset(div_5);
+  var node_3 = sibling(div_5, 2);
   {
     var consequent = ($$anchor2) => {
-      var div_5 = root_15();
-      append($$anchor2, div_5);
+      var div_6 = root_15();
+      append($$anchor2, div_6);
     };
     if_block(node_3, ($$render) => {
       if (get2(loading) && get2(days).length === 0)
@@ -15826,6 +15829,10 @@ function MultiDayApp($$anchor, $$props) {
   delegated("click", button_2, () => shiftDays(get2(count)));
   delegated("click", button_3, () => setCount(3));
   delegated("click", button_4, () => setCount(7));
+  delegated("click", button_5, function(...$$args) {
+    var _a6;
+    (_a6 = $$props.popOut) == null ? void 0 : _a6.apply(this, $$args);
+  });
   append($$anchor, div);
   pop();
 }
@@ -15861,6 +15868,9 @@ var MultiDayView = class extends import_obsidian11.ItemView {
         plugin: this.plugin,
         registerRefresh: (fn) => {
           this.refreshFn = fn;
+        },
+        popOut: () => {
+          this.app.workspace.moveLeafToPopout(this.leaf);
         }
       }
     });

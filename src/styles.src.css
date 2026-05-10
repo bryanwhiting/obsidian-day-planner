@@ -3861,9 +3861,15 @@
     gap: 4px;
   }
 
+  .dp-md-header-actions {
+    @apply inline-flex items-center;
+    gap: 8px;
+  }
+
   .dp-md-nav-btn,
   .dp-md-today-btn,
-  .dp-md-count-btn {
+  .dp-md-count-btn,
+  .dp-md-popout-btn {
     @apply inline-flex items-center justify-center;
     border: 1px solid var(--color-hairline);
     background: transparent;
@@ -3883,9 +3889,16 @@
 
   .dp-md-nav-btn:hover,
   .dp-md-today-btn:hover,
-  .dp-md-count-btn:hover {
+  .dp-md-count-btn:hover,
+  .dp-md-popout-btn:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
+  }
+
+  .dp-md-popout-btn {
+    min-width: 28px;
+    font-size: 0.95rem;
+    line-height: 1;
   }
 
   .dp-md-count-toggle {

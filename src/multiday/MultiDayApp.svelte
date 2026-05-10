@@ -17,9 +17,10 @@
   interface Props {
     plugin: TodayPlugin;
     registerRefresh: (fn: () => void) => void;
+    popOut: () => void;
   }
 
-  let { plugin, registerRefresh }: Props = $props();
+  let { plugin, registerRefresh, popOut }: Props = $props();
 
   let anchor = $state<Date>(startOfDay(new Date()));
   // svelte-ignore state_referenced_locally
@@ -94,15 +95,23 @@
         onclick={() => shiftDays(count)}
       >›</button>
     </div>
-    <div class="dp-md-count-toggle">
+    <div class="dp-md-header-actions">
+      <div class="dp-md-count-toggle">
+        <button
+          class={"dp-md-count-btn" + (count === 3 ? " is-active" : "")}
+          onclick={() => setCount(3)}
+        >3</button>
+        <button
+          class={"dp-md-count-btn" + (count === 7 ? " is-active" : "")}
+          onclick={() => setCount(7)}
+        >7</button>
+      </div>
       <button
-        class={"dp-md-count-btn" + (count === 3 ? " is-active" : "")}
-        onclick={() => setCount(3)}
-      >3</button>
-      <button
-        class={"dp-md-count-btn" + (count === 7 ? " is-active" : "")}
-        onclick={() => setCount(7)}
-      >7</button>
+        class="dp-md-popout-btn"
+        aria-label="Pop out into separate window"
+        title="Pop out into separate window"
+        onclick={popOut}
+      >⤢</button>
     </div>
   </div>
 
