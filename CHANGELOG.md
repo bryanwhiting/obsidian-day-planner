@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-10
+
+- [feat]: **Weekday templates now slot into the base via a `<@dow_template>` placeholder** instead of appending to the end. Put `<@dow_template>` wherever the day-of-week content should land in the base daily-note template (e.g. `_day.md`), and the matching weekday file (e.g. `monday.md`) is substituted there at note-creation time. Bases without the placeholder no longer get weekday content appended — users opt in by editing the base. Empty weekday entries collapse the placeholder to "". Files: `src/dailyNote.ts` (`readCombinedTemplate` rewritten as a placeholder substitution; interface doc updated), `src/settings.ts` (interface doc + the user-facing "Per-weekday templates" copy now explains the placeholder model). The user asked: "instead of just appending the day's tasks, let's create `<@dow_template>` and insert the day's template right there."
+
 ## 2026-05-09
 
 - [fix]: **Multi-day gutter click now works standalone** — no longer requires a TodayView leaf to already be open. Replaced the "show Notice if no TodayView open" branch with a new `ensureTodayView()` helper: returns the existing TodayView if one exists, otherwise creates a leaf in the right sidebar via `getRightLeaf(false)` + `setViewState({ type: VIEW_TYPE_TODAY, active: false })` so focus stays on the multi-day view (no flash, no steal). The background TodayView hosts the TaskEditModal and inherits every existing save / Pomodoro / open-line post-action — no logic duplication. File: `src/multiDayView.ts`. The user asked: "it should work standalone always."

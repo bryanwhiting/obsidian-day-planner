@@ -40,10 +40,12 @@ export const DEFAULT_AUTOCOMPLETE: AutocompleteSettings = {
 };
 
 // Optional vault paths to template files keyed by day-of-week. When non-empty,
-// the matching weekday template is appended to the base daily note template
-// (`dailyNoteTemplate`) at note-creation time. Empty values fall back to the
-// base template alone. Keys are lowercase day names so they line up with the
-// JS Date.getDay() table (0=Sunday..6=Saturday) via WEEKDAY_NAMES below.
+// the matching weekday template is substituted into the base daily note
+// template (`dailyNoteTemplate`) wherever the `<@dow_template>` placeholder
+// appears, at note-creation time. The placeholder collapses to "" when the
+// weekday entry is empty or the base lacks the placeholder. Keys are lowercase
+// day names so they line up with JS Date.getDay() (0=Sunday..6=Saturday) via
+// WEEKDAY_NAMES below.
 export interface DailyNoteWeekdayTemplates {
   sunday: string;
   monday: string;
@@ -88,8 +90,9 @@ export interface TodaySettings {
   dailyNoteFormatFallback: string;
   dailyNoteFolderFallback: string;
   dailyNoteTemplate: string;
-  // Per-weekday templates appended to the base `dailyNoteTemplate` when a
-  // daily note is created on that day of the week. Empty values are skipped.
+  // Per-weekday templates substituted into the base `dailyNoteTemplate` at
+  // the `<@dow_template>` placeholder when a daily note is created on that
+  // day of the week. Empty values collapse the placeholder to "".
   dailyNoteTemplatesByDay: DailyNoteWeekdayTemplates;
   // Vault path to a markdown file holding one quote per line. When the daily
   // note template contains `<@quote>`, a random line from this file is
@@ -874,11 +877,13 @@ export class TodaySettingTab extends PluginSettingTab {
       cls: "setting-item-description",
     });
     weekdayDesc.append(
-      "Optional vault paths to weekday-specific template files. The matching file's contents are appended to the base ",
+      "Optional vault paths to weekday-specific template files. The matching file's contents are substituted into the base ",
       makeCode("Daily note template"),
-      " when a daily note is created on that day — handy for routines that vary by day (e.g. ",
+      " wherever the ",
+      makeCode("<@dow_template>"),
+      " placeholder appears, when a daily note is created on that day — handy for routines that vary by day (e.g. ",
       makeCode("monday.md"),
-      " for the weekly review). Leave a row blank to skip; the base template still applies.",
+      " for the weekly review). Leave a row blank to collapse the placeholder to nothing on that day; if the base template lacks the placeholder, weekday templates are ignored.",
     );
 
     const dayLabels: Record<keyof DailyNoteWeekdayTemplates, string> = {
@@ -893,7 +898,9 @@ export class TodaySettingTab extends PluginSettingTab {
     for (const day of WEEKDAY_NAMES) {
       new Setting(containerEl)
         .setName(dayLabels[day])
-        .setDesc(`Appended to the base template on ${dayLabels[day]}.`)
+        .setDesc(
+          `Substituted into the base template at <@dow_template> on ${dayLabels[day]}.`,
+        )
         .addText((t) => {
           t.setPlaceholder(`Templates/${day}.md`)
             .setValue(this.plugin.settings.dailyNoteTemplatesByDay[day])

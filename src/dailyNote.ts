@@ -23,9 +23,10 @@ export interface DailyNoteFallback {
   folder: string;
   format: string;
   template?: string;
-  // Optional per-weekday templates appended to `template` based on the date's
-  // day-of-week (Date.getDay(): 0=Sunday..6=Saturday). Empty entries are
-  // skipped so the base template applies alone on those days.
+  // Optional per-weekday templates substituted into `template` wherever the
+  // `<@dow_template>` placeholder appears, keyed by the date's day-of-week
+  // (Date.getDay(): 0=Sunday..6=Saturday). Empty entries collapse the
+  // placeholder to "" on those days.
   templatesByDay?: DailyNoteWeekdayTemplates;
   // Moment.js format used for the visible alias on date links written by the
   // template parser. Empty/absent → no alias; the link uses just the basename.
@@ -177,27 +178,24 @@ async function readTemplateContent(
   return app.vault.read(file);
 }
 
-// Reads the base template and (if configured) the weekday-specific template
-// for `date`'s day-of-week, then concatenates them with a newline separator
-// when both are non-empty. The weekday template is appended after the base.
+// Reads the base template and substitutes the `<@dow_template>` placeholder
+// with the weekday-specific template for `date`'s day-of-week. The placeholder
+// collapses to "" when no weekday template is configured or its file is empty.
+// If the base has no placeholder, the weekday template is ignored — users opt
+// in by adding `<@dow_template>` to their base template where they want the
+// day's content inserted.
 async function readCombinedTemplate(
   app: App,
   fallback: DailyNoteFallback,
   date: Date,
 ): Promise<string> {
   const base = await readTemplateContent(app, fallback.template);
+  if (!base.includes("<@dow_template>")) return base;
   const byDay = fallback.templatesByDay;
-  if (!byDay) return base;
   const dayKey = WEEKDAY_NAMES[date.getDay()];
-  const dayPath = byDay[dayKey];
-  if (!dayPath) return base;
-  const dayContent = await readTemplateContent(app, dayPath);
-  if (!dayContent) return base;
-  if (!base) return dayContent;
-  // Ensure exactly one blank line separates the two so the appended block
-  // doesn't run into the base template's trailing content.
-  const baseTrimmed = base.replace(/\s+$/, "");
-  return `${baseTrimmed}\n\n${dayContent}`;
+  const dayPath = byDay?.[dayKey];
+  const dayContent = dayPath ? await readTemplateContent(app, dayPath) : "";
+  return base.replace(/<@dow_template>/g, dayContent);
 }
 
 function readDailyNotesOptions(app: App): DailyNotesOptions {

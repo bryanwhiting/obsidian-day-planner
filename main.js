@@ -1860,11 +1860,13 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       cls: "setting-item-description"
     });
     weekdayDesc.append(
-      "Optional vault paths to weekday-specific template files. The matching file's contents are appended to the base ",
+      "Optional vault paths to weekday-specific template files. The matching file's contents are substituted into the base ",
       makeCode("Daily note template"),
-      " when a daily note is created on that day \u2014 handy for routines that vary by day (e.g. ",
+      " wherever the ",
+      makeCode("<@dow_template>"),
+      " placeholder appears, when a daily note is created on that day \u2014 handy for routines that vary by day (e.g. ",
       makeCode("monday.md"),
-      " for the weekly review). Leave a row blank to skip; the base template still applies."
+      " for the weekly review). Leave a row blank to collapse the placeholder to nothing on that day; if the base template lacks the placeholder, weekday templates are ignored."
     );
     const dayLabels = {
       sunday: "Sunday",
@@ -1876,7 +1878,9 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       saturday: "Saturday"
     };
     for (const day of WEEKDAY_NAMES) {
-      new import_obsidian2.Setting(containerEl).setName(dayLabels[day]).setDesc(`Appended to the base template on ${dayLabels[day]}.`).addText((t) => {
+      new import_obsidian2.Setting(containerEl).setName(dayLabels[day]).setDesc(
+        `Substituted into the base template at <@dow_template> on ${dayLabels[day]}.`
+      ).addText((t) => {
         t.setPlaceholder(`Templates/${day}.md`).setValue(this.plugin.settings.dailyNoteTemplatesByDay[day]).onChange(async (v) => {
           this.plugin.settings.dailyNoteTemplatesByDay[day] = v.trim();
           await this.plugin.saveSettings();
@@ -2955,22 +2959,13 @@ async function readTemplateContent(app, templatePath) {
 }
 async function readCombinedTemplate(app, fallback, date) {
   const base = await readTemplateContent(app, fallback.template);
+  if (!base.includes("<@dow_template>"))
+    return base;
   const byDay = fallback.templatesByDay;
-  if (!byDay)
-    return base;
   const dayKey = WEEKDAY_NAMES[date.getDay()];
-  const dayPath = byDay[dayKey];
-  if (!dayPath)
-    return base;
-  const dayContent = await readTemplateContent(app, dayPath);
-  if (!dayContent)
-    return base;
-  if (!base)
-    return dayContent;
-  const baseTrimmed = base.replace(/\s+$/, "");
-  return `${baseTrimmed}
-
-${dayContent}`;
+  const dayPath = byDay == null ? void 0 : byDay[dayKey];
+  const dayContent = dayPath ? await readTemplateContent(app, dayPath) : "";
+  return base.replace(/<@dow_template>/g, dayContent);
 }
 function readDailyNotesOptions(app) {
   var _a, _b, _c;
