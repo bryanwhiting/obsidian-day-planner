@@ -84,6 +84,7 @@ import {
   buildPersonLinkInsert,
   PersonSuggestion,
 } from "./people";
+import { moveTaskBetweenDailyNotes } from "./taskMove";
 import {
   Habit,
   HabitPeriod,
@@ -160,6 +161,7 @@ export class TodayView extends ItemView {
   private calendarMonth: Date = startOfMonth(new Date());
   private calendarOpen: boolean = false;
   private summariesCollapsed: boolean = false;
+  private habitsCollapsed: boolean = false;
   private unscheduledCollapsed: boolean = Platform.isMobile;
   private overrideFilePath: string | null = null;
   private hasRendered: boolean = false;
@@ -280,11 +282,6 @@ export class TodayView extends ItemView {
       return;
     }
 
-    if (ev.key === "h") {
-      ev.preventDefault();
-      void this.navigateTo(new Date());
-      return;
-    }
     if (ev.key === "c") {
       ev.preventDefault();
       this.calendarOpen = !this.calendarOpen;
@@ -297,11 +294,30 @@ export class TodayView extends ItemView {
       this.scheduleRender();
       return;
     }
+    if (ev.key === "h") {
+      ev.preventDefault();
+      this.habitsCollapsed = !this.habitsCollapsed;
+      this.scheduleRender();
+      return;
+    }
+    if (ev.key === "b") {
+      ev.preventDefault();
+      this.toggleBothCollapsed();
+      this.scheduleRender();
+      return;
+    }
 
     if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
     ev.preventDefault();
     const delta = ev.key === "ArrowLeft" ? -1 : 1;
     void this.navigateTo(addDays(this.selectedDate, delta));
+  }
+
+  private toggleBothCollapsed(): void {
+    const allCollapsed = this.summariesCollapsed && this.habitsCollapsed;
+    const next = !allCollapsed;
+    this.summariesCollapsed = next;
+    this.habitsCollapsed = next;
   }
 
   private togglePomodoroPause(): void {
@@ -532,9 +548,10 @@ export class TodayView extends ItemView {
       item.createSpan({ cls: "dp-pomo-hint-label", text: label });
     };
     addHint("←/→", "day");
-    addHint("h", "today");
     addHint("c", "calendar");
-    addHint("s", "summaries");
+    addHint("s", "summary");
+    addHint("h", "habits");
+    addHint("b", "both");
     if (this.pomodoroState !== null) addHint("t", "focus");
     addHint("p", this.isPopout() ? "return" : "pop out");
   }
@@ -589,22 +606,20 @@ export class TodayView extends ItemView {
       });
     }
 
+    const allCollapsed = this.summariesCollapsed && this.habitsCollapsed;
     const collapseBtn = nav.createEl("button", {
       cls: "dp-nav-btn",
       attr: {
-        "aria-label": this.summariesCollapsed
-          ? "Expand summaries"
-          : "Collapse summaries",
-        "aria-expanded": this.summariesCollapsed ? "false" : "true",
+        "aria-label": allCollapsed
+          ? "Expand summary and habits"
+          : "Collapse summary and habits",
+        "aria-expanded": allCollapsed ? "false" : "true",
       },
     });
-    setIcon(
-      collapseBtn,
-      this.summariesCollapsed ? "chevron-down" : "chevron-up",
-    );
+    setIcon(collapseBtn, allCollapsed ? "chevron-down" : "chevron-up");
     collapseBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      this.summariesCollapsed = !this.summariesCollapsed;
+      this.toggleBothCollapsed();
       this.scheduleRender();
     });
 
@@ -785,6 +800,7 @@ export class TodayView extends ItemView {
   ): void {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed) section.addClass("is-summaries-collapsed");
+    if (this.habitsCollapsed) section.addClass("is-habits-collapsed");
 
     const header = section.createDiv({ cls: "dp-header" });
     if (!isPrimary && title) header.createDiv({ cls: "dp-title", text: title });
@@ -1558,6 +1574,8 @@ export class TodayView extends ItemView {
         grabOffsetY: 0,
         durationMin: task.durationMin,
         bodyText: "",
+        hasExplicitDuration: task.hasExplicitDuration,
+        subtaskRawLines: task.subtasks.map((s) => s.rawLine),
       },
       (line) => setDurationTag(line, newDurationMin, prefixes),
     );
@@ -1662,6 +1680,8 @@ export class TodayView extends ItemView {
         grabOffsetY: 0,
         durationMin: task.durationMin,
         bodyText: "",
+        hasExplicitDuration: task.hasExplicitDuration,
+        subtaskRawLines: task.subtasks.map((s) => s.rawLine),
       },
       (line) => {
         let next = setTimeTag(line, newStartMin, prefixes);
@@ -2558,44 +2578,13 @@ export class TodayView extends ItemView {
       quotesFile: this.plugin.settings.quotesFile,
       addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
     };
-    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
-    if (targetFile.path === file.path) {
-      new Notice("Source and target are the same file.");
-      return false;
-    }
-
-    // Snapshot the lines to move (parent + sub-tasks) from the source file
-    // and remove them in one process pass. Highest indices first so the
-    // earlier ones stay valid as we splice.
-    const lineNumbers = [task.lineNumber, ...task.subtasks.map((s) => s.lineNumber)]
-      .sort((a, b) => a - b);
-    let movedLines: string[] = [];
-    await this.app.vault.process(file, (content) => {
-      const lines = content.split("\n");
-      movedLines = lineNumbers
-        .filter((n) => n < lines.length)
-        .map((n) => lines[n]);
-      for (let i = lineNumbers.length - 1; i >= 0; i--) {
-        const n = lineNumbers[i];
-        if (n < lines.length) lines.splice(n, 1);
-      }
-      return lines.join("\n");
-    });
-    if (movedLines.length === 0) {
-      new Notice("Today: nothing to move.");
-      return false;
-    }
-
-    await this.app.vault.process(targetFile, (content) => {
-      const lines = content.split("\n");
-      const lastIdx = findLastTaskLine(content);
-      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
-      lines.splice(insertAt, 0, ...movedLines);
-      return lines.join("\n");
-    });
-
-    new Notice(`Moved to ${targetFile.path}`);
-    return true;
+    return moveTaskBetweenDailyNotes(
+      this.app,
+      file,
+      task,
+      targetDate,
+      fallback,
+    );
   }
 
   // Carries the task title (with most tags) and any unfinished sub-tasks into

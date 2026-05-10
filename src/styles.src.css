@@ -357,6 +357,12 @@
     margin-bottom: 4px;
   }
 
+  .dp-section.is-habits-collapsed .dp-quote-row,
+  .dp-section.is-habits-collapsed .dp-workout,
+  .dp-section.is-habits-collapsed .dp-habits {
+    display: none;
+  }
+
   .dp-title {
     font-family: var(--font-display);
     font-weight: 500;

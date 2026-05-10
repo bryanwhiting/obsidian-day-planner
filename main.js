@@ -318,11 +318,11 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian2 = require("obsidian");
@@ -3192,6 +3192,49 @@ function buildPersonLinkInsert(app, path) {
   return `[[${basename}]]`;
 }
 
+// src/taskMove.ts
+var import_obsidian4 = require("obsidian");
+async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fallback, options = {}) {
+  var _a;
+  const notify = options.notify !== false;
+  const targetFile = (_a = options.targetFile) != null ? _a : await ensureDailyNote(app, targetDate, fallback);
+  if (targetFile.path === sourceFile.path) {
+    if (notify)
+      new import_obsidian4.Notice("Source and target are the same file.");
+    return false;
+  }
+  const lineNumbers = [
+    task.lineNumber,
+    ...task.subtasks.map((s) => s.lineNumber)
+  ].sort((a, b) => a - b);
+  let movedLines = [];
+  await app.vault.process(sourceFile, (content) => {
+    const lines = content.split("\n");
+    movedLines = lineNumbers.filter((n) => n < lines.length).map((n) => lines[n]);
+    for (let i = lineNumbers.length - 1; i >= 0; i--) {
+      const n = lineNumbers[i];
+      if (n < lines.length)
+        lines.splice(n, 1);
+    }
+    return lines.join("\n");
+  });
+  if (movedLines.length === 0) {
+    if (notify)
+      new import_obsidian4.Notice("Today: nothing to move.");
+    return false;
+  }
+  await app.vault.process(targetFile, (content) => {
+    const lines = content.split("\n");
+    const lastIdx = findLastTaskLine(content);
+    const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+    lines.splice(insertAt, 0, ...movedLines);
+    return lines.join("\n");
+  });
+  if (notify)
+    new import_obsidian4.Notice(`Moved to ${targetFile.path}`);
+  return true;
+}
+
 // src/habits.ts
 var SLUG_PATTERN = "[\\w-]+";
 var NUM_PATTERN = "\\d+(?:[._]\\d+)?";
@@ -3367,7 +3410,7 @@ function nowMinutes() {
 function quickDurations(mins) {
   return mins.map((m) => ({ label: formatCompactDuration(m), min: m }));
 }
-var TodayView = class extends import_obsidian4.ItemView {
+var TodayView = class extends import_obsidian5.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -3377,7 +3420,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.calendarMonth = startOfMonth(new Date());
     this.calendarOpen = false;
     this.summariesCollapsed = false;
-    this.unscheduledCollapsed = import_obsidian4.Platform.isMobile;
+    this.habitsCollapsed = false;
+    this.unscheduledCollapsed = import_obsidian5.Platform.isMobile;
     this.overrideFilePath = null;
     this.hasRendered = false;
     // Path of the workspace's active file at the last render. The
@@ -3403,7 +3447,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   async onOpen() {
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
-        if (file instanceof import_obsidian4.TFile)
+        if (file instanceof import_obsidian5.TFile)
           this.scheduleRender();
       })
     );
@@ -3472,11 +3516,6 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
       return;
     }
-    if (ev.key === "h") {
-      ev.preventDefault();
-      void this.navigateTo(new Date());
-      return;
-    }
     if (ev.key === "c") {
       ev.preventDefault();
       this.calendarOpen = !this.calendarOpen;
@@ -3489,11 +3528,29 @@ var TodayView = class extends import_obsidian4.ItemView {
       this.scheduleRender();
       return;
     }
+    if (ev.key === "h") {
+      ev.preventDefault();
+      this.habitsCollapsed = !this.habitsCollapsed;
+      this.scheduleRender();
+      return;
+    }
+    if (ev.key === "b") {
+      ev.preventDefault();
+      this.toggleBothCollapsed();
+      this.scheduleRender();
+      return;
+    }
     if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight")
       return;
     ev.preventDefault();
     const delta = ev.key === "ArrowLeft" ? -1 : 1;
     void this.navigateTo(addDays(this.selectedDate, delta));
+  }
+  toggleBothCollapsed() {
+    const allCollapsed = this.summariesCollapsed && this.habitsCollapsed;
+    const next = !allCollapsed;
+    this.summariesCollapsed = next;
+    this.habitsCollapsed = next;
   }
   togglePomodoroPause() {
     var _a;
@@ -3531,7 +3588,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (!state)
       return;
     const file = this.app.vault.getAbstractFileByPath(state.filePath);
-    if (!(file instanceof import_obsidian4.TFile))
+    if (!(file instanceof import_obsidian5.TFile))
       return;
     const content = await this.app.vault.read(file);
     const tasks = parseFileTasks(
@@ -3572,7 +3629,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (!state)
       return;
     const file = this.app.vault.getAbstractFileByPath(state.filePath);
-    if (!(file instanceof import_obsidian4.TFile))
+    if (!(file instanceof import_obsidian5.TFile))
       return;
     await this.applyLineChecked(file, lineNumber, false);
     this.scheduleRender();
@@ -3628,7 +3685,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     let displayPath = dailyResolved.path;
     if (this.overrideFilePath) {
       const f = this.app.vault.getAbstractFileByPath(this.overrideFilePath);
-      if (f instanceof import_obsidian4.TFile) {
+      if (f instanceof import_obsidian5.TFile) {
         displayFile = f;
         displayPath = f.path;
       } else {
@@ -3694,9 +3751,10 @@ var TodayView = class extends import_obsidian4.ItemView {
       item.createSpan({ cls: "dp-pomo-hint-label", text: label });
     };
     addHint("\u2190/\u2192", "day");
-    addHint("h", "today");
     addHint("c", "calendar");
-    addHint("s", "summaries");
+    addHint("s", "summary");
+    addHint("h", "habits");
+    addHint("b", "both");
     if (this.pomodoroState !== null)
       addHint("t", "focus");
     addHint("p", this.isPopout() ? "return" : "pop out");
@@ -3707,17 +3765,17 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-nav-btn dp-nav-arrow",
       attr: { "aria-label": "Previous day" }
     });
-    (0, import_obsidian4.setIcon)(prev, "chevron-left");
+    (0, import_obsidian5.setIcon)(prev, "chevron-left");
     const today = nav.createEl("button", {
       cls: "dp-today-btn",
       attr: { "aria-label": "Jump to today" }
     });
-    (0, import_obsidian4.setIcon)(today, "sun");
+    (0, import_obsidian5.setIcon)(today, "sun");
     const calBtn = nav.createEl("button", {
       cls: "dp-cal-btn",
       attr: { "aria-label": "Toggle calendar" }
     });
-    (0, import_obsidian4.setIcon)(calBtn, "calendar");
+    (0, import_obsidian5.setIcon)(calBtn, "calendar");
     if (this.calendarOpen)
       calBtn.addClass("is-active");
     const labelText = this.formatDateLabel(this.selectedDate);
@@ -3740,26 +3798,24 @@ var TodayView = class extends import_obsidian4.ItemView {
         cls: "dp-nav-btn dp-pomo-resume",
         attr: { "aria-label": "Back to focus" }
       });
-      (0, import_obsidian4.setIcon)(focusBtn, "timer");
+      (0, import_obsidian5.setIcon)(focusBtn, "timer");
       focusBtn.addEventListener("click", () => {
         this.pomodoroHidden = false;
         this.scheduleRender();
       });
     }
+    const allCollapsed = this.summariesCollapsed && this.habitsCollapsed;
     const collapseBtn = nav.createEl("button", {
       cls: "dp-nav-btn",
       attr: {
-        "aria-label": this.summariesCollapsed ? "Expand summaries" : "Collapse summaries",
-        "aria-expanded": this.summariesCollapsed ? "false" : "true"
+        "aria-label": allCollapsed ? "Expand summary and habits" : "Collapse summary and habits",
+        "aria-expanded": allCollapsed ? "false" : "true"
       }
     });
-    (0, import_obsidian4.setIcon)(
-      collapseBtn,
-      this.summariesCollapsed ? "chevron-down" : "chevron-up"
-    );
+    (0, import_obsidian5.setIcon)(collapseBtn, allCollapsed ? "chevron-down" : "chevron-up");
     collapseBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      this.summariesCollapsed = !this.summariesCollapsed;
+      this.toggleBothCollapsed();
       this.scheduleRender();
     });
     const popoutBtn = nav.createEl("button", {
@@ -3768,7 +3824,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         "aria-label": this.isPopout() ? "Return to main window" : "Open in new window"
       }
     });
-    (0, import_obsidian4.setIcon)(popoutBtn, this.isPopout() ? "monitor" : "picture-in-picture-2");
+    (0, import_obsidian5.setIcon)(popoutBtn, this.isPopout() ? "monitor" : "picture-in-picture-2");
     popoutBtn.addEventListener("click", () => {
       if (this.isPopout())
         void this.returnLeafToMain();
@@ -3779,7 +3835,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-nav-btn dp-nav-arrow",
       attr: { "aria-label": "Next day" }
     });
-    (0, import_obsidian4.setIcon)(next, "chevron-right");
+    (0, import_obsidian5.setIcon)(next, "chevron-right");
     prev.addEventListener(
       "click",
       () => void this.navigateTo(addDays(this.selectedDate, -1))
@@ -3817,7 +3873,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       try {
         await ensureDailyNote(this.app, target, fallback);
       } catch (e) {
-        new import_obsidian4.Notice(`Today: failed to create note (${e.message})`);
+        new import_obsidian5.Notice(`Today: failed to create note (${e.message})`);
       }
     }
     this.scheduleRender();
@@ -3896,7 +3952,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   // appended the empty span, so the rendered children fill it asynchronously
   // without holding up the rest of the view render.
   renderInlineMarkdown(text, el, sourcePath) {
-    void import_obsidian4.MarkdownRenderer.render(this.app, text, el, sourcePath, this).then(
+    void import_obsidian5.MarkdownRenderer.render(this.app, text, el, sourcePath, this).then(
       () => {
         const p = el.querySelector(":scope > p");
         if (p) {
@@ -3911,6 +3967,8 @@ var TodayView = class extends import_obsidian4.ItemView {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed)
       section.addClass("is-summaries-collapsed");
+    if (this.habitsCollapsed)
+      section.addClass("is-habits-collapsed");
     const header = section.createDiv({ cls: "dp-header" });
     if (!isPrimary && title)
       header.createDiv({ cls: "dp-title", text: title });
@@ -4006,7 +4064,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     const totalMin = endMin - startMin;
     const heightPx = totalMin * settings.pxPerMin;
     const wrap = parent.createDiv({ cls: "dp-timeline-wrap" });
-    const configuredHeight = import_obsidian4.Platform.isMobile ? settings.timelineHeightMobile : settings.timelineHeightDesktop;
+    const configuredHeight = import_obsidian5.Platform.isMobile ? settings.timelineHeightMobile : settings.timelineHeightDesktop;
     const parsedHeight = parseTimelineHeight(configuredHeight);
     if (parsedHeight)
       wrap.style.maxHeight = parsedHeight;
@@ -4336,7 +4394,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       else if (block.task.durationMin <= 30)
         el.addClass("is-narrow-2line");
     }
-    if (import_obsidian4.Platform.isMobile)
+    if (import_obsidian5.Platform.isMobile)
       el.addClass("is-mobile-condensed");
     const ctx = this.findContextTag(block.task);
     const projectColor = getTaskColor(
@@ -4355,15 +4413,15 @@ var TodayView = class extends import_obsidian4.ItemView {
     const meta = row.createSpan({ cls: "dp-block-meta" });
     if (ctx == null ? void 0 : ctx.icon) {
       const ctxIcon = meta.createSpan({ cls: "dp-block-context-icon" });
-      (0, import_obsidian4.setIcon)(ctxIcon, ctx.icon);
+      (0, import_obsidian5.setIcon)(ctxIcon, ctx.icon);
       ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
     }
     if (!block.task.hasExplicitDuration) {
       const warn = meta.createSpan({ cls: "dp-warn" });
-      (0, import_obsidian4.setIcon)(warn, "alert-triangle");
+      (0, import_obsidian5.setIcon)(warn, "alert-triangle");
       warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
     }
-    const compactTime = block.task.startMin !== null && (import_obsidian4.Platform.isMobile || narrow && block.task.durationMin <= 30);
+    const compactTime = block.task.startMin !== null && (import_obsidian5.Platform.isMobile || narrow && block.task.durationMin <= 30);
     meta.createSpan({
       cls: "dp-block-time",
       text: compactTime ? this.fmtClock(block.task.startMin) : this.formatBlockTime(block.task)
@@ -4374,7 +4432,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       const projIcon = this.resolveProjectIcon(block.task.project);
       if (projIcon) {
         const ic = projWrap.createSpan({ cls: "dp-block-project-icon" });
-        (0, import_obsidian4.setIcon)(ic, projIcon);
+        (0, import_obsidian5.setIcon)(ic, projIcon);
       }
       projWrap.createSpan({ cls: "dp-block-project", text: block.task.project });
       if (block.task.subproject) {
@@ -4557,7 +4615,9 @@ var TodayView = class extends import_obsidian4.ItemView {
         source: "timeline",
         grabOffsetY: 0,
         durationMin: task.durationMin,
-        bodyText: ""
+        bodyText: "",
+        hasExplicitDuration: task.hasExplicitDuration,
+        subtaskRawLines: task.subtasks.map((s) => s.rawLine)
       },
       (line) => setDurationTag(line, newDurationMin, prefixes)
     );
@@ -4642,7 +4702,9 @@ var TodayView = class extends import_obsidian4.ItemView {
         source: "timeline",
         grabOffsetY: 0,
         durationMin: task.durationMin,
-        bodyText: ""
+        bodyText: "",
+        hasExplicitDuration: task.hasExplicitDuration,
+        subtaskRawLines: task.subtasks.map((s) => s.rawLine)
       },
       (line) => {
         let next = setTimeTag(line, newStartMin, prefixes);
@@ -4663,11 +4725,11 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   renderUnscheduled(parent, file, unscheduled, colorMap) {
     const list = parent.createDiv({ cls: "dp-unscheduled" });
-    if (import_obsidian4.Platform.isMobile && this.unscheduledCollapsed) {
+    if (import_obsidian5.Platform.isMobile && this.unscheduledCollapsed) {
       list.addClass("is-collapsed");
     }
     const head = list.createDiv({ cls: "dp-unscheduled-head" });
-    if (import_obsidian4.Platform.isMobile) {
+    if (import_obsidian5.Platform.isMobile) {
       const toggleBtn = head.createEl("button", {
         cls: "dp-unscheduled-toggle",
         attr: {
@@ -4675,7 +4737,7 @@ var TodayView = class extends import_obsidian4.ItemView {
           "aria-expanded": this.unscheduledCollapsed ? "false" : "true"
         }
       });
-      (0, import_obsidian4.setIcon)(
+      (0, import_obsidian5.setIcon)(
         toggleBtn,
         this.unscheduledCollapsed ? "chevron-up" : "chevron-down"
       );
@@ -4686,7 +4748,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       });
     }
     head.createSpan({ cls: "dp-unscheduled-title", text: "Unscheduled" });
-    if (import_obsidian4.Platform.isMobile && unscheduled.length > 0) {
+    if (import_obsidian5.Platform.isMobile && unscheduled.length > 0) {
       head.createSpan({
         cls: "dp-unscheduled-count",
         text: String(unscheduled.length)
@@ -4696,10 +4758,10 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-unscheduled-add",
       attr: { "aria-label": "Add unscheduled task" }
     });
-    (0, import_obsidian4.setIcon)(addBtn, "plus");
+    (0, import_obsidian5.setIcon)(addBtn, "plus");
     addBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      if (import_obsidian4.Platform.isMobile && this.unscheduledCollapsed) {
+      if (import_obsidian5.Platform.isMobile && this.unscheduledCollapsed) {
         this.unscheduledCollapsed = false;
       }
       void this.createUnscheduledTask(file);
@@ -4726,12 +4788,12 @@ var TodayView = class extends import_obsidian4.ItemView {
       const meta = card.createDiv({ cls: "dp-card-meta" });
       if (ctx == null ? void 0 : ctx.icon) {
         const ctxIcon = meta.createSpan({ cls: "dp-card-context-icon" });
-        (0, import_obsidian4.setIcon)(ctxIcon, ctx.icon);
+        (0, import_obsidian5.setIcon)(ctxIcon, ctx.icon);
         ctxIcon.setAttribute("aria-label", `#${ctx.tag}`);
       }
       if (!task.hasExplicitDuration) {
         const warn = meta.createSpan({ cls: "dp-warn" });
-        (0, import_obsidian4.setIcon)(warn, "alert-triangle");
+        (0, import_obsidian5.setIcon)(warn, "alert-triangle");
         warn.setAttribute("aria-label", "No #d/ tag \u2014 using default duration");
       }
       meta.createSpan({ text: formatTotal(task.durationMin) });
@@ -4740,7 +4802,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         const projIcon = this.resolveProjectIcon(task.project);
         if (projIcon) {
           const ic = projGroup.createSpan({ cls: "dp-card-project-icon" });
-          (0, import_obsidian4.setIcon)(ic, projIcon);
+          (0, import_obsidian5.setIcon)(ic, projIcon);
         }
         projGroup.createSpan({ cls: "dp-card-project", text: task.project });
         if (task.subproject) {
@@ -4877,8 +4939,8 @@ var TodayView = class extends import_obsidian4.ItemView {
   }
   async editLine(payload, transform) {
     const file = this.app.vault.getAbstractFileByPath(payload.filePath);
-    if (!(file instanceof import_obsidian4.TFile)) {
-      new import_obsidian4.Notice("Today: source file no longer exists.");
+    if (!(file instanceof import_obsidian5.TFile)) {
+      new import_obsidian5.Notice("Today: source file no longer exists.");
       this.scheduleRender();
       return;
     }
@@ -4897,7 +4959,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       return lines.join("\n");
     });
     if (stale) {
-      new import_obsidian4.Notice("Today: file changed since last render \u2014 refreshing.");
+      new import_obsidian5.Notice("Today: file changed since last render \u2014 refreshing.");
       this.scheduleRender();
     }
   }
@@ -5072,7 +5134,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       const projIconName = this.resolveProjectIcon(name);
       if (projIconName) {
         const ic = nameCell.createSpan({ cls: "dp-st-project-icon" });
-        (0, import_obsidian4.setIcon)(ic, projIconName);
+        (0, import_obsidian5.setIcon)(ic, projIconName);
       }
       nameCell.createSpan({ text: name });
       if (agg.subs.size > 0) {
@@ -5325,7 +5387,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       }
       return lines.join("\n");
     });
-    new import_obsidian4.Notice("Task deleted");
+    new import_obsidian5.Notice("Task deleted");
   }
   // Inserts a copy of the task line (and optionally its sub-tasks) directly
   // under the existing block. Strips any `#tid/<id>` tag from the copies so
@@ -5350,7 +5412,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       lines.splice(lastIdx + 1, 0, ...copyBlock);
       return lines.join("\n");
     });
-    new import_obsidian4.Notice(
+    new import_obsidian5.Notice(
       includeSubtasks ? "Task duplicated (with sub-tasks)" : "Task duplicated"
     );
   }
@@ -5366,7 +5428,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       lines[task.lineNumber] = removeTimeTag(lines[task.lineNumber], prefixes);
       return lines.join("\n");
     });
-    new import_obsidian4.Notice("Unscheduled");
+    new import_obsidian5.Notice("Unscheduled");
   }
   // Computes the date-picker entries for the edit modal's "Move" button:
   // tomorrow, +2 days, +3 days, and the first day of next week (driven by
@@ -5424,36 +5486,13 @@ var TodayView = class extends import_obsidian4.ItemView {
       quotesFile: this.plugin.settings.quotesFile,
       addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
-    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
-    if (targetFile.path === file.path) {
-      new import_obsidian4.Notice("Source and target are the same file.");
-      return false;
-    }
-    const lineNumbers = [task.lineNumber, ...task.subtasks.map((s) => s.lineNumber)].sort((a, b) => a - b);
-    let movedLines = [];
-    await this.app.vault.process(file, (content) => {
-      const lines = content.split("\n");
-      movedLines = lineNumbers.filter((n) => n < lines.length).map((n) => lines[n]);
-      for (let i = lineNumbers.length - 1; i >= 0; i--) {
-        const n = lineNumbers[i];
-        if (n < lines.length)
-          lines.splice(n, 1);
-      }
-      return lines.join("\n");
-    });
-    if (movedLines.length === 0) {
-      new import_obsidian4.Notice("Today: nothing to move.");
-      return false;
-    }
-    await this.app.vault.process(targetFile, (content) => {
-      const lines = content.split("\n");
-      const lastIdx = findLastTaskLine(content);
-      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
-      lines.splice(insertAt, 0, ...movedLines);
-      return lines.join("\n");
-    });
-    new import_obsidian4.Notice(`Moved to ${targetFile.path}`);
-    return true;
+    return moveTaskBetweenDailyNotes(
+      this.app,
+      file,
+      task,
+      targetDate,
+      fallback
+    );
   }
   // Carries the task title (with most tags) and any unfinished sub-tasks into
   // the daily note for `targetDate`, while keeping the completed sub-tasks on
@@ -5475,7 +5514,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     };
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
-      new import_obsidian4.Notice("Source and target are the same file.");
+      new import_obsidian5.Notice("Source and target are the same file.");
       return false;
     }
     const prefixes = this.plugin.settings.prefixes;
@@ -5487,7 +5526,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     );
     let current = (_a = fresh.find((t) => t.lineNumber === task.lineNumber)) != null ? _a : fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
     if (!current) {
-      new import_obsidian4.Notice("Couldn't locate the task to migrate.");
+      new import_obsidian5.Notice("Couldn't locate the task to migrate.");
       return false;
     }
     const existingId = parseTaskId(current.body, prefixes);
@@ -5521,7 +5560,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       lines.splice(insertAt, 0, newParentLine, ...uncheckedSubLines);
       return lines.join("\n");
     });
-    new import_obsidian4.Notice(`Migrated to ${targetFile.path}`);
+    new import_obsidian5.Notice(`Migrated to ${targetFile.path}`);
     return true;
   }
   // Inserts a new sub-task line below the parent's existing sub-tasks (or
@@ -5689,7 +5728,7 @@ var TodayView = class extends import_obsidian4.ItemView {
   async loadHabitDisplays(displayDate, displayContent, fallback) {
     const settings = this.plugin.settings;
     const habitsFile = this.app.vault.getAbstractFileByPath(settings.habitsFile);
-    if (!(habitsFile instanceof import_obsidian4.TFile))
+    if (!(habitsFile instanceof import_obsidian5.TFile))
       return [];
     const habitsContent = await this.plugin.habitsScanner.getContent(habitsFile);
     const habits = parseHabitsFile(habitsContent, settings.habitPrefix);
@@ -5961,7 +6000,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     const minutes = Math.floor(state.actualMs / 6e4);
     if (minutes > 0) {
       const file = this.app.vault.getAbstractFileByPath(state.filePath);
-      if (file instanceof import_obsidian4.TFile) {
+      if (file instanceof import_obsidian5.TFile) {
         try {
           const content = await this.app.vault.read(file);
           const tasks = parseFileTasks(
@@ -5982,7 +6021,7 @@ var TodayView = class extends import_obsidian4.ItemView {
             await this.commitActualTime(file, target);
           }
         } catch (e) {
-          new import_obsidian4.Notice(`Today: failed to write actual time (${e.message})`);
+          new import_obsidian5.Notice(`Today: failed to write actual time (${e.message})`);
         }
       }
     }
@@ -6044,7 +6083,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     if (!state)
       return false;
     const file = this.app.vault.getAbstractFileByPath(state.filePath);
-    if (!(file instanceof import_obsidian4.TFile)) {
+    if (!(file instanceof import_obsidian5.TFile)) {
       this.exitPomodoro();
       return false;
     }
@@ -6080,7 +6119,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       this.bankWorkProgress();
       if (this.plugin.settings.pomodoroAutoCycle) {
         const nextPhase = state.phase === "work" ? "rest" : "work";
-        new import_obsidian4.Notice(nextPhase === "rest" ? "Break time" : "Back to focus");
+        new import_obsidian5.Notice(nextPhase === "rest" ? "Break time" : "Back to focus");
         state.phase = nextPhase;
         state.startedAt = Date.now();
         state.workPhaseBankedMs = 0;
@@ -6102,7 +6141,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-pomo-iconbtn",
       attr: { "aria-label": "Edit task" }
     });
-    (0, import_obsidian4.setIcon)(editTask, "pencil");
+    (0, import_obsidian5.setIcon)(editTask, "pencil");
     editTask.addEventListener("click", () => {
       this.openTaskEditor(file, task);
     });
@@ -6110,7 +6149,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-pomo-iconbtn",
       attr: { "aria-label": "Show timeline" }
     });
-    (0, import_obsidian4.setIcon)(showTimeline, "list");
+    (0, import_obsidian5.setIcon)(showTimeline, "list");
     showTimeline.addEventListener("click", () => {
       this.pomodoroHidden = true;
       this.scheduleRender();
@@ -6121,7 +6160,7 @@ var TodayView = class extends import_obsidian4.ItemView {
         "aria-label": this.isPopout() ? "Return to main window" : "Open in new window"
       }
     });
-    (0, import_obsidian4.setIcon)(popout, this.isPopout() ? "monitor" : "picture-in-picture-2");
+    (0, import_obsidian5.setIcon)(popout, this.isPopout() ? "monitor" : "picture-in-picture-2");
     popout.addEventListener("click", () => {
       if (this.isPopout())
         void this.returnLeafToMain();
@@ -6132,7 +6171,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       cls: "dp-pomo-iconbtn",
       attr: { "aria-label": "Exit focus mode" }
     });
-    (0, import_obsidian4.setIcon)(exit, "x");
+    (0, import_obsidian5.setIcon)(exit, "x");
     exit.addEventListener("click", () => void this.exitPomodoroWithCommit());
     wrap.createDiv({
       cls: "dp-pomo-phase",
@@ -6623,7 +6662,7 @@ function filterSuggestions(pool, query, limit = 12) {
 function sanitizeProjectName(raw) {
   return raw.trim().replace(/[^\w/-]+/g, "-").replace(/-+/g, "-").replace(/\/+/g, "/").replace(/-?\/-?/g, "/").replace(/^[-/]+|[-/]+$/g, "");
 }
-var TaskEditModal = class extends import_obsidian4.Modal {
+var TaskEditModal = class extends import_obsidian5.Modal {
   constructor(app, opts) {
     super(app);
     this.durationChanged = false;
@@ -7013,7 +7052,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         attr: { "aria-label": `Insert ${label.toLowerCase()}` }
       });
       btn.type = "button";
-      (0, import_obsidian4.setIcon)(btn, iconName);
+      (0, import_obsidian5.setIcon)(btn, iconName);
       btn.createSpan({ cls: "dp-edit-quick-label", text: label });
       btn.addEventListener("pointerdown", (ev) => {
         ev.preventDefault();
@@ -7143,7 +7182,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
             if (d && fmt.trim()) {
               el.createSpan({
                 cls: "dp-project-suggest-sub",
-                text: ` ${(0, import_obsidian4.moment)(d).format(fmt.trim())}`
+                text: ` ${(0, import_obsidian5.moment)(d).format(fmt.trim())}`
               });
             }
           },
@@ -7333,7 +7372,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         cls: "dp-edit-subtask-delete",
         attr: { "aria-label": "Delete sub-task", role: "button", tabindex: "0" }
       });
-      (0, import_obsidian4.setIcon)(deleteBtn, "x");
+      (0, import_obsidian5.setIcon)(deleteBtn, "x");
       deleteBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         const removedLine = sub.lineNumber;
@@ -7350,7 +7389,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         }
       });
       const handle = row2.createSpan({ cls: "dp-edit-subtask-handle" });
-      (0, import_obsidian4.setIcon)(handle, "grip-vertical");
+      (0, import_obsidian5.setIcon)(handle, "grip-vertical");
       handle.draggable = true;
       const toggleChecked2 = () => {
         checked = !checked;
@@ -7398,7 +7437,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
             const stripped = cleaned.startsWith(tagPrefix2) ? cleaned.slice(tagPrefix2.length) : cleaned;
             const parsed = parseTime(`${tagPrefix2}${stripped}`, prefixes);
             if (parsed === null) {
-              new import_obsidian4.Notice("Invalid time, try e.g. 7p or 6:30p");
+              new import_obsidian5.Notice("Invalid time, try e.g. 7p or 6:30p");
               return;
             }
             totalMin = parsed;
@@ -7452,7 +7491,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
             const stripped = raw.replace(new RegExp(`^#?${prefixes.duration}\\s*[/:]\\s*`, "i"), "").trim();
             const parsed = parseCompactDuration(stripped);
             if (parsed === null) {
-              new import_obsidian4.Notice("Invalid duration, try e.g. 30m or 1h30m");
+              new import_obsidian5.Notice("Invalid duration, try e.g. 30m or 1h30m");
               return;
             }
             totalMin = parsed;
@@ -7873,7 +7912,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       attr: { "aria-label": "Show in note (s)" }
     });
     showBtn.type = "button";
-    (0, import_obsidian4.setIcon)(showBtn, "eye");
+    (0, import_obsidian5.setIcon)(showBtn, "eye");
     showBtn.addEventListener("click", () => {
       if (this.opts.mode === "new") {
         submit("show");
@@ -7892,7 +7931,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         attr: { "aria-label": "Move to\u2026 (m)" }
       });
       moveBtn.type = "button";
-      (0, import_obsidian4.setIcon)(moveBtn, "forward");
+      (0, import_obsidian5.setIcon)(moveBtn, "forward");
       editModeMoveBtn = moveBtn;
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
@@ -7931,7 +7970,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
           text: `(${calendarPick.hotkey})`
         });
         const iconWrap = calBtn.createSpan({ cls: "dp-edit-move-calicon" });
-        (0, import_obsidian4.setIcon)(iconWrap, "calendar");
+        (0, import_obsidian5.setIcon)(iconWrap, "calendar");
         calBtn.addEventListener("click", () => openCalendar());
         choiceBtns.push(calBtn);
       }
@@ -8050,7 +8089,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
       attr: { "aria-label": "Pomodoro (p)" }
     });
     pomoBtn.type = "button";
-    (0, import_obsidian4.setIcon)(pomoBtn, "timer");
+    (0, import_obsidian5.setIcon)(pomoBtn, "timer");
     pomoBtn.addEventListener("click", () => {
       if (this.opts.mode === "new") {
         submit("pomodoro");
@@ -8065,7 +8104,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         attr: { "aria-label": "Unschedule (u)" }
       });
       unschedBtn.type = "button";
-      (0, import_obsidian4.setIcon)(unschedBtn, "calendar-x");
+      (0, import_obsidian5.setIcon)(unschedBtn, "calendar-x");
       unschedBtn.addEventListener("click", () => void runUnschedule());
     }
     if (this.opts.mode === "edit" && this.opts.onDuplicate) {
@@ -8074,7 +8113,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
         attr: { "aria-label": "Duplicate (y)" }
       });
       dupBtn.type = "button";
-      (0, import_obsidian4.setIcon)(dupBtn, "copy");
+      (0, import_obsidian5.setIcon)(dupBtn, "copy");
       dupBtn.addEventListener("click", () => void runDuplicate());
     }
     const saveBtn = actions.createEl("button", {
@@ -8161,7 +8200,7 @@ var TaskEditModal = class extends import_obsidian4.Modal {
     document.body.removeClass("today-edit-open");
   }
 };
-var SubtaskQuickAddModal = class extends import_obsidian4.Modal {
+var SubtaskQuickAddModal = class extends import_obsidian5.Modal {
   constructor(app, onSubmit) {
     super(app);
     this.onSubmit = onSubmit;
@@ -8206,7 +8245,7 @@ var SubtaskQuickAddModal = class extends import_obsidian4.Modal {
 };
 
 // src/collect.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 var TASK_LINE2 = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 async function collectUnfinished(plugin) {
   const fallback = {
@@ -8219,7 +8258,7 @@ async function collectUnfinished(plugin) {
     dailyOptions.folder
   );
   if (!inboxPath) {
-    new import_obsidian5.Notice("Today: set an inbox file path in settings before collecting.");
+    new import_obsidian6.Notice("Today: set an inbox file path in settings before collecting.");
     return;
   }
   const scope = await pickScope(plugin.app);
@@ -8227,7 +8266,7 @@ async function collectUnfinished(plugin) {
     return;
   const plan = await buildMigrationPlan(plugin, dailyOptions, inboxPath, scope);
   if (plan.totalCount === 0) {
-    new import_obsidian5.Notice("Today: no unfinished tasks to migrate.");
+    new import_obsidian6.Notice("Today: no unfinished tasks to migrate.");
     return;
   }
   if (plugin.settings.confirmCollectMigration) {
@@ -8236,7 +8275,7 @@ async function collectUnfinished(plugin) {
       return;
   }
   await applyPlan(plugin.app, plan);
-  new import_obsidian5.Notice(
+  new import_obsidian6.Notice(
     `Today: migrated ${plan.totalCount} task${plan.totalCount === 1 ? "" : "s"} to ${plan.inboxPath}.`
   );
 }
@@ -8244,7 +8283,7 @@ function resolveInboxPath(template, dailyFolder) {
   const t = (template || "").trim();
   if (!t)
     return "";
-  return (0, import_obsidian5.normalizePath)(t.replace(/\{daily\}/g, dailyFolder));
+  return (0, import_obsidian6.normalizePath)(t.replace(/\{daily\}/g, dailyFolder));
 }
 function pickScope(app) {
   return new Promise((resolve) => {
@@ -8256,7 +8295,7 @@ function confirmMigration(app, plan) {
     new ConfirmModal(app, plan, resolve).open();
   });
 }
-var ScopeModal = class extends import_obsidian5.Modal {
+var ScopeModal = class extends import_obsidian6.Modal {
   constructor(app, resolve) {
     super(app);
     this.settled = false;
@@ -8301,7 +8340,7 @@ var ScopeModal = class extends import_obsidian5.Modal {
       this.resolve(null);
   }
 };
-var ConfirmModal = class extends import_obsidian5.Modal {
+var ConfirmModal = class extends import_obsidian6.Modal {
   constructor(app, plan, resolve) {
     super(app);
     this.settled = false;
@@ -8499,7 +8538,7 @@ async function appendToInbox(app, inboxPath, newLines) {
     return;
   const payload = newLines.join("\n") + "\n";
   const existing = app.vault.getAbstractFileByPath(inboxPath);
-  if (existing instanceof import_obsidian5.TFile) {
+  if (existing instanceof import_obsidian6.TFile) {
     await app.vault.process(existing, (content) => {
       if (content.length === 0)
         return payload;
@@ -8525,9 +8564,9 @@ function extractTitle(rawLine) {
 }
 
 // src/habitsView.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var VIEW_TYPE_HABITS_STATS = "today-habits-stats";
-var HabitsStatsView = class extends import_obsidian6.ItemView {
+var HabitsStatsView = class extends import_obsidian7.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -8725,7 +8764,7 @@ ${reps} ${reps === 1 ? "rep" : "reps"}`;
   async loadHabitsAndGoals() {
     const path = this.plugin.settings.habitsFile;
     const f = this.app.vault.getAbstractFileByPath(path);
-    if (!(f instanceof import_obsidian6.TFile))
+    if (!(f instanceof import_obsidian7.TFile))
       return { habits: [], goals: [] };
     const content = await this.plugin.habitsScanner.getContent(f);
     const settings = this.plugin.settings;
@@ -9086,13 +9125,13 @@ function formatMonthRange(start, endExclusive) {
 }
 
 // src/main.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian7.Plugin {
+var TodayPlugin = class extends import_obsidian8.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    if (import_obsidian7.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian8.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
@@ -9146,7 +9185,7 @@ var TodayPlugin = class extends import_obsidian7.Plugin {
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian7.TFile))
+        if (!(af instanceof import_obsidian8.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -9213,7 +9252,7 @@ var TodayPlugin = class extends import_obsidian7.Plugin {
     }
   }
   async openDailyNoteForOffset(dayOffset) {
-    const target = (0, import_obsidian8.moment)().startOf("day").add(dayOffset, "day").toDate();
+    const target = (0, import_obsidian9.moment)().startOf("day").add(dayOffset, "day").toDate();
     const fallback = {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
@@ -9248,7 +9287,7 @@ var TodayPlugin = class extends import_obsidian7.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
 };
-var InlineSuggest = class extends import_obsidian7.EditorSuggest {
+var InlineSuggest = class extends import_obsidian8.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -9340,7 +9379,7 @@ var InlineSuggest = class extends import_obsidian7.EditorSuggest {
       const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian8.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian9.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,
