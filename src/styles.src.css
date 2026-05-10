@@ -132,13 +132,16 @@
     font-feature-settings: "ss01";
   }
 
-  a.dp-datenav-label.is-clickable {
+  a.dp-datenav-label.is-clickable,
+  a.dp-datenav-label.is-clickable:hover,
+  a.dp-datenav-label.is-clickable:focus,
+  a.dp-datenav-label.is-clickable:active {
     @apply cursor-pointer no-underline;
     color: var(--color-ink);
+    text-decoration: none;
   }
   a.dp-datenav-label.is-clickable:hover {
-    color: var(--color-accent, var(--interactive-accent));
-    text-decoration: underline;
+    opacity: 0.75;
   }
 
   .dp-nav-btn {

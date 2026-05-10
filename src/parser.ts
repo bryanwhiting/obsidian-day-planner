@@ -36,6 +36,7 @@ export interface TagPrefixes {
   taskId: string;
   actual: string;
   taskContext: string;
+  taskCreated: string;
 }
 
 export const DEFAULT_PREFIXES: TagPrefixes = {
@@ -47,6 +48,7 @@ export const DEFAULT_PREFIXES: TagPrefixes = {
   taskId: "tid",
   actual: "ta",
   taskContext: "tc",
+  taskCreated: "tcr",
 };
 
 export interface ExerciseSet {
@@ -97,6 +99,9 @@ export function buildTagRegexes(prefixes: TagPrefixes) {
     taskContext: new RegExp(
       `#${esc(prefixes.taskContext)}\\/([\\w-]+)`,
       "g",
+    ),
+    taskCreated: new RegExp(
+      `#${esc(prefixes.taskCreated)}\\/(\\d{4}-\\d{2}-\\d{2})\\b`,
     ),
   };
 }

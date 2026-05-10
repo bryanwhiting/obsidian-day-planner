@@ -336,7 +336,8 @@ var DEFAULT_PREFIXES = {
   exercise: "x",
   taskId: "tid",
   actual: "ta",
-  taskContext: "tc"
+  taskContext: "tc",
+  taskCreated: "tcr"
 };
 var TASK_LINE = /^(\s*)- \[([ xX/\-!?*<>])\]\s+(.*)$/;
 var DESCRIPTION_RE = /\{([^{}]*)\}/;
