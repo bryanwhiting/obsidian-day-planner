@@ -469,7 +469,7 @@ export class TodayView extends ItemView {
       activeFile !== null &&
       (!displayFile || activeFile.path !== displayFile.path);
 
-    this.renderDateNav(root);
+    this.renderDateNav(root, displayFile);
 
     const colorMap = resolveProjectColors(
       tasks.filter(
@@ -487,7 +487,7 @@ export class TodayView extends ItemView {
     this.renderSection(
       root,
       this.formatDateLabel(this.selectedDate),
-      displayPath,
+      "",
       displayFile,
       displayPath,
       tasks,
@@ -525,7 +525,7 @@ export class TodayView extends ItemView {
     addHint("p", this.isPopout() ? "return" : "pop out");
   }
 
-  private renderDateNav(parent: HTMLElement): void {
+  private renderDateNav(parent: HTMLElement, displayFile: TFile | null): void {
     const nav = parent.createDiv({ cls: "dp-datenav" });
 
     const prev = nav.createEl("button", {
@@ -547,8 +547,21 @@ export class TodayView extends ItemView {
     setIcon(calBtn, "calendar");
     if (this.calendarOpen) calBtn.addClass("is-active");
 
-    const label = nav.createDiv({ cls: "dp-datenav-label" });
-    label.textContent = this.formatDateLabel(this.selectedDate);
+    const labelText = this.formatDateLabel(this.selectedDate);
+    if (displayFile) {
+      const label = nav.createEl("a", {
+        cls: "dp-datenav-label is-clickable",
+        text: labelText,
+        attr: { href: "#", title: `Open ${displayFile.path}` },
+      });
+      label.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        void this.openFile(displayFile);
+      });
+    } else {
+      const label = nav.createDiv({ cls: "dp-datenav-label" });
+      label.textContent = labelText;
+    }
 
     if (this.pomodoroState && this.pomodoroHidden) {
       const focusBtn = nav.createEl("button", {

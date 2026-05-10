@@ -3386,7 +3386,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     const activeFile = this.app.workspace.getActiveFile();
     this.lastActiveFilePath = (_a = activeFile == null ? void 0 : activeFile.path) != null ? _a : null;
     const showOpenActiveLink = activeFile !== null && (!displayFile || activeFile.path !== displayFile.path);
-    this.renderDateNav(root);
+    this.renderDateNav(root, displayFile);
     const colorMap = resolveProjectColors(
       tasks.filter(
         (t) => t.project !== null
@@ -3401,7 +3401,7 @@ var TodayView = class extends import_obsidian4.ItemView {
     this.renderSection(
       root,
       this.formatDateLabel(this.selectedDate),
-      displayPath,
+      "",
       displayFile,
       displayPath,
       tasks,
@@ -3437,7 +3437,7 @@ var TodayView = class extends import_obsidian4.ItemView {
       addHint("t", "focus");
     addHint("p", this.isPopout() ? "return" : "pop out");
   }
-  renderDateNav(parent) {
+  renderDateNav(parent, displayFile) {
     const nav = parent.createDiv({ cls: "dp-datenav" });
     const prev = nav.createEl("button", {
       cls: "dp-nav-btn dp-nav-arrow",
@@ -3456,8 +3456,21 @@ var TodayView = class extends import_obsidian4.ItemView {
     (0, import_obsidian4.setIcon)(calBtn, "calendar");
     if (this.calendarOpen)
       calBtn.addClass("is-active");
-    const label = nav.createDiv({ cls: "dp-datenav-label" });
-    label.textContent = this.formatDateLabel(this.selectedDate);
+    const labelText = this.formatDateLabel(this.selectedDate);
+    if (displayFile) {
+      const label = nav.createEl("a", {
+        cls: "dp-datenav-label is-clickable",
+        text: labelText,
+        attr: { href: "#", title: `Open ${displayFile.path}` }
+      });
+      label.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        void this.openFile(displayFile);
+      });
+    } else {
+      const label = nav.createDiv({ cls: "dp-datenav-label" });
+      label.textContent = labelText;
+    }
     if (this.pomodoroState && this.pomodoroHidden) {
       const focusBtn = nav.createEl("button", {
         cls: "dp-nav-btn dp-pomo-resume",

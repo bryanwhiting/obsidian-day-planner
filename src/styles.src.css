@@ -132,6 +132,15 @@
     font-feature-settings: "ss01";
   }
 
+  a.dp-datenav-label.is-clickable {
+    @apply cursor-pointer no-underline;
+    color: var(--color-ink);
+  }
+  a.dp-datenav-label.is-clickable:hover {
+    color: var(--color-accent, var(--interactive-accent));
+    text-decoration: underline;
+  }
+
   .dp-nav-btn {
     @apply inline-flex items-center justify-center cursor-pointer transition;
     width: 29px;
