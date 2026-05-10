@@ -1005,9 +1005,10 @@ export class MultiDayView extends ItemView {
 
   // Gutter click → "new task at HH:MM" modal for that day. Mirrors the
   // daily-view gutter, delegating to TodayView so the modal, autocomplete,
-  // and onSave plumbing stay single-sourced. If the day's note doesn't
-  // exist yet, create it first; if no TodayView is open, surface a notice
-  // so the user knows to open one (the modal lives there).
+  // and onSave plumbing (including Pomodoro / open-line post-actions) stay
+  // single-sourced. Creates the daily note on demand, and spins up a
+  // background TodayView leaf if none exists so the gutter works standalone
+  // without forcing the user to open the daily view themselves.
   private async createTaskAt(day: DayBundle, startMin: number): Promise<void> {
     let file = day.file;
     if (!file) {
@@ -1017,13 +1018,25 @@ export class MultiDayView extends ItemView {
         buildFallback(this.plugin.settings),
       );
     }
-    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY)[0];
-    const view = leaf?.view;
-    if (view instanceof TodayView) {
-      view.createTaskAtTimeForDay(file, day.date, startMin);
+    const view = await this.ensureTodayView();
+    if (!view) {
+      new Notice("Could not open Today view to host the new-task modal.");
       return;
     }
-    new Notice("Open the Today view to add tasks from the multi-day gutter.");
+    view.createTaskAtTimeForDay(file, day.date, startMin);
+  }
+
+  // Returns the existing TodayView (if any) or creates one in the right
+  // sidebar with `active: false` so focus stays on the multi-day view. The
+  // background leaf hosts the TaskEditModal and reuses every onSave /
+  // postAction path the daily view already wires up.
+  private async ensureTodayView(): Promise<TodayView | null> {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY)[0];
+    if (existing?.view instanceof TodayView) return existing.view;
+    const leaf = this.app.workspace.getRightLeaf(false);
+    if (!leaf) return null;
+    await leaf.setViewState({ type: VIEW_TYPE_TODAY, active: false });
+    return leaf.view instanceof TodayView ? leaf.view : null;
   }
 
   private async openDay(day: DayBundle): Promise<void> {
