@@ -2695,7 +2695,7 @@ function computeFreeMin(scheduled, windowStartMin, windowEndMin) {
     occupied += curEnd - curStart;
   return Math.max(0, windowLen - occupied);
 }
-function layoutTimeline(scheduled, rangeStartMin, pxPerMin) {
+function layoutTimeline(scheduled, rangeStartMin, pxPerMin, maxColumns) {
   const groups = groupOverlaps(scheduled);
   const blocks = [];
   for (const group of groups) {
@@ -2710,8 +2710,23 @@ function layoutTimeline(scheduled, rangeStartMin, pxPerMin) {
           break;
         }
       }
-      if (!placed)
-        columns.push([t]);
+      if (!placed) {
+        if (maxColumns && columns.length >= maxColumns) {
+          let bestIdx = 0;
+          let bestEnd = columns[0][columns[0].length - 1].startMin + columns[0][columns[0].length - 1].durationMin;
+          for (let i = 1; i < columns.length; i++) {
+            const last = columns[i][columns[i].length - 1];
+            const end = last.startMin + last.durationMin;
+            if (end < bestEnd) {
+              bestEnd = end;
+              bestIdx = i;
+            }
+          }
+          columns[bestIdx].push(t);
+        } else {
+          columns.push([t]);
+        }
+      }
     }
     const colCount = columns.length;
     const widthPct = 100 / colCount;
@@ -15424,12 +15439,13 @@ var import_obsidian10 = require("obsidian");
 
 // src/multiday/MiniTimeline.svelte
 var root_13 = from_html(`<div class="dp-md-timeline-row"><div class="dp-md-timeline-line"></div> <div class="dp-md-timeline-label"> </div></div>`);
-var root_23 = from_html(`<button><span class="dp-md-timeline-block-time"> </span> <span class="dp-md-timeline-block-text"> </span></button>`);
+var root_23 = from_html(`<button><span class="dp-md-timeline-block-text"> </span></button>`);
 var root3 = from_html(`<div class="dp-md-timeline"><!> <div class="dp-md-timeline-blocks"></div></div>`);
 function MiniTimeline($$anchor, $$props) {
   push($$props, true);
   var _a5;
   var _b3;
+  const MAX_LANES = 2;
   const startHour = user_derived(() => (_a5 = $$props.plugin.settings.visibleStartHour) !== null && _a5 !== void 0 ? _a5 : 6);
   const endHour = user_derived(() => (_b3 = $$props.plugin.settings.visibleEndHour) !== null && _b3 !== void 0 ? _b3 : 22);
   const startMin = user_derived(() => get2(startHour) * 60);
@@ -15443,14 +15459,9 @@ function MiniTimeline($$anchor, $$props) {
       out.push(h);
     return out;
   });
-  const layout = user_derived(() => layoutTimeline($$props.tasks, get2(startMin), PX_PER_MIN));
+  const layout = user_derived(() => layoutTimeline($$props.tasks, get2(startMin), PX_PER_MIN, MAX_LANES));
   function hourTopPx(h) {
     return (h * 60 - get2(startMin)) * PX_PER_MIN;
-  }
-  function blockTimeLabel(t) {
-    var _a6;
-    const s = (_a6 = t.startMin) !== null && _a6 !== void 0 ? _a6 : 0;
-    return `${formatClockShort(s)}\u2013${formatClockShort(s + t.durationMin)}`;
   }
   function bodyText(task) {
     return task.body.replace(/#\S+/g, "").trim() || task.body.trim();
@@ -15488,20 +15499,15 @@ function MiniTimeline($$anchor, $$props) {
     var span = child(button);
     var text_1 = child(span, true);
     reset(span);
-    var span_1 = sibling(span, 2);
-    var text_2 = child(span_1, true);
-    reset(span_1);
     reset(button);
     template_effect(
-      ($0, $1, $2, $3, $4) => {
+      ($0, $1, $2) => {
         set_class(button, 1, "dp-md-timeline-block" + (get2(b).task.checked ? " is-done" : ""));
-        set_attribute2(button, "title", `${$0 != null ? $0 : ""} \xB7 ${$1 != null ? $1 : ""}`);
-        styles_2 = set_style(button, "", styles_2, $2);
-        set_text(text_1, $3);
-        set_text(text_2, $4);
+        set_attribute2(button, "title", $0);
+        styles_2 = set_style(button, "", styles_2, $1);
+        set_text(text_1, $2);
       },
       [
-        () => blockTimeLabel(get2(b).task),
         () => bodyText(get2(b).task),
         () => {
           var _a6, _b4, _c2, _d;
@@ -15512,10 +15518,6 @@ function MiniTimeline($$anchor, $$props) {
             width: `calc(${(_c2 = get2(b).widthPct) != null ? _c2 : ""}% - 2px)`,
             "--dp-md-color": (_d = get2(color)) != null ? _d : "var(--color-accent)"
           };
-        },
-        () => {
-          var _a6;
-          return formatClockShort((_a6 = get2(b).task.startMin) != null ? _a6 : 0);
         },
         () => bodyText(get2(b).task)
       ]
@@ -15954,6 +15956,11 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
       callback: () => void this.activateMultiDayView()
     });
     this.addCommand({
+      id: "open-combined-popout",
+      name: "Open Today + multi-day + habits in popout",
+      callback: () => void this.openCombinedPopout()
+    });
+    this.addCommand({
       id: "open-daily-note-today",
       name: "Open today's daily note",
       callback: () => void this.openDailyNoteForOffset(0)
@@ -16077,6 +16084,32 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
       active: true
     });
     this.app.workspace.revealLeaf(leaf);
+  }
+  async openCombinedPopout() {
+    if (import_obsidian12.Platform.isMobile) {
+      await this.activateView();
+      await this.activateMultiDayView();
+      await this.activateHabitsStatsView();
+      return;
+    }
+    const todayLeaf = this.app.workspace.openPopoutLeaf({
+      size: { width: 1500, height: 950 }
+    });
+    await todayLeaf.setViewState({ type: VIEW_TYPE_TODAY, active: true });
+    const multiLeaf = this.app.workspace.createLeafBySplit(
+      todayLeaf,
+      "vertical"
+    );
+    await multiLeaf.setViewState({ type: VIEW_TYPE_MULTI_DAY, active: false });
+    const habitsLeaf = this.app.workspace.createLeafBySplit(
+      multiLeaf,
+      "vertical"
+    );
+    await habitsLeaf.setViewState({
+      type: VIEW_TYPE_HABITS_STATS,
+      active: false
+    });
+    this.app.workspace.setActiveLeaf(todayLeaf, { focus: true });
   }
   async activateMultiDayView() {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_MULTI_DAY);

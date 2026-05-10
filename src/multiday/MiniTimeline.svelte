@@ -7,6 +7,11 @@
   import { layoutTimeline } from "../scheduler";
   import { colorFor } from "../multiDay";
 
+  // Cap on how many overlapping tasks render side-by-side in a single day
+  // column. With 7 columns onscreen, 3+ lanes shrink each block past the
+  // point of legibility — overflow stacks visually instead.
+  const MAX_LANES = 2;
+
   interface Props {
     plugin: TodayPlugin;
     tasks: ParsedTask[];
@@ -34,15 +39,12 @@
     return out;
   });
 
-  const layout = $derived(layoutTimeline(tasks, startMin, PX_PER_MIN));
+  const layout = $derived(
+    layoutTimeline(tasks, startMin, PX_PER_MIN, MAX_LANES),
+  );
 
   function hourTopPx(h: number): number {
     return (h * 60 - startMin) * PX_PER_MIN;
-  }
-
-  function blockTimeLabel(t: ParsedTask): string {
-    const s = t.startMin ?? 0;
-    return `${formatClockShort(s)}–${formatClockShort(s + t.durationMin)}`;
   }
 
   function bodyText(task: ParsedTask): string {
@@ -68,12 +70,9 @@
         style:left="{b.leftPct}%"
         style:width="calc({b.widthPct}% - 2px)"
         style:--dp-md-color={color ?? "var(--color-accent)"}
-        title="{blockTimeLabel(b.task)} · {bodyText(b.task)}"
+        title={bodyText(b.task)}
         onclick={() => onClickTask(b.task)}
       >
-        <span class="dp-md-timeline-block-time">
-          {formatClockShort(b.task.startMin ?? 0)}
-        </span>
         <span class="dp-md-timeline-block-text">{bodyText(b.task)}</span>
       </button>
     {/each}

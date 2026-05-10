@@ -101,6 +101,7 @@ export function layoutTimeline(
   scheduled: ParsedTask[],
   rangeStartMin: number,
   pxPerMin: number,
+  maxColumns?: number,
 ): LayoutBlock[] {
   const groups = groupOverlaps(scheduled);
   const blocks: LayoutBlock[] = [];
@@ -116,7 +117,28 @@ export function layoutTimeline(
           break;
         }
       }
-      if (!placed) columns.push([t]);
+      if (!placed) {
+        if (maxColumns && columns.length >= maxColumns) {
+          // Cap reached: drop the new task into the column whose last task
+          // ends earliest, accepting the visual overlap so the lane stays at
+          // maxColumns wide.
+          let bestIdx = 0;
+          let bestEnd =
+            columns[0][columns[0].length - 1].startMin! +
+            columns[0][columns[0].length - 1].durationMin;
+          for (let i = 1; i < columns.length; i++) {
+            const last = columns[i][columns[i].length - 1];
+            const end = last.startMin! + last.durationMin;
+            if (end < bestEnd) {
+              bestEnd = end;
+              bestIdx = i;
+            }
+          }
+          columns[bestIdx].push(t);
+        } else {
+          columns.push([t]);
+        }
+      }
     }
     const colCount = columns.length;
     const widthPct = 100 / colCount;

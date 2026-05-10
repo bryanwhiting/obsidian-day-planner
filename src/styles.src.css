@@ -4184,42 +4184,32 @@
   .dp-md-timeline-block {
     --dp-color: var(--dp-md-color, var(--color-accent));
     position: absolute;
-    background: color-mix(in srgb, var(--dp-color) 92%, white);
+    background: var(--dp-color);
     color: #fff;
     border: 0;
     border-radius: var(--radius-tab);
-    padding: 2px 5px 2px 6px;
+    padding: 2px 6px;
     margin: 0;
     text-align: left;
     overflow: hidden;
     cursor: pointer;
     font-family: inherit;
     box-shadow:
-      inset 2px 0 0 0 rgba(255, 255, 255, 0.35),
-      0 1px 1px rgba(0, 0, 0, 0.06);
+      inset 2px 0 0 0 rgba(255, 255, 255, 0.4),
+      0 1px 1px rgba(0, 0, 0, 0.08);
     transition: filter 120ms ease;
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
+    align-items: center;
     line-height: 1.15;
   }
 
   .dp-md-timeline-block:hover {
-    filter: brightness(1.04) saturate(1.05);
+    filter: brightness(1.06) saturate(1.05);
   }
 
   .dp-md-timeline-block.is-done {
     opacity: 0.5;
     text-decoration: line-through;
-  }
-
-  .dp-md-timeline-block-time {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-    opacity: 0.85;
   }
 
   .dp-md-timeline-block-text {

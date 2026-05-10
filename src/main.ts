@@ -104,6 +104,12 @@ export default class TodayPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "open-combined-popout",
+      name: "Open Today + multi-day + habits in popout",
+      callback: () => void this.openCombinedPopout(),
+    });
+
+    this.addCommand({
       id: "open-daily-note-today",
       name: "Open today's daily note",
       callback: () => void this.openDailyNoteForOffset(0),
@@ -241,6 +247,34 @@ export default class TodayPlugin extends Plugin {
       active: true,
     });
     this.app.workspace.revealLeaf(leaf);
+  }
+
+  async openCombinedPopout(): Promise<void> {
+    if (Platform.isMobile) {
+      // Popout windows are desktop-only; just open each in a tab.
+      await this.activateView();
+      await this.activateMultiDayView();
+      await this.activateHabitsStatsView();
+      return;
+    }
+    const todayLeaf = this.app.workspace.openPopoutLeaf({
+      size: { width: 1500, height: 950 },
+    });
+    await todayLeaf.setViewState({ type: VIEW_TYPE_TODAY, active: true });
+    const multiLeaf = this.app.workspace.createLeafBySplit(
+      todayLeaf,
+      "vertical",
+    );
+    await multiLeaf.setViewState({ type: VIEW_TYPE_MULTI_DAY, active: false });
+    const habitsLeaf = this.app.workspace.createLeafBySplit(
+      multiLeaf,
+      "vertical",
+    );
+    await habitsLeaf.setViewState({
+      type: VIEW_TYPE_HABITS_STATS,
+      active: false,
+    });
+    this.app.workspace.setActiveLeaf(todayLeaf, { focus: true });
   }
 
   async activateMultiDayView(): Promise<void> {
