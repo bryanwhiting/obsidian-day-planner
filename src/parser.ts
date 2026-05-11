@@ -681,6 +681,28 @@ export function setTaskCreatedTag(
   return appendTag(rawLine, `#${prefixes.taskCreated}/${dateStr}`);
 }
 
+// Replace-or-append variant: always ends with exactly one `#<taskCreated>/<dateStr>`
+// tag, regardless of whether the line already carried one. Used by the edit modal
+// when the user changes the "Created" date through the collapsible.
+export function replaceTaskCreatedTag(
+  rawLine: string,
+  dateStr: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).taskCreated;
+  const newTag = `#${prefixes.taskCreated}/${dateStr}`;
+  if (re.test(rawLine)) return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+
+export function removeTaskCreatedTag(
+  rawLine: string,
+  prefixes: TagPrefixes,
+): string {
+  const re = buildTagRegexes(prefixes).taskCreated;
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
+}
+
 export function setTaskTitle(
   rawLine: string,
   newTitle: string,

@@ -43,6 +43,9 @@ import {
   parseTaskId,
   generateTaskId,
   setTaskCreatedTag,
+  parseTaskCreated,
+  replaceTaskCreatedTag,
+  removeTaskCreatedTag,
   snapToInterval,
   formatTotal,
   formatCompactDuration,
@@ -1219,6 +1222,7 @@ export class TodayView extends ItemView {
       initialChecked: false,
       initialTags: [],
       availableTags: this.collectContextTagNames(),
+      initialTaskCreated: todayDateStr(),
       subtasks: [],
       projects: this.collectProjectNames(),
       getPriorTasks: () => this.collectPriorTaskSuggestions(),
@@ -1238,7 +1242,16 @@ export class TodayView extends ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, _checked, tags, extras) => {
+      onSave: (
+        title,
+        description,
+        durationMin,
+        project,
+        _checked,
+        tags,
+        taskCreated,
+        extras,
+      ) => {
         const proj =
           project === undefined || project === "" ? null : project;
         // When the user didn't touch the duration field, prefer the sum of
@@ -1262,11 +1275,16 @@ export class TodayView extends ItemView {
             this.plugin.settings.prefixes,
           );
         }
-        newLine = setTaskCreatedTag(
-          newLine,
-          todayDateStr(),
-          this.plugin.settings.prefixes,
-        );
+        // Stamp the creation date — use whatever the modal returned (it always
+        // seeds today's date in "new" mode, but the user may have edited it
+        // through the collapsible). "" or null clears the tag entirely.
+        if (taskCreated) {
+          newLine = setTaskCreatedTag(
+            newLine,
+            taskCreated,
+            this.plugin.settings.prefixes,
+          );
+        }
         void this.appendTaskAfterLast(
           file,
           newLine,
@@ -2362,6 +2380,10 @@ export class TodayView extends ItemView {
       .replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "")
       .replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "")
       .replace(new RegExp(`#${p.taskContext}\\/[\\w-]+`, "g"), "")
+      .replace(
+        new RegExp(`#${p.taskCreated}\\/\\d{4}-\\d{2}-\\d{2}\\b`, "g"),
+        "",
+      )
       .replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = ctx.tag?.trim();
@@ -2477,6 +2499,7 @@ export class TodayView extends ItemView {
       availableTags: this.collectContextTagNames(),
       initialTaskId: parseTaskId(task.body, prefixes),
       taskIdPrefix: prefixes.taskId,
+      initialTaskCreated: parseTaskCreated(task.body, prefixes),
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
@@ -2493,7 +2516,15 @@ export class TodayView extends ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, checked, tags) => {
+      onSave: (
+        title,
+        description,
+        durationMin,
+        project,
+        checked,
+        tags,
+        taskCreated,
+      ) => {
         void this.applyTaskEdit(
           file,
           task,
@@ -2503,6 +2534,7 @@ export class TodayView extends ItemView {
           project,
           checked,
           tags,
+          taskCreated,
         );
       },
       onToggleSubtask: async (sub, checked) => {
@@ -2932,6 +2964,8 @@ export class TodayView extends ItemView {
     // null = leave the existing #tc/ tags alone, otherwise replace them with
     // the supplied list (pass [] to clear all).
     newTags: string[] | null,
+    // undefined = leave the #tcr/ tag alone, "" = remove it, otherwise set
+    newTaskCreated: string | null | undefined,
   ): Promise<void> {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
@@ -2954,6 +2988,11 @@ export class TodayView extends ItemView {
       }
       if (newTags !== null) {
         updated = setTaskContextTags(updated, newTags, prefixes);
+      }
+      if (newTaskCreated !== undefined) {
+        updated = newTaskCreated
+          ? replaceTaskCreatedTag(updated, newTaskCreated, prefixes)
+          : removeTaskCreatedTag(updated, prefixes);
       }
       lines[task.lineNumber] = updated;
       return lines.join("\n");
@@ -3834,6 +3873,9 @@ interface TaskEditOpts {
   // title input where the user would have to delete it to avoid duplication.
   initialTaskId?: string | null;
   taskIdPrefix?: string;
+  // Existing `#tcr/<YYYY-MM-DD>` value, or null if the task has none. Shown in
+  // the collapsible "Created" field. In "new" mode this is today's date.
+  initialTaskCreated?: string | null;
   subtasks: ParsedSubtask[];
   projects: string[];
   // Loader for prior tasks across the vault, deduped by title (most recent
@@ -3875,6 +3917,9 @@ interface TaskEditOpts {
   // checked is null when unchanged.
   // tags is null when unchanged; otherwise it's the new full list (pass []
   // to clear all `#tc/` tags).
+  // taskCreated is undefined when unchanged (edit mode and the user didn't touch
+  // the field), "" to clear the tag, or a YYYY-MM-DD string to set it. In "new"
+  // mode it's always a string (the modal seeds today's date).
   // extras is supplied only in "new" mode and carries any pending sub-tasks
   // plus the post-save action the user picked (Add / Show in note / Pomodoro).
   onSave: (
@@ -3884,6 +3929,7 @@ interface TaskEditOpts {
     project: string | null | undefined,
     checked: boolean | null,
     tags: string[] | null,
+    taskCreated: string | null | undefined,
     extras?: NewTaskExtras,
   ) => void;
   // Edit-only callbacks. Required in "edit" mode, omitted in "new" mode.
@@ -5000,6 +5046,21 @@ class TaskEditModal extends Modal {
       return final;
     };
 
+    // Forward-declared so resolveTaskCreated (defined immediately below) can
+    // close over the input — the collapsible itself is rendered further down,
+    // after the submit-on-Enter wiring.
+    let taskCreatedInput!: HTMLInputElement;
+    const resolveTaskCreated = (): string | null | undefined => {
+      const raw = taskCreatedInput.value.trim();
+      if (this.opts.mode === "new") return raw || null;
+      const initial = this.opts.initialTaskCreated ?? null;
+      // In edit mode treat "value unchanged" as undefined so the save path
+      // leaves the existing tag alone (and `removeTaskCreatedTag` is only
+      // triggered when the user explicitly clears the field).
+      if (raw === (initial ?? "")) return undefined;
+      return raw === "" ? "" : raw;
+    };
+
     const submit = (postAction: NewTaskPostAction = "none"): void => {
       const title = input.value.trim();
       if (this.opts.mode === "new" && !title) {
@@ -5020,6 +5081,7 @@ class TaskEditModal extends Modal {
         resolveProject(),
         this.checkedChanged ? this.checked : null,
         resolveTags(),
+        resolveTaskCreated(),
         extras,
       );
       this.close();
@@ -5044,6 +5106,37 @@ class TaskEditModal extends Modal {
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
     durInput.addEventListener("keydown", enterToSubmit);
+
+    // Collapsible "Created" field — hidden by default, expands to a date input
+    // showing the `#tcr/YYYY-MM-DD` tag value. In "new" mode the modal seeds
+    // today's date; the user can override before saving. In edit mode the
+    // input pre-fills from the parsed tag (empty if the line has none).
+    const createdDetails = this.contentEl.createEl("details", {
+      cls: "dp-edit-created",
+    });
+    const createdSummary = createdDetails.createEl("summary", {
+      cls: "dp-edit-created-summary",
+    });
+    createdSummary.setText("Created");
+    const createdValueLabel = createdSummary.createSpan({
+      cls: "dp-edit-created-value",
+    });
+    const createdBody = createdDetails.createDiv({
+      cls: "dp-edit-created-body",
+    });
+    taskCreatedInput = createdBody.createEl("input", {
+      type: "date",
+      cls: "dp-edit-created-input",
+      attr: { "aria-label": "Task creation date" },
+    });
+    taskCreatedInput.value = this.opts.initialTaskCreated ?? "";
+    const refreshCreatedLabel = (): void => {
+      createdValueLabel.setText(taskCreatedInput.value || "—");
+    };
+    refreshCreatedLabel();
+    taskCreatedInput.addEventListener("input", refreshCreatedLabel);
+    taskCreatedInput.addEventListener("change", refreshCreatedLabel);
+    taskCreatedInput.addEventListener("keydown", enterToSubmit);
 
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({
@@ -5617,23 +5710,14 @@ class TaskEditModal extends Modal {
       };
 
       const applyPriorPick = (sugg: TaskSuggestion): void => {
+        // Only the title carries over from the prior task — duration, project,
+        // description, tags, and the creation date are all left at their
+        // current defaults so each pick produces a fresh task. The sub-task
+        // checklist is still copied when the user opts in via
+        // `copySubtasksOnAutocomplete`, since that's a useful pattern for
+        // recurring checklists.
         input.value = sugg.title;
         input.setSelectionRange(sugg.title.length, sugg.title.length);
-
-        descInput.value = sugg.description;
-        projInput.value = sugg.project ?? "";
-
-        if (sugg.durationMin !== null) {
-          this.selectedDurationMin = sugg.durationMin;
-          this.durationChanged = true;
-          refreshDurButtons();
-          durInput.value = formatCompactDuration(sugg.durationMin);
-          durInput.removeClass("is-invalid");
-        }
-
-        currentTags.length = 0;
-        currentTags.push(...sugg.tags);
-        renderTagChips();
 
         if (this.opts.copySubtasksOnAutocomplete) {
           // Drop any pending in-memory subs and adopt the source's checklist.

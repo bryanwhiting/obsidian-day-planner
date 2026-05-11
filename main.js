@@ -354,7 +354,9 @@ __export(parser_exports, {
   removeDurationTag: () => removeDurationTag,
   removeOrderTag: () => removeOrderTag,
   removeProjectTag: () => removeProjectTag,
+  removeTaskCreatedTag: () => removeTaskCreatedTag,
   removeTimeTag: () => removeTimeTag,
+  replaceTaskCreatedTag: () => replaceTaskCreatedTag,
   setDurationTag: () => setDurationTag,
   setOrderTag: () => setOrderTag,
   setProjectTag: () => setProjectTag,
@@ -843,6 +845,17 @@ function setTaskCreatedTag(rawLine, dateStr, prefixes) {
   if (re.test(rawLine))
     return rawLine;
   return appendTag(rawLine, `#${prefixes.taskCreated}/${dateStr}`);
+}
+function replaceTaskCreatedTag(rawLine, dateStr, prefixes) {
+  const re = buildTagRegexes(prefixes).taskCreated;
+  const newTag = `#${prefixes.taskCreated}/${dateStr}`;
+  if (re.test(rawLine))
+    return rawLine.replace(re, newTag);
+  return appendTag(rawLine, newTag);
+}
+function removeTaskCreatedTag(rawLine, prefixes) {
+  const re = buildTagRegexes(prefixes).taskCreated;
+  return rawLine.replace(re, "").replace(/[ \t]+$/, "").replace(/  +/g, " ");
 }
 function setTaskTitle(rawLine, newTitle, prefixes) {
   const m = TASK_LINE.exec(rawLine);
@@ -5017,6 +5030,7 @@ var TodayView = class extends import_obsidian7.ItemView {
       initialChecked: false,
       initialTags: [],
       availableTags: this.collectContextTagNames(),
+      initialTaskCreated: todayDateStr(),
       subtasks: [],
       projects: this.collectProjectNames(),
       getPriorTasks: () => this.collectPriorTaskSuggestions(),
@@ -5035,7 +5049,7 @@ var TodayView = class extends import_obsidian7.ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, _checked, tags, extras) => {
+      onSave: (title, description, durationMin, project, _checked, tags, taskCreated, extras) => {
         var _a, _b;
         const proj = project === void 0 || project === "" ? null : project;
         const subtaskSum = durationMin === null && (extras == null ? void 0 : extras.subtaskRawLines) ? sumSubtaskDurations(
@@ -5051,11 +5065,13 @@ var TodayView = class extends import_obsidian7.ItemView {
             this.plugin.settings.prefixes
           );
         }
-        newLine = setTaskCreatedTag(
-          newLine,
-          todayDateStr(),
-          this.plugin.settings.prefixes
-        );
+        if (taskCreated) {
+          newLine = setTaskCreatedTag(
+            newLine,
+            taskCreated,
+            this.plugin.settings.prefixes
+          );
+        }
         void this.appendTaskAfterLast(
           file,
           newLine,
@@ -5976,7 +5992,10 @@ var TodayView = class extends import_obsidian7.ItemView {
   cleanBody(body) {
     var _a, _b;
     const p = this.plugin.settings.prefixes;
-    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "").replace(new RegExp(`#${p.taskContext}\\/[\\w-]+`, "g"), "").replace(/\{[^{}]*\}/g, "");
+    let out = body.replace(new RegExp(`#${p.duration}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.time}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.order}\\/\\d+`, "g"), "").replace(new RegExp(`#${p.project}\\/[\\w-]+(?:\\/[\\w-]+)?`, "g"), "").replace(new RegExp(`#${p.exercise}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.actual}\\/\\S+`, "g"), "").replace(new RegExp(`#${p.taskId}\\/[A-Za-z0-9]+\\b`, "g"), "").replace(new RegExp(`#${p.taskContext}\\/[\\w-]+`, "g"), "").replace(
+      new RegExp(`#${p.taskCreated}\\/\\d{4}-\\d{2}-\\d{2}\\b`, "g"),
+      ""
+    ).replace(/\{[^{}]*\}/g, "");
     for (const ctx of this.plugin.settings.contextTags) {
       const tag = (_a = ctx.tag) == null ? void 0 : _a.trim();
       if (!tag)
@@ -6081,6 +6100,7 @@ var TodayView = class extends import_obsidian7.ItemView {
       availableTags: this.collectContextTagNames(),
       initialTaskId: parseTaskId(task.body, prefixes),
       taskIdPrefix: prefixes.taskId,
+      initialTaskCreated: parseTaskCreated(task.body, prefixes),
       subtasks: task.subtasks,
       projects: this.collectProjectNames(),
       durations: quickDurations(this.plugin.settings.quickDurationsMin),
@@ -6097,7 +6117,7 @@ var TodayView = class extends import_obsidian7.ItemView {
       visibleEndHour: this.plugin.settings.visibleEndHour,
       quickDurationsMin: this.plugin.settings.quickDurationsMin,
       cleanBody: (body) => this.cleanBody(body),
-      onSave: (title, description, durationMin, project, checked, tags) => {
+      onSave: (title, description, durationMin, project, checked, tags, taskCreated) => {
         void this.applyTaskEdit(
           file,
           task,
@@ -6106,7 +6126,8 @@ var TodayView = class extends import_obsidian7.ItemView {
           durationMin,
           project,
           checked,
-          tags
+          tags,
+          taskCreated
         );
       },
       onToggleSubtask: async (sub, checked) => {
@@ -6461,7 +6482,7 @@ var TodayView = class extends import_obsidian7.ItemView {
     }
     return out;
   }
-  async applyTaskEdit(file, task, newTitle, newDescription, newDurationMin, newProject, newChecked, newTags) {
+  async applyTaskEdit(file, task, newTitle, newDescription, newDurationMin, newProject, newChecked, newTags, newTaskCreated) {
     const prefixes = this.plugin.settings.prefixes;
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
@@ -6482,6 +6503,9 @@ var TodayView = class extends import_obsidian7.ItemView {
       }
       if (newTags !== null) {
         updated = setTaskContextTags(updated, newTags, prefixes);
+      }
+      if (newTaskCreated !== void 0) {
+        updated = newTaskCreated ? replaceTaskCreatedTag(updated, newTaskCreated, prefixes) : removeTaskCreatedTag(updated, prefixes);
       }
       lines[task.lineNumber] = updated;
       return lines.join("\n");
@@ -7496,7 +7520,7 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     this.checked = opts.initialChecked;
   }
   onOpen() {
-    var _a, _b;
+    var _a, _b, _c;
     this.modalEl.addClass("dp-title-modal");
     document.body.addClass("today-edit-open");
     this.titleEl.setText(this.opts.modalTitle);
@@ -7513,10 +7537,10 @@ var TaskEditModal = class extends import_obsidian7.Modal {
         }
       });
       pill.addEventListener("click", (ev) => {
-        var _a2, _b2, _c, _d;
+        var _a2, _b2, _c2, _d;
         ev.preventDefault();
         const search = (_b2 = (_a2 = this.app.internalPlugins) == null ? void 0 : _a2.getPluginById) == null ? void 0 : _b2.call(_a2, "global-search");
-        (_d = (_c = search == null ? void 0 : search.instance) == null ? void 0 : _c.openGlobalSearch) == null ? void 0 : _d.call(_c, `tag:#${prefix}/${id}`);
+        (_d = (_c2 = search == null ? void 0 : search.instance) == null ? void 0 : _c2.openGlobalSearch) == null ? void 0 : _d.call(_c2, `tag:#${prefix}/${id}`);
         this.close();
       });
     }
@@ -8069,6 +8093,17 @@ var TaskEditModal = class extends import_obsidian7.Modal {
       }
       return final;
     };
+    let taskCreatedInput;
+    const resolveTaskCreated = () => {
+      var _a2;
+      const raw = taskCreatedInput.value.trim();
+      if (this.opts.mode === "new")
+        return raw || null;
+      const initial = (_a2 = this.opts.initialTaskCreated) != null ? _a2 : null;
+      if (raw === (initial != null ? initial : ""))
+        return void 0;
+      return raw === "" ? "" : raw;
+    };
     const submit = (postAction = "none") => {
       const title = input.value.trim();
       if (this.opts.mode === "new" && !title) {
@@ -8086,6 +8121,7 @@ var TaskEditModal = class extends import_obsidian7.Modal {
         resolveProject(),
         this.checkedChanged ? this.checked : null,
         resolveTags(),
+        resolveTaskCreated(),
         extras
       );
       this.close();
@@ -8099,6 +8135,32 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     input.addEventListener("keydown", enterToSubmit);
     projInput.addEventListener("keydown", enterToSubmit);
     durInput.addEventListener("keydown", enterToSubmit);
+    const createdDetails = this.contentEl.createEl("details", {
+      cls: "dp-edit-created"
+    });
+    const createdSummary = createdDetails.createEl("summary", {
+      cls: "dp-edit-created-summary"
+    });
+    createdSummary.setText("Created");
+    const createdValueLabel = createdSummary.createSpan({
+      cls: "dp-edit-created-value"
+    });
+    const createdBody = createdDetails.createDiv({
+      cls: "dp-edit-created-body"
+    });
+    taskCreatedInput = createdBody.createEl("input", {
+      type: "date",
+      cls: "dp-edit-created-input",
+      attr: { "aria-label": "Task creation date" }
+    });
+    taskCreatedInput.value = (_b = this.opts.initialTaskCreated) != null ? _b : "";
+    const refreshCreatedLabel = () => {
+      createdValueLabel.setText(taskCreatedInput.value || "\u2014");
+    };
+    refreshCreatedLabel();
+    taskCreatedInput.addEventListener("input", refreshCreatedLabel);
+    taskCreatedInput.addEventListener("change", refreshCreatedLabel);
+    taskCreatedInput.addEventListener("keydown", enterToSubmit);
     const subHeader = this.contentEl.createDiv({ cls: "dp-edit-subtask-header" });
     const subLabel = subHeader.createDiv({
       cls: "dp-prompt-step-label",
@@ -8622,21 +8684,8 @@ var TaskEditModal = class extends import_obsidian7.Modal {
         priorActiveIdx = -1;
       };
       const applyPriorPick = (sugg) => {
-        var _a2;
         input.value = sugg.title;
         input.setSelectionRange(sugg.title.length, sugg.title.length);
-        descInput.value = sugg.description;
-        projInput.value = (_a2 = sugg.project) != null ? _a2 : "";
-        if (sugg.durationMin !== null) {
-          this.selectedDurationMin = sugg.durationMin;
-          this.durationChanged = true;
-          refreshDurButtons();
-          durInput.value = formatCompactDuration(sugg.durationMin);
-          durInput.removeClass("is-invalid");
-        }
-        currentTags.length = 0;
-        currentTags.push(...sugg.tags);
-        renderTagChips();
         if (this.opts.copySubtasksOnAutocomplete) {
           subs.length = 0;
           for (const rawLine of sugg.subtaskRawLines) {
@@ -8747,7 +8796,7 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     });
     let editModeMoveBtn = null;
     if (this.opts.mode === "edit") {
-      const moveChoices = (_b = this.opts.moveChoices) != null ? _b : [];
+      const moveChoices = (_c = this.opts.moveChoices) != null ? _c : [];
       const calendarPick = this.opts.moveCalendarPick;
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {

@@ -1460,12 +1460,23 @@
   .dp-block.is-compact .dp-block-row {
     align-items: center;
     line-height: 1.15;
+    flex-wrap: nowrap;
+  }
+
+  /* Short blocks don't have vertical room for a wrapped title — keep the
+   * single-line ellipsis so the start of the title stays readable. Narrow
+   * and mobile-condensed variants override this further down. */
+  .dp-block.is-compact .dp-block-text {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
 
   .dp-block-row {
     display: flex;
     align-items: flex-start;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 2px 6px;
     min-width: 0;
     width: 100%;
     line-height: 1.25;
@@ -1693,9 +1704,8 @@
     font-size: 11.5px;
     font-weight: 500;
     color: var(--dp-on-color);
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: anywhere;
     letter-spacing: -0.005em;
     cursor: pointer;
   }
@@ -3155,6 +3165,61 @@
   body.is-mobile .dp-title-modal .dp-duration-row,
   body.is-mobile .dp-title-modal .dp-duration-custom-row.is-mobile-hidden {
     display: none;
+  }
+
+  .dp-edit-created {
+    margin: 8px 0 4px;
+  }
+
+  .dp-edit-created-summary {
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+  }
+
+  .dp-edit-created-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .dp-edit-created-summary::before {
+    content: "▸";
+    font-size: 9px;
+    color: var(--color-ink-muted);
+    transition: transform 120ms ease;
+    display: inline-block;
+  }
+
+  .dp-edit-created[open] > .dp-edit-created-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .dp-edit-created-value {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dp-edit-created-body {
+    margin-top: 6px;
+  }
+
+  .dp-edit-created-input {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    padding: 4px 8px;
   }
 
   .dp-edit-subtask-header {
