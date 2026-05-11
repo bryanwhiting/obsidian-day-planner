@@ -284,6 +284,7 @@ type SettingsTab =
   | "day"
   | "view"
   | "projects"
+  | "people"
   | "pomodoro"
   | "habits";
 
@@ -299,6 +300,7 @@ const TAB_SPECS: Record<SettingsTab, TabSpec> = {
   day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },
   projects: { label: "Projects", icon: "folder-kanban" },
+  people: { label: "People", icon: "users" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
   habits: { label: "Habits", icon: "repeat" },
 };
@@ -350,6 +352,9 @@ export class TodaySettingTab extends PluginSettingTab {
       case "projects":
         this.renderProjectsSection(pane);
         this.renderContextTagsSection(pane);
+        break;
+      case "people":
+        this.renderPeopleSection(pane);
         break;
       case "pomodoro":
         this.renderPomodoroSection(pane);
@@ -1209,6 +1214,11 @@ export class TodaySettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+  }
+
+  private renderPeopleSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("People").setHeading();
 
     const peopleDesc = document.createDocumentFragment();
     peopleDesc.append(

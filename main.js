@@ -1421,6 +1421,7 @@ var TAB_SPECS = {
   day: { label: "Day", icon: "sun" },
   view: { label: "View", icon: "eye" },
   projects: { label: "Projects", icon: "folder-kanban" },
+  people: { label: "People", icon: "users" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
   habits: { label: "Habits", icon: "repeat" }
 };
@@ -1466,6 +1467,9 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       case "projects":
         this.renderProjectsSection(pane);
         this.renderContextTagsSection(pane);
+        break;
+      case "people":
+        this.renderPeopleSection(pane);
         break;
       case "pomodoro":
         this.renderPomodoroSection(pane);
@@ -2078,6 +2082,9 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+  }
+  renderPeopleSection(containerEl) {
+    new import_obsidian2.Setting(containerEl).setName("People").setHeading();
     const peopleDesc = document.createDocumentFragment();
     peopleDesc.append(
       "Vault folder containing one markdown file per person. When set, the date trigger also matches basenames in this folder \u2014 e.g. ",
