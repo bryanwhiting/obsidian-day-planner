@@ -79,15 +79,15 @@ export function findPersonByName(
 interface CreatePersonOptions {
   folder: string;
   name: string;
-  birthdayField: string;
-  anniversaryField: string;
+  // Frontmatter keys to seed in the new note. Each becomes an empty
+  // `key: ` line in the stub. Duplicates and empty keys are dropped.
+  seedFields: string[];
 }
 
 // Creates `<folder>/<name>.md` with a minimal frontmatter stub seeded for the
-// configured birthday/anniversary fields. If the file already exists it's
-// returned as-is. Empty `birthdayField` / `anniversaryField` keep that line
-// out of the stub. Surfaces a Notice on creation so the user can confirm the
-// file landed where they expected.
+// configured date fields. If the file already exists it's returned as-is.
+// Empty `seedFields` yields a blank file. Surfaces a Notice on creation so
+// the user can confirm the file landed where they expected.
 export async function createPerson(
   app: App,
   opts: CreatePersonOptions,
@@ -106,9 +106,14 @@ export async function createPerson(
   const path = `${cleanFolder}/${cleanName}.md`;
   const existing = app.vault.getAbstractFileByPath(path);
   if (existing instanceof TFile) return existing;
+  const seen = new Set<string>();
   const fmLines: string[] = [];
-  if (opts.birthdayField) fmLines.push(`${opts.birthdayField}: `);
-  if (opts.anniversaryField) fmLines.push(`${opts.anniversaryField}: `);
+  for (const raw of opts.seedFields) {
+    const key = (raw || "").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    fmLines.push(`${key}: `);
+  }
   const content =
     fmLines.length > 0 ? `---\n${fmLines.join("\n")}\n---\n` : "";
   const file = await app.vault.create(path, content);

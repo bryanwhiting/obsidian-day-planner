@@ -1015,7 +1015,7 @@ var import_mobile_drag_drop = __toESM(require_index_min());
 var import_obsidian7 = require("obsidian");
 
 // src/settings.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 init_parser();
 
 // src/colors.ts
@@ -1126,10 +1126,170 @@ function isValidHex(hex) {
   return parseHex(hex) !== null;
 }
 
-// src/migrate.ts
+// src/upcoming.ts
 var import_obsidian = require("obsidian");
+var DEFAULT_UPCOMING_FIELDS = [
+  { field: "birthday", icon: "cake" },
+  { field: "anniversary", icon: "gem" }
+];
+function parseUpcomingDate(raw) {
+  const s = (raw || "").trim();
+  if (!s)
+    return null;
+  const formats = [
+    "YYYY-MM-DD",
+    "YYYY/MM/DD",
+    "MM-DD",
+    "MM/DD",
+    "M-D",
+    "M/D",
+    "MMM D",
+    "MMM D, YYYY",
+    "MMMM D",
+    "MMMM D, YYYY",
+    "D MMM",
+    "D MMMM",
+    "D MMM YYYY",
+    "D MMMM YYYY"
+  ];
+  for (const fmt of formats) {
+    const m = (0, import_obsidian.moment)(s, fmt, true);
+    if (m.isValid())
+      return { month: m.month() + 1, day: m.date() };
+  }
+  const guess = (0, import_obsidian.moment)(s);
+  if (guess.isValid())
+    return { month: guess.month() + 1, day: guess.date() };
+  return null;
+}
+function daysUntilAnniversary(month, day, today) {
+  const t = (0, import_obsidian.moment)(today).startOf("day");
+  const year = t.year();
+  let target = (0, import_obsidian.moment)([year, month - 1, day]);
+  if (!target.isValid())
+    target = (0, import_obsidian.moment)([year, month - 1, 28]);
+  if (target.isBefore(t, "day")) {
+    target = (0, import_obsidian.moment)([year + 1, month - 1, day]);
+    if (!target.isValid())
+      target = (0, import_obsidian.moment)([year + 1, month - 1, 28]);
+  }
+  return target.diff(t, "day");
+}
+function formatEventDate(month, day) {
+  return (0, import_obsidian.moment)([2e3, month - 1, day]).format("MMM D");
+}
+function formatDaysUntil(days) {
+  if (days <= 0)
+    return "today";
+  return `${days}d`;
+}
+function getUpcomingEvents(app, opts) {
+  const folder = (opts.peopleFolder || "").replace(/^\/+|\/+$/g, "");
+  if (!folder)
+    return [];
+  const folderLc = folder.toLowerCase();
+  const files = app.vault.getMarkdownFiles().filter((f) => {
+    var _a;
+    const dir = (((_a = f.parent) == null ? void 0 : _a.path) || "").toLowerCase();
+    return dir === folderLc || dir.startsWith(folderLc + "/");
+  });
+  const out = [];
+  for (const file of files) {
+    const cache = app.metadataCache.getFileCache(file);
+    const fm = cache == null ? void 0 : cache.frontmatter;
+    const daysAhead = resolveDaysAheadForFile(file, cache, opts);
+    opts.fields.forEach((fc, fieldIdx) => {
+      pushEvent(out, file, fm, fc, fieldIdx, daysAhead, opts.today);
+    });
+  }
+  out.sort(
+    (a, b) => a.daysUntil - b.daysUntil || a.name.localeCompare(b.name)
+  );
+  return out;
+}
+function pushEvent(out, file, fm, fc, _fieldIdx, daysAhead, today) {
+  if (!fc.field || !fm)
+    return;
+  const raw = fm[fc.field];
+  let value = null;
+  if (typeof raw === "string")
+    value = raw;
+  else if (typeof raw === "number")
+    value = String(raw);
+  else if (raw instanceof Date)
+    value = (0, import_obsidian.moment)(raw).format("YYYY-MM-DD");
+  if (!value)
+    return;
+  const md = parseUpcomingDate(value);
+  if (!md)
+    return;
+  const daysUntil = daysUntilAnniversary(md.month, md.day, today);
+  if (daysUntil > daysAhead)
+    return;
+  out.push({
+    field: fc.field,
+    iconName: fc.icon,
+    name: file.basename,
+    path: file.path,
+    daysUntil,
+    month: md.month,
+    day: md.day,
+    dateLabel: formatEventDate(md.month, md.day),
+    daysAhead
+  });
+}
+function resolveDaysAheadForFile(file, cache, opts) {
+  let best = opts.defaultDaysAhead;
+  if (!opts.tagOverrides.length)
+    return best;
+  const tags = collectFileTags(cache);
+  if (!tags.length)
+    return best;
+  for (const o of opts.tagOverrides) {
+    const wanted = (o.tag || "").replace(/^#+/, "").toLowerCase();
+    if (!wanted)
+      continue;
+    if (tags.includes(wanted) && o.daysAhead > best)
+      best = o.daysAhead;
+  }
+  return best;
+}
+function collectFileTags(cache) {
+  var _a, _b;
+  const out = /* @__PURE__ */ new Set();
+  if (!cache)
+    return [];
+  for (const t of (_a = cache.tags) != null ? _a : []) {
+    const body = (t.tag || "").replace(/^#+/, "").toLowerCase();
+    if (body)
+      out.add(body);
+  }
+  const fm = cache.frontmatter;
+  if (fm) {
+    const raw = (_b = fm.tags) != null ? _b : fm.tag;
+    if (typeof raw === "string") {
+      for (const tok of raw.split(/[\s,]+/)) {
+        const v = tok.replace(/^#+/, "").trim().toLowerCase();
+        if (v)
+          out.add(v);
+      }
+    } else if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (typeof item === "string") {
+          const v = item.replace(/^#+/, "").trim().toLowerCase();
+          if (v)
+            out.add(v);
+        }
+      }
+    }
+  }
+  return Array.from(out);
+}
+
+// src/migrate.ts
+var import_obsidian2 = require("obsidian");
 var escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-var TagMigrationModal = class extends import_obsidian.Modal {
+var TagMigrationModal = class extends import_obsidian2.Modal {
   constructor(app, opts) {
     super(app);
     this.matches = [];
@@ -1275,7 +1435,7 @@ var TagMigrationModal = class extends import_obsidian.Modal {
         touched++;
       }
     }
-    new import_obsidian.Notice(
+    new import_obsidian2.Notice(
       `Migrated ${total} tag${total === 1 ? "" : "s"} across ${touched} file${touched === 1 ? "" : "s"}.`
     );
     this.close();
@@ -1366,10 +1526,7 @@ var DEFAULT_SETTINGS = {
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
   peopleFolder: "",
-  birthdayField: "birthday",
-  anniversaryField: "anniversary",
-  birthdayIcon: "cake",
-  anniversaryIcon: "gem",
+  upcomingFields: DEFAULT_UPCOMING_FIELDS.map((f) => ({ ...f })),
   upcomingDaysAhead: 7,
   upcomingTagOverrides: [],
   habitsFile: "daily/_habits.md",
@@ -1425,7 +1582,7 @@ var TAB_SPECS = {
   pomodoro: { label: "Pomodoro", icon: "timer" },
   habits: { label: "Habits", icon: "repeat" }
 };
-var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
+var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     // Captured the first time the tab is opened, cleared on hide(). Persists
@@ -1503,7 +1660,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       const spec = TAB_SPECS[tab];
       const btn = bar.createEl("button", { cls: "dp-settings-tab" });
       const iconEl = btn.createSpan({ cls: "dp-settings-tab-icon" });
-      (0, import_obsidian2.setIcon)(iconEl, spec.icon);
+      (0, import_obsidian3.setIcon)(iconEl, spec.icon);
       btn.createSpan({ cls: "dp-settings-tab-label", text: spec.label });
       if (tab === this.activeTab)
         btn.addClass("is-active");
@@ -1548,8 +1705,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     }
   }
   renderTaskDefaultsSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Defaults").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Default duration (minutes)").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Defaults").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Default duration (minutes)").setDesc(
       "Used for tasks that have a #t/ start time but no #d/ tag. Drag the bottom edge of the block to commit a real duration."
     ).addText(
       (t) => t.setValue(this.plugin.settings.defaultDurationMin.toString()).onChange(async (v) => {
@@ -1562,7 +1719,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Quick duration chips").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Quick duration chips").setDesc(
       `Comma-separated durations for the chips on the new-task and edit-task modals (max ${MAX_QUICK_DURATIONS}). Accepts forms like 5m, 1h, 1h30m, 90m.`
     ).addText((t) => {
       const initial = formatQuickDurations(
@@ -1580,7 +1737,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Snap interval (minutes)").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Snap interval (minutes)").setDesc(
       "Drag-drop snaps to this granularity. Also controls the sub-marks revealed on hover in the timeline gutter (e.g. 15 \u2192 :15, :30, :45)."
     ).addText(
       (t) => t.setValue(this.plugin.settings.snapMin.toString()).onChange(async (v) => {
@@ -1593,7 +1750,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Duration tag prefix").setDesc(buildDurationDesc()).addText(
+    new import_obsidian3.Setting(containerEl).setName("Duration tag prefix").setDesc(buildDurationDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.duration).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.duration = v;
@@ -1601,7 +1758,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Time tag prefix").setDesc(buildTimeDesc()).addText(
+    new import_obsidian3.Setting(containerEl).setName("Time tag prefix").setDesc(buildTimeDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.time).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.time = v;
@@ -1609,7 +1766,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Order tag prefix").setDesc(buildOrderDesc()).addText(
+    new import_obsidian3.Setting(containerEl).setName("Order tag prefix").setDesc(buildOrderDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.order).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.order = v;
@@ -1617,7 +1774,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Exercise tag prefix").setDesc(buildExerciseDesc()).addText(
+    new import_obsidian3.Setting(containerEl).setName("Exercise tag prefix").setDesc(buildExerciseDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.exercise).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.exercise = v;
@@ -1625,7 +1782,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Task context tag prefix").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Task context tag prefix").setDesc(
       "Prefix for free-form task labels (e.g. #tc/billable, #tc/client-acme). Multiple tags per task are allowed and rendered as chips next to the project label."
     ).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.taskContext).onChange(async (v) => {
@@ -1635,7 +1792,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Copy sub-tasks on title autocomplete").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Copy sub-tasks on title autocomplete").setDesc(
       "When you pick a prior task from the title autocomplete in the new/edit task modal, also copy its sub-tasks (all unchecked). Off keeps just the project, duration, description, and tags."
     ).addToggle(
       (t) => t.setValue(this.plugin.settings.copySubtasksOnAutocomplete).onChange(async (v) => {
@@ -1643,7 +1800,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Inbox").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Inbox").setHeading();
     const inboxDesc = document.createDocumentFragment();
     inboxDesc.append(
       "Where the ",
@@ -1660,13 +1817,13 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("#tid/"),
       " task id."
     );
-    new import_obsidian2.Setting(containerEl).setName("Inbox file path").setDesc(inboxDesc).addText((t) => {
+    new import_obsidian3.Setting(containerEl).setName("Inbox file path").setDesc(inboxDesc).addText((t) => {
       t.setPlaceholder("{daily}/_inbox.md").setValue(this.plugin.settings.inboxPath).onChange(async (v) => {
         this.plugin.settings.inboxPath = v.trim();
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Confirm before migrating").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Confirm before migrating").setDesc(
       "Show a preview modal listing the tasks to migrate before writing. Off skips straight to the write and shows a notice with the count."
     ).addToggle(
       (t) => t.setValue(this.plugin.settings.confirmCollectMigration).onChange(async (v) => {
@@ -1674,7 +1831,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Task created tag prefix").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Task created tag prefix").setDesc(
       "Stamps a creation date on tasks made through the new-task modal. Default `tcr` \u2192 `#tcr/2026-05-09`. Carried with migrated tasks so the inbox copy keeps the original date."
     ).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.taskCreated).onChange(async (v) => {
@@ -1686,8 +1843,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderPomodoroSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Pomodoro").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Actual time tag prefix").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Pomodoro").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Actual time tag prefix").setDesc(
       "Prefix for actual-time tags written by the pomodoro timer (e.g. #ta/25m). Whole minutes only; subsequent sessions add to the existing tag."
     ).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.actual).onChange(async (v) => {
@@ -1697,7 +1854,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Work duration (minutes)").setDesc("Length of one focus interval.").addText(
+    new import_obsidian3.Setting(containerEl).setName("Work duration (minutes)").setDesc("Length of one focus interval.").addText(
       (t) => t.setValue(this.plugin.settings.pomodoroWorkMin.toString()).onChange(async (v) => {
         this.plugin.settings.pomodoroWorkMin = clampInt(
           v,
@@ -1708,7 +1865,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Rest duration (minutes)").setDesc("Length of one break between focus intervals.").addText(
+    new import_obsidian3.Setting(containerEl).setName("Rest duration (minutes)").setDesc("Length of one break between focus intervals.").addText(
       (t) => t.setValue(this.plugin.settings.pomodoroBreakMin.toString()).onChange(async (v) => {
         this.plugin.settings.pomodoroBreakMin = clampInt(
           v,
@@ -1719,13 +1876,13 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Auto-start timer").setDesc("Begin counting down as soon as focus mode opens.").addToggle(
+    new import_obsidian3.Setting(containerEl).setName("Auto-start timer").setDesc("Begin counting down as soon as focus mode opens.").addToggle(
       (t) => t.setValue(this.plugin.settings.pomodoroAutoStart).onChange(async (v) => {
         this.plugin.settings.pomodoroAutoStart = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Auto-cycle work and rest").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Auto-cycle work and rest").setDesc(
       "When a phase ends, automatically roll into the next one. If off, the timer waits for a click."
     ).addToggle(
       (t) => t.setValue(this.plugin.settings.pomodoroAutoCycle).onChange(async (v) => {
@@ -1733,7 +1890,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Auto-return to main window").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Auto-return to main window").setDesc(
       "When the focus view exits inside a popped-out window, move the Today view back to the main Obsidian window."
     ).addToggle(
       (t) => t.setValue(this.plugin.settings.pomodoroAutoReturn).onChange(async (v) => {
@@ -1743,8 +1900,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderTaskIdSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Task ID").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Task ID tag prefix").setDesc(buildTaskIdDesc()).addText(
+    new import_obsidian3.Setting(containerEl).setName("Task ID").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Task ID tag prefix").setDesc(buildTaskIdDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.taskId).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.taskId = v;
@@ -1752,7 +1909,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Task ID length").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Task ID length").setDesc(
       "Number of alphanumeric characters in IDs minted by Migrate incomplete. Shorter is easier to scan; longer reduces collision odds. Existing IDs in your notes are still recognized regardless of length."
     ).addText(
       (t) => t.setValue(this.plugin.settings.taskIdLength.toString()).onChange(async (v) => {
@@ -1767,7 +1924,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderTemplatingSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Templating").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Templating").setHeading();
     const placeholders = containerEl.createEl("p", {
       cls: "setting-item-description"
     });
@@ -1794,7 +1951,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("<@quote>"),
       " is replaced with a random line from the configured quotes file (see below)."
     );
-    new import_obsidian2.Setting(containerEl).setName("Daily note format fallback").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Daily note format fallback").setDesc(
       "Used if the core Daily Notes plugin isn't enabled. Tokens: YYYY MM DD."
     ).addText(
       (t) => t.setValue(this.plugin.settings.dailyNoteFormatFallback).onChange(async (v) => {
@@ -1804,7 +1961,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Daily notes folder").setDesc("Where should your daily notes be saved?").addText((t) => {
+    new import_obsidian3.Setting(containerEl).setName("Daily notes folder").setDesc("Where should your daily notes be saved?").addText((t) => {
       t.setValue(this.plugin.settings.dailyNoteFolderFallback).onChange(
         async (v) => {
           this.plugin.settings.dailyNoteFolderFallback = v.trim();
@@ -1817,7 +1974,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Daily note template").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Daily note template").setDesc(
       "Vault path to a template file (e.g. Templates/Daily.md). Its contents are copied verbatim into newly created daily notes. Leave blank for empty notes."
     ).addText((t) => {
       t.setPlaceholder("Templates/Daily.md").setValue(this.plugin.settings.dailyNoteTemplate).onChange(async (v) => {
@@ -1838,7 +1995,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("daily/_quotes.md"),
       ". Leave blank to disable the placeholder."
     );
-    new import_obsidian2.Setting(containerEl).setName("Quotes file").setDesc(quotesDesc).addText((t) => {
+    new import_obsidian3.Setting(containerEl).setName("Quotes file").setDesc(quotesDesc).addText((t) => {
       t.setPlaceholder("daily/_quotes.md").setValue(this.plugin.settings.quotesFile).onChange(async (v) => {
         this.plugin.settings.quotesFile = v.trim();
         await this.plugin.saveSettings();
@@ -1859,13 +2016,13 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode(`#${this.plugin.settings.prefixes.taskCreated}/`),
       " stamp written onto new tasks."
     );
-    new import_obsidian2.Setting(containerEl).setName("Stamp creation date in frontmatter tags").setDesc(createdTagDesc).addToggle(
+    new import_obsidian3.Setting(containerEl).setName("Stamp creation date in frontmatter tags").setDesc(createdTagDesc).addToggle(
       (t) => t.setValue(this.plugin.settings.addCreatedTagToFrontmatter).onChange(async (v) => {
         this.plugin.settings.addCreatedTagToFrontmatter = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Per-weekday templates").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Per-weekday templates").setHeading();
     const weekdayDesc = containerEl.createEl("p", {
       cls: "setting-item-description"
     });
@@ -1888,7 +2045,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       saturday: "Saturday"
     };
     for (const day of WEEKDAY_NAMES) {
-      new import_obsidian2.Setting(containerEl).setName(dayLabels[day]).setDesc(
+      new import_obsidian3.Setting(containerEl).setName(dayLabels[day]).setDesc(
         `Substituted into the base template at <@dow_template> on ${dayLabels[day]}.`
       ).addText((t) => {
         t.setPlaceholder(`Templates/${day}.md`).setValue(this.plugin.settings.dailyNoteTemplatesByDay[day]).onChange(async (v) => {
@@ -1904,8 +2061,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     }
   }
   renderDaySection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Day").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Working hours start").setDesc("Start of the working window (0-23). Used for the 'Working hours open' stat.").addText(
+    new import_obsidian3.Setting(containerEl).setName("Day").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Working hours start").setDesc("Start of the working window (0-23). Used for the 'Working hours open' stat.").addText(
       (t) => t.setValue(this.plugin.settings.workStartHour.toString()).onChange(async (v) => {
         this.plugin.settings.workStartHour = clampInt(
           v,
@@ -1916,7 +2073,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Working hours end").setDesc("End of the working window (1-24, must exceed start).").addText(
+    new import_obsidian3.Setting(containerEl).setName("Working hours end").setDesc("End of the working window (1-24, must exceed start).").addText(
       (t) => t.setValue(this.plugin.settings.workEndHour.toString()).onChange(async (v) => {
         this.plugin.settings.workEndHour = clampInt(
           v,
@@ -1927,7 +2084,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Wake hour").setDesc("Start of the awake window (0-23). Used for the 'Day available' stat.").addText(
+    new import_obsidian3.Setting(containerEl).setName("Wake hour").setDesc("Start of the awake window (0-23). Used for the 'Day available' stat.").addText(
       (t) => t.setValue(this.plugin.settings.wakeHour.toString()).onChange(async (v) => {
         this.plugin.settings.wakeHour = clampInt(
           v,
@@ -1938,7 +2095,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Sleep hour").setDesc("End of the awake window (1-24, must exceed wake hour).").addText(
+    new import_obsidian3.Setting(containerEl).setName("Sleep hour").setDesc("End of the awake window (1-24, must exceed wake hour).").addText(
       (t) => t.setValue(this.plugin.settings.sleepHour.toString()).onChange(async (v) => {
         this.plugin.settings.sleepHour = clampInt(
           v,
@@ -1951,8 +2108,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderViewSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("View").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Pixels per minute").setDesc("Vertical scale of the timeline.").addText(
+    new import_obsidian3.Setting(containerEl).setName("View").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Pixels per minute").setDesc("Vertical scale of the timeline.").addText(
       (t) => t.setValue(this.plugin.settings.pxPerMin.toString()).onChange(async (v) => {
         const n = parseFloat(v);
         if (!isNaN(n) && n > 0 && n <= 10) {
@@ -1961,21 +2118,21 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Visible start hour").setDesc("First hour shown on the timeline (0-23).").addText(
+    new import_obsidian3.Setting(containerEl).setName("Visible start hour").setDesc("First hour shown on the timeline (0-23).").addText(
       (t) => t.setValue(this.plugin.settings.visibleStartHour.toString()).onChange(async (v) => {
         const n = clampInt(v, 0, 23, this.plugin.settings.visibleStartHour);
         this.plugin.settings.visibleStartHour = n;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Visible end hour").setDesc("Last hour shown (1-24, must exceed start).").addText(
+    new import_obsidian3.Setting(containerEl).setName("Visible end hour").setDesc("Last hour shown (1-24, must exceed start).").addText(
       (t) => t.setValue(this.plugin.settings.visibleEndHour.toString()).onChange(async (v) => {
         const n = clampInt(v, 1, 24, this.plugin.settings.visibleEndHour);
         this.plugin.settings.visibleEndHour = n;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Timeline height (desktop)").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Timeline height (desktop)").setDesc(
       "Max height of the scrollable timeline on desktop. Bare numbers are treated as px (e.g. 600). Units accepted: px, vh, vw, em, rem, %. Leave blank for the default (60vh)."
     ).addText(
       (t) => t.setPlaceholder("60vh").setValue(this.plugin.settings.timelineHeightDesktop).onChange(async (v) => {
@@ -1986,7 +2143,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Timeline height (mobile)").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Timeline height (mobile)").setDesc(
       "Max height of the scrollable timeline on mobile. Bare numbers are treated as px (e.g. 200). Units accepted: px, vh, vw, em, rem, %. Leave blank for the default (40vh)."
     ).addText(
       (t) => t.setPlaceholder("40vh").setValue(this.plugin.settings.timelineHeightMobile).onChange(async (v) => {
@@ -1999,7 +2156,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderAutocompleteSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Autocomplete").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Autocomplete").setHeading();
     const intro = containerEl.createEl("p", { cls: "setting-item-description" });
     intro.append(
       "Type a trigger string in a task title (in the new/edit modal) or in any markdown file to open a picker. Trigger strings can be anything that's unlikely to appear naturally \u2014 defaults are ",
@@ -2024,7 +2181,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("@Nd"),
       "). These are mostly conveniences for mobile where typing is slow."
     );
-    new import_obsidian2.Setting(containerEl).setName("Project trigger").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Project trigger").setDesc(
       "Opens the project picker. Modal: fills the project field. Editor: inserts #p/<name>."
     ).addText(
       (t) => t.setPlaceholder("##").setValue(this.plugin.settings.autocomplete.projectTrigger).onChange(async (v) => {
@@ -2035,7 +2192,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Time trigger").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Time trigger").setDesc(
       "Opens the time picker. Suggestions are drawn from your visible-hours range at hour and half-hour marks. Inserts #t/<value>."
     ).addText(
       (t) => t.setPlaceholder("#@").setValue(this.plugin.settings.autocomplete.timeTrigger).onChange(async (v) => {
@@ -2046,7 +2203,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Duration trigger").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Duration trigger").setDesc(
       "Opens the duration picker. Suggestions come from your quick-duration chips. Modal: updates the duration selection. Editor: inserts #d/<value>."
     ).addText(
       (t) => t.setPlaceholder("#$").setValue(this.plugin.settings.autocomplete.durationTrigger).onChange(async (v) => {
@@ -2057,7 +2214,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Date trigger").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Date trigger").setDesc(
       "Opens the relative-date picker. Suggestions: today, tomorrow, yesterday, and Nd (e.g. 2d, 7d). Selecting one inserts a link to the matching daily note."
     ).addText(
       (t) => t.setPlaceholder("@").setValue(this.plugin.settings.autocomplete.dateTrigger).onChange(async (v) => {
@@ -2076,7 +2233,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("Mon, Mar 5, 2026"),
       ". Leave blank to drop the alias and use just the file basename. The link target itself uses the daily-note format from the Templating section."
     );
-    new import_obsidian2.Setting(containerEl).setName("Date link format").setDesc(dateFormatDesc).addText(
+    new import_obsidian3.Setting(containerEl).setName("Date link format").setDesc(dateFormatDesc).addText(
       (t) => t.setPlaceholder("ddd, MMM D, YYYY").setValue(this.plugin.settings.dateLinkFormat).onChange(async (v) => {
         this.plugin.settings.dateLinkFormat = v;
         await this.plugin.saveSettings();
@@ -2084,7 +2241,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderPeopleSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("People").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("People").setHeading();
     const peopleDesc = document.createDocumentFragment();
     peopleDesc.append(
       "Vault folder containing one markdown file per person. When set, the date trigger also matches basenames in this folder \u2014 e.g. ",
@@ -2095,7 +2252,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("tomorrow"),
       ". Picking a person inserts a link to their note. Leave blank to disable."
     );
-    new import_obsidian2.Setting(containerEl).setName("People folder").setDesc(peopleDesc).addText((t) => {
+    new import_obsidian3.Setting(containerEl).setName("People folder").setDesc(peopleDesc).addText((t) => {
       t.setPlaceholder("people").setValue(this.plugin.settings.peopleFolder).onChange(async (v) => {
         this.plugin.settings.peopleFolder = v.trim();
         await this.plugin.saveSettings();
@@ -2109,14 +2266,14 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     this.renderUpcomingSection(containerEl);
   }
   renderUpcomingSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Upcoming events").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Upcoming events").setHeading();
     const intro = document.createDocumentFragment();
     intro.append(
-      "Scans the People folder for ",
+      "Scans the People folder for the date fields configured below (",
       makeCode("birthday"),
       " and ",
       makeCode("anniversary"),
-      " frontmatter fields and shows a row at the top of the Today view for each event in the next N days. The row stays visible through the event date itself, then disappears. Accepts dates like ",
+      " by default) and shows a row at the top of the Today view for each upcoming event. The row stays visible every day through the event date, then disappears. Accepts dates like ",
       makeCode("1990-05-15"),
       ", ",
       makeCode("05-15"),
@@ -2127,7 +2284,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       ". Year is ignored for the countdown."
     );
     containerEl.createDiv({ cls: "setting-item-description", text: "" }).append(intro);
-    new import_obsidian2.Setting(containerEl).setName("Default lookahead (days)").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Default lookahead (days)").setDesc(
       "How many days before the event the alert begins. Default 7."
     ).addText(
       (t) => t.setPlaceholder("7").setValue(String(this.plugin.settings.upcomingDaysAhead)).onChange(async (v) => {
@@ -2138,56 +2295,77 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Birthday frontmatter field").setDesc("Frontmatter key on person files holding the birthday date. Empty disables birthdays.").addText(
-      (t) => t.setPlaceholder("birthday").setValue(this.plugin.settings.birthdayField).onChange(async (v) => {
-        this.plugin.settings.birthdayField = v.trim();
+    const fieldsDesc = document.createDocumentFragment();
+    fieldsDesc.append(
+      "Each row is one frontmatter key to read on person notes (e.g. ",
+      makeCode("birthday"),
+      ", ",
+      makeCode("anniversary"),
+      ", ",
+      makeCode("deathday"),
+      ") paired with the Lucide icon shown next to matching events. Add as many as you want. Browse icon names at ",
+      makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
+      "."
+    );
+    const fieldsList = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    fieldsList.dataset.list = "upcoming-fields";
+    const appendFieldRow = (entry) => {
+      const row = fieldsList.createDiv({ cls: "dp-project-color-row" });
+      const fieldInput = row.createEl("input", {
+        cls: "dp-project-color-name",
+        attr: { type: "text", placeholder: "birthday" }
+      });
+      fieldInput.value = entry.field;
+      fieldInput.addEventListener("change", async () => {
+        entry.field = fieldInput.value.trim();
+        fieldInput.value = entry.field;
+        await this.plugin.saveSettings();
+      });
+      const iconInput = row.createEl("input", {
+        cls: "dp-project-color-icon",
+        attr: {
+          type: "text",
+          placeholder: "cake",
+          spellcheck: "false"
+        }
+      });
+      iconInput.value = entry.icon;
+      iconInput.addEventListener("change", async () => {
+        entry.icon = iconInput.value.trim();
+        iconInput.value = entry.icon;
+        await this.plugin.saveSettings();
+      });
+      const remove = row.createEl("button", {
+        cls: "dp-project-color-remove",
+        text: "Remove"
+      });
+      remove.addEventListener("click", async () => {
+        const idx = this.plugin.settings.upcomingFields.indexOf(entry);
+        if (idx < 0)
+          return;
+        this.plugin.settings.upcomingFields.splice(idx, 1);
+        row.remove();
+        await this.plugin.saveSettings();
+      });
+      return row;
+    };
+    new import_obsidian3.Setting(containerEl).setName("Date fields").setDesc(fieldsDesc).addButton(
+      (b) => b.setButtonText("Add date field").setCta().onClick(async () => {
+        const entry = { field: "", icon: "" };
+        this.plugin.settings.upcomingFields.push(entry);
+        const row = appendFieldRow(entry);
+        const input = row.querySelector(
+          ".dp-project-color-name"
+        );
+        if (input) {
+          input.scrollIntoView({ block: "center" });
+          input.focus();
+        }
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Birthday icon").setDesc(
-      document.createDocumentFragment().appendChild(
-        (() => {
-          const f = document.createDocumentFragment();
-          f.append(
-            "Lucide icon shown next to birthday rows. Default ",
-            makeCode("cake"),
-            ". Browse names at ",
-            makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
-            "."
-          );
-          return f;
-        })()
-      )
-    ).addText(
-      (t) => t.setPlaceholder("cake").setValue(this.plugin.settings.birthdayIcon).onChange(async (v) => {
-        this.plugin.settings.birthdayIcon = v.trim();
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("Anniversary frontmatter field").setDesc("Frontmatter key on person files holding the anniversary date. Empty disables anniversaries.").addText(
-      (t) => t.setPlaceholder("anniversary").setValue(this.plugin.settings.anniversaryField).onChange(async (v) => {
-        this.plugin.settings.anniversaryField = v.trim();
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("Anniversary icon").setDesc(
-      document.createDocumentFragment().appendChild(
-        (() => {
-          const f = document.createDocumentFragment();
-          f.append(
-            "Lucide icon shown next to anniversary rows. Default ",
-            makeCode("gem"),
-            "."
-          );
-          return f;
-        })()
-      )
-    ).addText(
-      (t) => t.setPlaceholder("gem").setValue(this.plugin.settings.anniversaryIcon).onChange(async (v) => {
-        this.plugin.settings.anniversaryIcon = v.trim();
-        await this.plugin.saveSettings();
-      })
-    );
+    containerEl.appendChild(fieldsList);
+    this.plugin.settings.upcomingFields.forEach((entry) => appendFieldRow(entry));
     const overridesDesc = document.createDocumentFragment();
     overridesDesc.append(
       "Override the lookahead for people tagged with a specific hashtag. Enter the bare tag without ",
@@ -2263,7 +2441,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       });
       return row;
     };
-    new import_obsidian2.Setting(containerEl).setName("Tag overrides").setDesc(overridesDesc).addButton(
+    new import_obsidian3.Setting(containerEl).setName("Tag overrides").setDesc(overridesDesc).addButton(
       (b) => b.setButtonText("Add tag override").setCta().onClick(async () => {
         const entry = { tag: "", daysAhead: 21 };
         this.plugin.settings.upcomingTagOverrides.push(entry);
@@ -2306,8 +2484,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     });
   }
   renderProjectsSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Projects").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("Project tag prefix").setDesc(buildProjectPrefixDesc()).addText(
+    new import_obsidian3.Setting(containerEl).setName("Projects").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Project tag prefix").setDesc(buildProjectPrefixDesc()).addText(
       (t) => t.setValue(this.plugin.settings.prefixes.project).onChange(async (v) => {
         if (/^[a-zA-Z]+$/.test(v)) {
           this.plugin.settings.prefixes.project = v;
@@ -2338,7 +2516,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode(`#${prefix}/silvermine/\u2026`),
       " tasks keep the parent color)."
     );
-    new import_obsidian2.Setting(containerEl).setName("Project colors").setDesc(desc).addButton(
+    new import_obsidian3.Setting(containerEl).setName("Project colors").setDesc(desc).addButton(
       (b) => b.setButtonText("Add project color").setCta().onClick(async () => {
         this.plugin.settings.projectColors.push({
           project: "",
@@ -2414,7 +2592,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       const row = list.createDiv({ cls: "dp-project-color-row" });
       rows.push(row);
       const handle = row.createDiv({ cls: "dp-project-color-drag" });
-      (0, import_obsidian2.setIcon)(handle, "grip-vertical");
+      (0, import_obsidian3.setIcon)(handle, "grip-vertical");
       handle.draggable = true;
       handle.setAttr("aria-label", "Drag to reorder");
       handle.addEventListener("dragstart", (ev) => {
@@ -2511,7 +2689,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     });
   }
   renderContextTagsSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Context tags").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Context tags").setHeading();
     const desc = document.createDocumentFragment();
     desc.append(
       "Pin a color and a Lucide icon to a hashtag (e.g. ",
@@ -2522,7 +2700,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
       "."
     );
-    new import_obsidian2.Setting(containerEl).setName("Tags").setDesc(desc).addButton(
+    new import_obsidian3.Setting(containerEl).setName("Tags").setDesc(desc).addButton(
       (b) => b.setButtonText("Add context tag").setCta().onClick(async () => {
         this.plugin.settings.contextTags.push({
           tag: "",
@@ -2612,7 +2790,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     });
   }
   renderNotesSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Notes").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Notes").setHeading();
     const desc = document.createDocumentFragment();
     desc.append(
       "A timed task containing this hashtag renders as a small dot in the timeline gutter instead of a calendar block \u2014 useful for events you need to be aware of (a delivery window, a kid's pickup) but don't want eating up planning space. Hover the dot to see the title and description. Enter the bare tag without the leading ",
@@ -2627,7 +2805,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("#tc/note"),
       ". Untimed notes still appear in the unscheduled list."
     );
-    new import_obsidian2.Setting(containerEl).setName("Note tag").setDesc(desc).addText(
+    new import_obsidian3.Setting(containerEl).setName("Note tag").setDesc(desc).addText(
       (t) => t.setPlaceholder("note").setValue(this.plugin.settings.noteTag).onChange(async (v) => {
         this.plugin.settings.noteTag = v.trim().replace(/^#+/, "");
         await this.plugin.saveSettings();
@@ -2651,7 +2829,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("#intention"),
       " lines exist, only the first is shown."
     );
-    new import_obsidian2.Setting(containerEl).setName("Intention tag").setDesc(intentionDesc).addText(
+    new import_obsidian3.Setting(containerEl).setName("Intention tag").setDesc(intentionDesc).addText(
       (t) => t.setPlaceholder("intention").setValue(this.plugin.settings.intentionTag).onChange(async (v) => {
         this.plugin.settings.intentionTag = v.trim().replace(/^#+/, "");
         await this.plugin.saveSettings();
@@ -2673,7 +2851,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("#quote"),
       " lines exist, only the first is shown."
     );
-    new import_obsidian2.Setting(containerEl).setName("Quote tag").setDesc(quoteDesc).addText(
+    new import_obsidian3.Setting(containerEl).setName("Quote tag").setDesc(quoteDesc).addText(
       (t) => t.setPlaceholder("quote").setValue(this.plugin.settings.quoteTag).onChange(async (v) => {
         this.plugin.settings.quoteTag = v.trim().replace(/^#+/, "");
         await this.plugin.saveSettings();
@@ -2681,7 +2859,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderHabitsSection(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Habits").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Habits").setHeading();
     const desc = document.createDocumentFragment();
     desc.append(
       "Habits live in a single source file as plain hashtag lines like ",
@@ -2704,8 +2882,8 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("/N"),
       " or to add another line for repeat completions."
     );
-    new import_obsidian2.Setting(containerEl).setDesc(desc);
-    new import_obsidian2.Setting(containerEl).setName("Habits file").setDesc("Vault path to the habits-source file. Default: daily/_habits.md.").addText((t) => {
+    new import_obsidian3.Setting(containerEl).setDesc(desc);
+    new import_obsidian3.Setting(containerEl).setName("Habits file").setDesc("Vault path to the habits-source file. Default: daily/_habits.md.").addText((t) => {
       t.setPlaceholder("daily/_habits.md").setValue(this.plugin.settings.habitsFile).onChange(async (v) => {
         this.plugin.settings.habitsFile = v.trim();
         await this.plugin.saveSettings();
@@ -2716,7 +2894,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Habit tag prefix").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Habit tag prefix").setDesc(
       "Letter(s) used at the start of habit tags. Default `h` \u2192 goal tags `#h-day/call-mom`, log tags `#h/call-mom`."
     ).addText(
       (t) => t.setPlaceholder("h").setValue(this.plugin.settings.habitPrefix).onChange(async (v) => {
@@ -2726,7 +2904,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Week start").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Week start").setDesc(
       "First day of the habit week. Affects when weekly habits reset and how the weekly heatmap is bucketed."
     ).addDropdown(
       (d) => d.addOption("0", "Sunday").addOption("1", "Monday").addOption("2", "Tuesday").addOption("3", "Wednesday").addOption("4", "Thursday").addOption("5", "Friday").addOption("6", "Saturday").setValue(this.plugin.settings.habitWeekStart.toString()).onChange(async (v) => {
@@ -2737,7 +2915,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Hide completed habits").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Hide completed habits").setDesc(
       "When on, every completed habit disappears from the dashboard. When off (default), a weekly/monthly habit appears with strikethrough only on the day it was actually checked \u2014 other days in the same window stay clean."
     ).addToggle(
       (t) => t.setValue(this.plugin.settings.habitsHideCompleted).onChange(async (v) => {
@@ -2745,7 +2923,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Stats window").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("Stats window").setDesc(
       "Number of cells in each heatmap row in the stats pane (last N days / weeks / months). Range 5\u201330."
     ).addText(
       (t) => t.setValue(this.plugin.settings.habitsStatsWindow.toString()).onChange(async (v) => {
@@ -2894,7 +3072,7 @@ function normalizeHex(hex) {
   }
   return "#5b8def";
 }
-var FileSuggest = class extends import_obsidian2.AbstractInputSuggest {
+var FileSuggest = class extends import_obsidian3.AbstractInputSuggest {
   constructor(app, inputEl, onSelectFile) {
     super(app, inputEl);
     this.inputEl = inputEl;
@@ -2922,7 +3100,7 @@ var FileSuggest = class extends import_obsidian2.AbstractInputSuggest {
     this.close();
   }
 };
-var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
+var FolderSuggest = class extends import_obsidian3.AbstractInputSuggest {
   constructor(app, inputEl, onSelectFolder) {
     super(app, inputEl);
     this.inputEl = inputEl;
@@ -2935,7 +3113,7 @@ var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
       if (folder.path !== "/")
         folders.push(folder);
       for (const child of folder.children) {
-        if (child instanceof import_obsidian2.TFolder)
+        if (child instanceof import_obsidian3.TFolder)
           walk(child);
       }
     };
@@ -3147,7 +3325,7 @@ function groupOverlaps(scheduled) {
 }
 
 // src/dailyNote.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 init_parser();
 async function resolveDailyNote(app, date, fallback) {
   var _a;
@@ -3155,11 +3333,11 @@ async function resolveDailyNote(app, date, fallback) {
   const format = (opts.format || fallback.format).trim();
   const folder = ((_a = opts.folder) != null ? _a : fallback.folder).trim();
   const fileName = formatDate(date, format) + ".md";
-  const path = (0, import_obsidian3.normalizePath)(folder ? `${folder}/${fileName}` : fileName);
+  const path = (0, import_obsidian4.normalizePath)(folder ? `${folder}/${fileName}` : fileName);
   const file = app.vault.getAbstractFileByPath(path);
   return {
     path,
-    file: file instanceof import_obsidian3.TFile ? file : null
+    file: file instanceof import_obsidian4.TFile ? file : null
   };
 }
 async function ensureDailyNote(app, date, fallback, notify = true) {
@@ -3192,7 +3370,7 @@ async function ensureDailyNote(app, date, fallback, notify = true) {
   ) : withDurations;
   const file = await app.vault.create(resolved.path, initialContent);
   if (notify)
-    new import_obsidian3.Notice(`Created ${resolved.path}`);
+    new import_obsidian4.Notice(`Created ${resolved.path}`);
   return file;
 }
 async function applyDailyNoteTemplateIfEmpty(app, file, fallback) {
@@ -3240,10 +3418,10 @@ async function readTemplateContent(app, templatePath) {
   if (!raw)
     return "";
   const withExt = raw.toLowerCase().endsWith(".md") ? raw : `${raw}.md`;
-  const path = (0, import_obsidian3.normalizePath)(withExt);
+  const path = (0, import_obsidian4.normalizePath)(withExt);
   const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof import_obsidian3.TFile)) {
-    new import_obsidian3.Notice(`Today: template not found at ${path}`);
+  if (!(file instanceof import_obsidian4.TFile)) {
+    new import_obsidian4.Notice(`Today: template not found at ${path}`);
     return "";
   }
   return app.vault.read(file);
@@ -3347,9 +3525,9 @@ async function pickRandomQuote(app, quotesPath) {
   if (!raw)
     return "";
   const withExt = raw.toLowerCase().endsWith(".md") ? raw : `${raw}.md`;
-  const path = (0, import_obsidian3.normalizePath)(withExt);
+  const path = (0, import_obsidian4.normalizePath)(withExt);
   const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof import_obsidian3.TFile))
+  if (!(file instanceof import_obsidian4.TFile))
     return "";
   const content = await app.vault.read(file);
   const lines = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
@@ -3359,7 +3537,7 @@ async function pickRandomQuote(app, quotesPath) {
 }
 function parseFilenameDate(basename, fileFormat) {
   const fmt = (fileFormat || "YYYY-MM-DD").trim();
-  const m = (0, import_obsidian3.moment)(basename, fmt, true);
+  const m = (0, import_obsidian4.moment)(basename, fmt, true);
   return m.isValid() ? m.toDate() : null;
 }
 function getDailyNoteOptions(app, fallback) {
@@ -3553,7 +3731,7 @@ function buildDateSuggestions(query, today = new Date()) {
 }
 function buildDateLinkInsert(app, date, fileFormat, folder, displayFormat) {
   var _a, _b;
-  const m = (0, import_obsidian3.moment)(date);
+  const m = (0, import_obsidian4.moment)(date);
   const fileBasename = m.format(fileFormat || "YYYY-MM-DD");
   const cleanFolder = (folder || "").replace(/^\/+|\/+$/g, "");
   const linkPath = cleanFolder ? `${cleanFolder}/${fileBasename}` : fileBasename;
@@ -3571,7 +3749,7 @@ function buildDateLinkInsert(app, date, fileFormat, folder, displayFormat) {
 }
 
 // src/people.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 function buildPeopleSuggestions(app, folder, query, limit = 12) {
   const cleanFolder = (folder || "").replace(/^\/+|\/+$/g, "");
   if (!cleanFolder)
@@ -3630,19 +3808,23 @@ async function createPerson(app, opts) {
   }
   const path = `${cleanFolder}/${cleanName}.md`;
   const existing = app.vault.getAbstractFileByPath(path);
-  if (existing instanceof import_obsidian4.TFile)
+  if (existing instanceof import_obsidian5.TFile)
     return existing;
+  const seen = /* @__PURE__ */ new Set();
   const fmLines = [];
-  if (opts.birthdayField)
-    fmLines.push(`${opts.birthdayField}: `);
-  if (opts.anniversaryField)
-    fmLines.push(`${opts.anniversaryField}: `);
+  for (const raw of opts.seedFields) {
+    const key = (raw || "").trim();
+    if (!key || seen.has(key))
+      continue;
+    seen.add(key);
+    fmLines.push(`${key}: `);
+  }
   const content = fmLines.length > 0 ? `---
 ${fmLines.join("\n")}
 ---
 ` : "";
   const file = await app.vault.create(path, content);
-  new import_obsidian4.Notice(`Created ${path}`);
+  new import_obsidian5.Notice(`Created ${path}`);
   return file;
 }
 function buildPersonLinkInsert(app, path) {
@@ -3657,7 +3839,7 @@ function buildPersonLinkInsert(app, path) {
 }
 
 // src/taskMove.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 init_parser();
 async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fallback, options = {}) {
   var _a;
@@ -3665,7 +3847,7 @@ async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fall
   const targetFile = (_a = options.targetFile) != null ? _a : await ensureDailyNote(app, targetDate, fallback);
   if (targetFile.path === sourceFile.path) {
     if (notify)
-      new import_obsidian5.Notice("Source and target are the same file.");
+      new import_obsidian6.Notice("Source and target are the same file.");
     return false;
   }
   const lineNumbers = [
@@ -3685,7 +3867,7 @@ async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fall
   });
   if (movedLines.length === 0) {
     if (notify)
-      new import_obsidian5.Notice("Today: nothing to move.");
+      new import_obsidian6.Notice("Today: nothing to move.");
     return false;
   }
   await app.vault.process(targetFile, (content) => {
@@ -3696,160 +3878,8 @@ async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fall
     return lines.join("\n");
   });
   if (notify)
-    new import_obsidian5.Notice(`Moved to ${targetFile.path}`);
+    new import_obsidian6.Notice(`Moved to ${targetFile.path}`);
   return true;
-}
-
-// src/upcoming.ts
-var import_obsidian6 = require("obsidian");
-function parseUpcomingDate(raw) {
-  const s = (raw || "").trim();
-  if (!s)
-    return null;
-  const formats = [
-    "YYYY-MM-DD",
-    "YYYY/MM/DD",
-    "MM-DD",
-    "MM/DD",
-    "M-D",
-    "M/D",
-    "MMM D",
-    "MMM D, YYYY",
-    "MMMM D",
-    "MMMM D, YYYY",
-    "D MMM",
-    "D MMMM",
-    "D MMM YYYY",
-    "D MMMM YYYY"
-  ];
-  for (const fmt of formats) {
-    const m = (0, import_obsidian6.moment)(s, fmt, true);
-    if (m.isValid())
-      return { month: m.month() + 1, day: m.date() };
-  }
-  const guess = (0, import_obsidian6.moment)(s);
-  if (guess.isValid())
-    return { month: guess.month() + 1, day: guess.date() };
-  return null;
-}
-function daysUntilAnniversary(month, day, today) {
-  const t = (0, import_obsidian6.moment)(today).startOf("day");
-  const year = t.year();
-  let target = (0, import_obsidian6.moment)([year, month - 1, day]);
-  if (!target.isValid())
-    target = (0, import_obsidian6.moment)([year, month - 1, 28]);
-  if (target.isBefore(t, "day")) {
-    target = (0, import_obsidian6.moment)([year + 1, month - 1, day]);
-    if (!target.isValid())
-      target = (0, import_obsidian6.moment)([year + 1, month - 1, 28]);
-  }
-  return target.diff(t, "day");
-}
-function formatEventDate(month, day) {
-  return (0, import_obsidian6.moment)([2e3, month - 1, day]).format("MMM D");
-}
-function formatDaysUntil(days) {
-  if (days <= 0)
-    return "today";
-  return `${days}d`;
-}
-function getUpcomingEvents(app, opts) {
-  const folder = (opts.peopleFolder || "").replace(/^\/+|\/+$/g, "");
-  if (!folder)
-    return [];
-  const folderLc = folder.toLowerCase();
-  const files = app.vault.getMarkdownFiles().filter((f) => {
-    var _a;
-    const dir = (((_a = f.parent) == null ? void 0 : _a.path) || "").toLowerCase();
-    return dir === folderLc || dir.startsWith(folderLc + "/");
-  });
-  const out = [];
-  for (const file of files) {
-    const cache = app.metadataCache.getFileCache(file);
-    const fm = cache == null ? void 0 : cache.frontmatter;
-    const daysAhead = resolveDaysAheadForFile(file, cache, opts);
-    pushEvent(out, file, fm, opts.birthdayField, "birthday", daysAhead, opts.today);
-    pushEvent(out, file, fm, opts.anniversaryField, "anniversary", daysAhead, opts.today);
-  }
-  out.sort((a, b) => a.daysUntil - b.daysUntil || a.name.localeCompare(b.name));
-  return out;
-}
-function pushEvent(out, file, fm, field, kind, daysAhead, today) {
-  if (!field || !fm)
-    return;
-  const raw = fm[field];
-  let value = null;
-  if (typeof raw === "string")
-    value = raw;
-  else if (typeof raw === "number")
-    value = String(raw);
-  else if (raw instanceof Date)
-    value = (0, import_obsidian6.moment)(raw).format("YYYY-MM-DD");
-  if (!value)
-    return;
-  const md = parseUpcomingDate(value);
-  if (!md)
-    return;
-  const daysUntil = daysUntilAnniversary(md.month, md.day, today);
-  if (daysUntil > daysAhead)
-    return;
-  out.push({
-    kind,
-    name: file.basename,
-    path: file.path,
-    daysUntil,
-    month: md.month,
-    day: md.day,
-    dateLabel: formatEventDate(md.month, md.day),
-    daysAhead
-  });
-}
-function resolveDaysAheadForFile(file, cache, opts) {
-  let best = opts.defaultDaysAhead;
-  if (!opts.tagOverrides.length)
-    return best;
-  const tags = collectFileTags(cache);
-  if (!tags.length)
-    return best;
-  for (const o of opts.tagOverrides) {
-    const wanted = (o.tag || "").replace(/^#+/, "").toLowerCase();
-    if (!wanted)
-      continue;
-    if (tags.includes(wanted) && o.daysAhead > best)
-      best = o.daysAhead;
-  }
-  return best;
-}
-function collectFileTags(cache) {
-  var _a, _b;
-  const out = /* @__PURE__ */ new Set();
-  if (!cache)
-    return [];
-  for (const t of (_a = cache.tags) != null ? _a : []) {
-    const body = (t.tag || "").replace(/^#+/, "").toLowerCase();
-    if (body)
-      out.add(body);
-  }
-  const fm = cache.frontmatter;
-  if (fm) {
-    const raw = (_b = fm.tags) != null ? _b : fm.tag;
-    if (typeof raw === "string") {
-      for (const tok of raw.split(/[\s,]+/)) {
-        const v = tok.replace(/^#+/, "").trim().toLowerCase();
-        if (v)
-          out.add(v);
-      }
-    } else if (Array.isArray(raw)) {
-      for (const item of raw) {
-        if (typeof item === "string") {
-          const v = item.replace(/^#+/, "").trim().toLowerCase();
-          if (v)
-            out.add(v);
-        }
-      }
-    }
-  }
-  return Array.from(out);
 }
 
 // src/habits.ts
@@ -4350,8 +4380,7 @@ var TodayView = class extends import_obsidian7.ItemView {
     );
     const upcomingEvents = getUpcomingEvents(this.app, {
       peopleFolder: this.plugin.settings.peopleFolder,
-      birthdayField: this.plugin.settings.birthdayField,
-      anniversaryField: this.plugin.settings.anniversaryField,
+      fields: this.plugin.settings.upcomingFields,
       defaultDaysAhead: this.plugin.settings.upcomingDaysAhead,
       tagOverrides: this.plugin.settings.upcomingTagOverrides,
       today: this.selectedDate
@@ -6467,18 +6496,17 @@ var TodayView = class extends import_obsidian7.ItemView {
     return out;
   }
   renderUpcomingRow(parent, events) {
-    const settings = this.plugin.settings;
     const wrap = parent.createDiv({ cls: "dp-upcoming" });
     events.forEach((ev, idx) => {
       if (idx > 0)
         wrap.createSpan({ cls: "dp-upcoming-sep", text: " \u2022 " });
       const chip = wrap.createSpan({
-        cls: "dp-upcoming-item" + (ev.daysUntil === 0 ? " is-today" : "")
+        cls: "dp-upcoming-item" + (ev.daysUntil === 0 ? " is-today" : ""),
+        attr: { title: `${ev.field}: ${ev.dateLabel}` }
       });
-      const iconName = ev.kind === "birthday" ? settings.birthdayIcon : settings.anniversaryIcon;
-      if (iconName) {
+      if (ev.iconName) {
         const iconEl = chip.createSpan({ cls: "dp-upcoming-icon" });
-        (0, import_obsidian7.setIcon)(iconEl, iconName);
+        (0, import_obsidian7.setIcon)(iconEl, ev.iconName);
       }
       const file = this.app.vault.getAbstractFileByPath(ev.path);
       const nameEl = chip.createEl("a", {
@@ -11111,8 +11139,44 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
       ) : [],
       upcomingTagOverrides: Array.isArray(data == null ? void 0 : data.upcomingTagOverrides) ? data.upcomingTagOverrides.filter(
         (o) => o && typeof o.tag === "string" && typeof o.daysAhead === "number" && Number.isFinite(o.daysAhead)
-      ) : []
+      ) : [],
+      upcomingFields: this.resolveUpcomingFields(data)
     };
+    const sx = this.settings;
+    delete sx.birthdayField;
+    delete sx.anniversaryField;
+    delete sx.birthdayIcon;
+    delete sx.anniversaryIcon;
+  }
+  // Loads `upcomingFields` from saved data, falling back to a migration from
+  // the deprecated four-field shape (birthdayField/anniversaryField/
+  // birthdayIcon/anniversaryIcon) for users who saved data on the prior
+  // release. Empty `field` entries are dropped. If nothing usable is found,
+  // returns a fresh clone of the defaults.
+  resolveUpcomingFields(data) {
+    const raw = data != null ? data : {};
+    if (Array.isArray(raw.upcomingFields)) {
+      const cleaned = raw.upcomingFields.filter(
+        (f) => f && typeof f.field === "string" && typeof f.icon === "string"
+      ).map((f) => ({
+        field: f.field.trim(),
+        icon: f.icon.trim()
+      })).filter((f) => f.field.length > 0);
+      if (cleaned.length > 0)
+        return cleaned;
+    }
+    const legacy = [];
+    const bField = typeof raw.birthdayField === "string" ? raw.birthdayField.trim() : "";
+    const bIcon = typeof raw.birthdayIcon === "string" ? raw.birthdayIcon.trim() : "";
+    const aField = typeof raw.anniversaryField === "string" ? raw.anniversaryField.trim() : "";
+    const aIcon = typeof raw.anniversaryIcon === "string" ? raw.anniversaryIcon.trim() : "";
+    if (bField)
+      legacy.push({ field: bField, icon: bIcon || "cake" });
+    if (aField)
+      legacy.push({ field: aField, icon: aIcon || "gem" });
+    if (legacy.length > 0)
+      return legacy;
+    return DEFAULT_SETTINGS.upcomingFields.map((f) => ({ ...f }));
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -11378,8 +11442,7 @@ var InlineSuggest = class extends import_obsidian12.EditorSuggest {
         const file = await createPerson(this.app, {
           folder: settings.peopleFolder,
           name: item.payload,
-          birthdayField: settings.birthdayField,
-          anniversaryField: settings.anniversaryField
+          seedFields: settings.upcomingFields.map((f) => f.field)
         });
         if (!file)
           return;

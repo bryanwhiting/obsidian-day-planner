@@ -195,7 +195,58 @@ export default class TodayPlugin extends Plugin {
               Number.isFinite(o.daysAhead),
           )
         : [],
+      upcomingFields: this.resolveUpcomingFields(data),
     };
+    // Drop legacy keys from the previous schema so they don't get re-saved
+    // forever via the spread above. Harmless if absent.
+    const sx = this.settings as unknown as Record<string, unknown>;
+    delete sx.birthdayField;
+    delete sx.anniversaryField;
+    delete sx.birthdayIcon;
+    delete sx.anniversaryIcon;
+  }
+
+  // Loads `upcomingFields` from saved data, falling back to a migration from
+  // the deprecated four-field shape (birthdayField/anniversaryField/
+  // birthdayIcon/anniversaryIcon) for users who saved data on the prior
+  // release. Empty `field` entries are dropped. If nothing usable is found,
+  // returns a fresh clone of the defaults.
+  private resolveUpcomingFields(
+    data: Partial<TodaySettings> | null,
+  ): TodaySettings["upcomingFields"] {
+    const raw = (data as unknown as Record<string, unknown>) ?? {};
+    if (Array.isArray(raw.upcomingFields)) {
+      const cleaned = raw.upcomingFields
+        .filter(
+          (f) =>
+            f &&
+            typeof (f as { field?: unknown }).field === "string" &&
+            typeof (f as { icon?: unknown }).icon === "string",
+        )
+        .map((f) => ({
+          field: (f as { field: string }).field.trim(),
+          icon: (f as { icon: string }).icon.trim(),
+        }))
+        .filter((f) => f.field.length > 0);
+      if (cleaned.length > 0) return cleaned;
+    }
+    const legacy: { field: string; icon: string }[] = [];
+    const bField = typeof raw.birthdayField === "string"
+      ? (raw.birthdayField as string).trim()
+      : "";
+    const bIcon = typeof raw.birthdayIcon === "string"
+      ? (raw.birthdayIcon as string).trim()
+      : "";
+    const aField = typeof raw.anniversaryField === "string"
+      ? (raw.anniversaryField as string).trim()
+      : "";
+    const aIcon = typeof raw.anniversaryIcon === "string"
+      ? (raw.anniversaryIcon as string).trim()
+      : "";
+    if (bField) legacy.push({ field: bField, icon: bIcon || "cake" });
+    if (aField) legacy.push({ field: aField, icon: aIcon || "gem" });
+    if (legacy.length > 0) return legacy;
+    return DEFAULT_SETTINGS.upcomingFields.map((f) => ({ ...f }));
   }
 
   async saveSettings(): Promise<void> {
@@ -526,8 +577,7 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
         const file = await createPerson(this.app, {
           folder: settings.peopleFolder,
           name: item.payload!,
-          birthdayField: settings.birthdayField,
-          anniversaryField: settings.anniversaryField,
+          seedFields: settings.upcomingFields.map((f) => f.field),
         });
         if (!file) return;
         const insert = buildPersonLinkInsert(this.app, file.path) + " ";

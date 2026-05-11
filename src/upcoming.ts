@@ -9,10 +9,27 @@ export interface UpcomingTagOverride {
   daysAhead: number;
 }
 
-export type UpcomingKind = "birthday" | "anniversary";
+// One configured date-field on a person note. `field` is the frontmatter key
+// to read (e.g. "birthday"), `icon` is the Lucide icon name shown next to the
+// row. Empty `field` is ignored at scan time; empty `icon` simply renders
+// without one.
+export interface UpcomingFieldConfig {
+  field: string;
+  icon: string;
+}
+
+export const DEFAULT_UPCOMING_FIELDS: UpcomingFieldConfig[] = [
+  { field: "birthday", icon: "cake" },
+  { field: "anniversary", icon: "gem" },
+];
 
 export interface UpcomingEvent {
-  kind: UpcomingKind;
+  // Frontmatter key this event came from (e.g. "birthday"). Surfaces in the
+  // tooltip / hover so users with many configured fields can tell which is
+  // which without relying on the icon alone.
+  field: string;
+  // Lucide icon to render. Resolved from the matching UpcomingFieldConfig.
+  iconName: string;
   // Person file basename (e.g. "Bob") and full vault path (used to open).
   name: string;
   path: string;
@@ -101,17 +118,17 @@ export function formatDaysUntil(days: number): string {
 
 interface ScanOptions {
   peopleFolder: string;
-  birthdayField: string;
-  anniversaryField: string;
+  fields: UpcomingFieldConfig[];
   defaultDaysAhead: number;
   tagOverrides: UpcomingTagOverride[];
   today: Date;
 }
 
-// Walks every markdown file in `peopleFolder`, reads frontmatter for the
-// configured birthday/anniversary fields, computes days-until-next, and keeps
-// only the ones whose countdown falls inside the (per-person) lookahead
-// window. Returns events sorted soonest-first.
+// Walks every markdown file in `peopleFolder`, reads frontmatter for every
+// configured date field, computes days-until-next, and keeps the ones whose
+// countdown falls inside the (per-person) lookahead window. Returns events
+// sorted soonest-first; ties break on field-config order so birthdays render
+// before anniversaries by default on the same day.
 export function getUpcomingEvents(
   app: App,
   opts: ScanOptions,
@@ -128,10 +145,15 @@ export function getUpcomingEvents(
     const cache = app.metadataCache.getFileCache(file);
     const fm = cache?.frontmatter as Record<string, unknown> | undefined;
     const daysAhead = resolveDaysAheadForFile(file, cache, opts);
-    pushEvent(out, file, fm, opts.birthdayField, "birthday", daysAhead, opts.today);
-    pushEvent(out, file, fm, opts.anniversaryField, "anniversary", daysAhead, opts.today);
+    opts.fields.forEach((fc, fieldIdx) => {
+      pushEvent(out, file, fm, fc, fieldIdx, daysAhead, opts.today);
+    });
   }
-  out.sort((a, b) => a.daysUntil - b.daysUntil || a.name.localeCompare(b.name));
+  out.sort(
+    (a, b) =>
+      a.daysUntil - b.daysUntil ||
+      a.name.localeCompare(b.name),
+  );
   return out;
 }
 
@@ -139,13 +161,13 @@ function pushEvent(
   out: UpcomingEvent[],
   file: TFile,
   fm: Record<string, unknown> | undefined,
-  field: string,
-  kind: UpcomingKind,
+  fc: UpcomingFieldConfig,
+  _fieldIdx: number,
   daysAhead: number,
   today: Date,
 ): void {
-  if (!field || !fm) return;
-  const raw = fm[field];
+  if (!fc.field || !fm) return;
+  const raw = fm[fc.field];
   let value: string | null = null;
   if (typeof raw === "string") value = raw;
   else if (typeof raw === "number") value = String(raw);
@@ -156,7 +178,8 @@ function pushEvent(
   const daysUntil = daysUntilAnniversary(md.month, md.day, today);
   if (daysUntil > daysAhead) return;
   out.push({
-    kind,
+    field: fc.field,
+    iconName: fc.icon,
     name: file.basename,
     path: file.path,
     daysUntil,

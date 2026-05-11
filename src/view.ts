@@ -534,8 +534,7 @@ export class TodayView extends ItemView {
 
     const upcomingEvents = getUpcomingEvents(this.app, {
       peopleFolder: this.plugin.settings.peopleFolder,
-      birthdayField: this.plugin.settings.birthdayField,
-      anniversaryField: this.plugin.settings.anniversaryField,
+      fields: this.plugin.settings.upcomingFields,
       defaultDaysAhead: this.plugin.settings.upcomingDaysAhead,
       tagOverrides: this.plugin.settings.upcomingTagOverrides,
       today: this.selectedDate,
@@ -3042,18 +3041,16 @@ export class TodayView extends ItemView {
     parent: HTMLElement,
     events: UpcomingEvent[],
   ): void {
-    const settings = this.plugin.settings;
     const wrap = parent.createDiv({ cls: "dp-upcoming" });
     events.forEach((ev, idx) => {
       if (idx > 0) wrap.createSpan({ cls: "dp-upcoming-sep", text: " • " });
       const chip = wrap.createSpan({
         cls: "dp-upcoming-item" + (ev.daysUntil === 0 ? " is-today" : ""),
+        attr: { title: `${ev.field}: ${ev.dateLabel}` },
       });
-      const iconName =
-        ev.kind === "birthday" ? settings.birthdayIcon : settings.anniversaryIcon;
-      if (iconName) {
+      if (ev.iconName) {
         const iconEl = chip.createSpan({ cls: "dp-upcoming-icon" });
-        setIcon(iconEl, iconName);
+        setIcon(iconEl, ev.iconName);
       }
       const file = this.app.vault.getAbstractFileByPath(ev.path);
       const nameEl = chip.createEl("a", {

@@ -15,7 +15,11 @@ import {
   parseCompactDuration,
 } from "./parser";
 import { ContextTag, ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
-import { UpcomingTagOverride } from "./upcoming";
+import {
+  UpcomingTagOverride,
+  UpcomingFieldConfig,
+  DEFAULT_UPCOMING_FIELDS,
+} from "./upcoming";
 import { TagMigrationModal, PrefixChange } from "./migrate";
 
 // Inline-autocomplete trigger strings. Each opens a different picker when
@@ -140,17 +144,13 @@ export interface TodaySettings {
   // suggestions so typing "@bob" surfaces every Bob alongside today/tomorrow.
   // Empty disables people lookup entirely.
   peopleFolder: string;
-  // Frontmatter field names on person files that hold a birthday / anniversary
-  // date (parsed flexibly — see parseUpcomingDate). Default "birthday" /
-  // "anniversary". Empty string disables that kind of event entirely.
-  birthdayField: string;
-  anniversaryField: string;
-  // Lucide icon names used in the dashboard's upcoming-events row. Defaults:
-  // "cake" for birthdays, "gem" for anniversaries.
-  birthdayIcon: string;
-  anniversaryIcon: string;
-  // Default lookahead window for birthday/anniversary alerts. An event is
-  // shown when it is within this many days, every day through the date.
+  // Frontmatter date-fields scanned on each person note. Each entry pairs a
+  // field name (parsed flexibly via parseUpcomingDate) with the Lucide icon
+  // shown for matching events. Defaults are birthday / cake and
+  // anniversary / gem; users can add more (e.g. "deathday", "work-iversary").
+  upcomingFields: UpcomingFieldConfig[];
+  // Default lookahead window for upcoming-event alerts. An event is shown
+  // when it is within this many days, every day through the date itself.
   upcomingDaysAhead: number;
   // Per-tag overrides that lengthen the lookahead. e.g. `{tag: "p/family",
   // daysAhead: 21}` makes anyone with `#p/family` (inline or frontmatter)
@@ -221,10 +221,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
   peopleFolder: "",
-  birthdayField: "birthday",
-  anniversaryField: "anniversary",
-  birthdayIcon: "cake",
-  anniversaryIcon: "gem",
+  upcomingFields: DEFAULT_UPCOMING_FIELDS.map((f) => ({ ...f })),
   upcomingDaysAhead: 7,
   upcomingTagOverrides: [],
   habitsFile: "daily/_habits.md",
@@ -1255,11 +1252,11 @@ export class TodaySettingTab extends PluginSettingTab {
 
     const intro = document.createDocumentFragment();
     intro.append(
-      "Scans the People folder for ",
+      "Scans the People folder for the date fields configured below (",
       makeCode("birthday"),
       " and ",
       makeCode("anniversary"),
-      " frontmatter fields and shows a row at the top of the Today view for each event in the next N days. The row stays visible through the event date itself, then disappears. Accepts dates like ",
+      " by default) and shows a row at the top of the Today view for each upcoming event. The row stays visible every day through the event date, then disappears. Accepts dates like ",
       makeCode("1990-05-15"),
       ", ",
       makeCode("05-15"),
@@ -1289,83 +1286,94 @@ export class TodaySettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName("Birthday frontmatter field")
-      .setDesc("Frontmatter key on person files holding the birthday date. Empty disables birthdays.")
-      .addText((t) =>
-        t
-          .setPlaceholder("birthday")
-          .setValue(this.plugin.settings.birthdayField)
-          .onChange(async (v) => {
-            this.plugin.settings.birthdayField = v.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+    const fieldsDesc = document.createDocumentFragment();
+    fieldsDesc.append(
+      "Each row is one frontmatter key to read on person notes (e.g. ",
+      makeCode("birthday"),
+      ", ",
+      makeCode("anniversary"),
+      ", ",
+      makeCode("deathday"),
+      ") paired with the Lucide icon shown next to matching events. Add as many as you want. Browse icon names at ",
+      makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
+      ".",
+    );
+
+    const fieldsList = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    fieldsList.dataset.list = "upcoming-fields";
+
+    const appendFieldRow = (entry: UpcomingFieldConfig): HTMLElement => {
+      const row = fieldsList.createDiv({ cls: "dp-project-color-row" });
+
+      const fieldInput = row.createEl("input", {
+        cls: "dp-project-color-name",
+        attr: { type: "text", placeholder: "birthday" },
+      });
+      fieldInput.value = entry.field;
+      fieldInput.addEventListener("change", async () => {
+        entry.field = fieldInput.value.trim();
+        fieldInput.value = entry.field;
+        await this.plugin.saveSettings();
+      });
+
+      const iconInput = row.createEl("input", {
+        cls: "dp-project-color-icon",
+        attr: {
+          type: "text",
+          placeholder: "cake",
+          spellcheck: "false",
+        },
+      });
+      iconInput.value = entry.icon;
+      iconInput.addEventListener("change", async () => {
+        entry.icon = iconInput.value.trim();
+        iconInput.value = entry.icon;
+        await this.plugin.saveSettings();
+      });
+
+      const remove = row.createEl("button", {
+        cls: "dp-project-color-remove",
+        text: "Remove",
+      });
+      remove.addEventListener("click", async () => {
+        const idx = this.plugin.settings.upcomingFields.indexOf(entry);
+        if (idx < 0) return;
+        this.plugin.settings.upcomingFields.splice(idx, 1);
+        row.remove();
+        await this.plugin.saveSettings();
+      });
+
+      return row;
+    };
 
     new Setting(containerEl)
-      .setName("Birthday icon")
-      .setDesc(
-        document.createDocumentFragment().appendChild(
-          (() => {
-            const f = document.createDocumentFragment();
-            f.append(
-              "Lucide icon shown next to birthday rows. Default ",
-              makeCode("cake"),
-              ". Browse names at ",
-              makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
-              ".",
+      .setName("Date fields")
+      .setDesc(fieldsDesc)
+      .addButton((b) =>
+        b
+          .setButtonText("Add date field")
+          .setCta()
+          .onClick(async () => {
+            const entry: UpcomingFieldConfig = { field: "", icon: "" };
+            this.plugin.settings.upcomingFields.push(entry);
+            const row = appendFieldRow(entry);
+            const input = row.querySelector<HTMLInputElement>(
+              ".dp-project-color-name",
             );
-            return f;
-          })(),
-        ),
-      )
-      .addText((t) =>
-        t
-          .setPlaceholder("cake")
-          .setValue(this.plugin.settings.birthdayIcon)
-          .onChange(async (v) => {
-            this.plugin.settings.birthdayIcon = v.trim();
+            if (input) {
+              input.scrollIntoView({ block: "center" });
+              input.focus();
+            }
             await this.plugin.saveSettings();
           }),
       );
 
-    new Setting(containerEl)
-      .setName("Anniversary frontmatter field")
-      .setDesc("Frontmatter key on person files holding the anniversary date. Empty disables anniversaries.")
-      .addText((t) =>
-        t
-          .setPlaceholder("anniversary")
-          .setValue(this.plugin.settings.anniversaryField)
-          .onChange(async (v) => {
-            this.plugin.settings.anniversaryField = v.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+    // Move the list to sit AFTER the "Date fields" Setting (Setting appended
+    // after the list was created); matches the visual order of the tag-
+    // overrides block below.
+    containerEl.appendChild(fieldsList);
 
-    new Setting(containerEl)
-      .setName("Anniversary icon")
-      .setDesc(
-        document.createDocumentFragment().appendChild(
-          (() => {
-            const f = document.createDocumentFragment();
-            f.append(
-              "Lucide icon shown next to anniversary rows. Default ",
-              makeCode("gem"),
-              ".",
-            );
-            return f;
-          })(),
-        ),
-      )
-      .addText((t) =>
-        t
-          .setPlaceholder("gem")
-          .setValue(this.plugin.settings.anniversaryIcon)
-          .onChange(async (v) => {
-            this.plugin.settings.anniversaryIcon = v.trim();
-            await this.plugin.saveSettings();
-          }),
-      );
+    this.plugin.settings.upcomingFields.forEach((entry) => appendFieldRow(entry));
 
     const overridesDesc = document.createDocumentFragment();
     overridesDesc.append(
