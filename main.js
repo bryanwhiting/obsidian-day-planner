@@ -1526,6 +1526,7 @@ var DEFAULT_SETTINGS = {
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
   peopleFolder: "",
+  personTemplate: "",
   upcomingFields: DEFAULT_UPCOMING_FIELDS.map((f) => ({ ...f })),
   upcomingDaysAhead: 7,
   upcomingTagOverrides: [],
@@ -2260,6 +2261,29 @@ var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
       new FolderSuggest(this.app, t.inputEl, async (folder) => {
         t.setValue(folder.path);
         this.plugin.settings.peopleFolder = folder.path;
+        await this.plugin.saveSettings();
+      });
+    });
+    const personTemplateDesc = document.createDocumentFragment();
+    personTemplateDesc.append(
+      "Vault path to a markdown file used when the ",
+      makeCode("@Name"),
+      " autocomplete creates a new person (",
+      makeCode("Create new person: \u2026"),
+      "). The file's contents are copied verbatim, with ",
+      makeCode("{{name}}"),
+      " replaced by the person basename and ",
+      makeCode("{{date}}"),
+      " by today's date. Leave blank to fall back to an auto-stub seeded from the configured date fields below."
+    );
+    new import_obsidian3.Setting(containerEl).setName("New-person template").setDesc(personTemplateDesc).addText((t) => {
+      t.setPlaceholder("Templates/Person.md").setValue(this.plugin.settings.personTemplate).onChange(async (v) => {
+        this.plugin.settings.personTemplate = v.trim();
+        await this.plugin.saveSettings();
+      });
+      new FileSuggest(this.app, t.inputEl, async (file) => {
+        t.setValue(file.path);
+        this.plugin.settings.personTemplate = file.path;
         await this.plugin.saveSettings();
       });
     });
@@ -3810,22 +3834,45 @@ async function createPerson(app, opts) {
   const existing = app.vault.getAbstractFileByPath(path);
   if (existing instanceof import_obsidian5.TFile)
     return existing;
+  const content = await buildPersonContent(app, cleanName, opts);
+  const file = await app.vault.create(path, content);
+  new import_obsidian5.Notice(`Created ${path}`);
+  return file;
+}
+async function buildPersonContent(app, cleanName, opts) {
+  const tplPath = (opts.templatePath || "").trim();
+  if (tplPath) {
+    const tplFile = app.vault.getAbstractFileByPath(tplPath);
+    if (tplFile instanceof import_obsidian5.TFile) {
+      const raw = await app.vault.read(tplFile);
+      return expandPersonTemplate(raw, cleanName);
+    }
+    new import_obsidian5.Notice(`Person template not found: ${tplPath} \u2014 using default stub`);
+  }
+  return buildAutoStub(opts.seedFields);
+}
+function expandPersonTemplate(raw, name) {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, "0");
+  const d = String(today.getDate()).padStart(2, "0");
+  const dateStr = `${y}-${m}-${d}`;
+  return raw.replace(/\{\{name\}\}/g, name).replace(/\{\{date\}\}/g, dateStr);
+}
+function buildAutoStub(seedFields) {
   const seen = /* @__PURE__ */ new Set();
   const fmLines = [];
-  for (const raw of opts.seedFields) {
+  for (const raw of seedFields) {
     const key = (raw || "").trim();
     if (!key || seen.has(key))
       continue;
     seen.add(key);
     fmLines.push(`${key}: `);
   }
-  const content = fmLines.length > 0 ? `---
+  return fmLines.length > 0 ? `---
 ${fmLines.join("\n")}
 ---
 ` : "";
-  const file = await app.vault.create(path, content);
-  new import_obsidian5.Notice(`Created ${path}`);
-  return file;
 }
 function buildPersonLinkInsert(app, path) {
   var _a, _b;
@@ -11442,7 +11489,8 @@ var InlineSuggest = class extends import_obsidian12.EditorSuggest {
         const file = await createPerson(this.app, {
           folder: settings.peopleFolder,
           name: item.payload,
-          seedFields: settings.upcomingFields.map((f) => f.field)
+          seedFields: settings.upcomingFields.map((f) => f.field),
+          templatePath: settings.personTemplate
         });
         if (!file)
           return;

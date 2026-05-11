@@ -144,6 +144,13 @@ export interface TodaySettings {
   // suggestions so typing "@bob" surfaces every Bob alongside today/tomorrow.
   // Empty disables people lookup entirely.
   peopleFolder: string;
+  // Vault path to a markdown file used as the template when the @-trigger
+  // auto-creates a new person note (the "Create new person: …" picker entry).
+  // The file's contents are copied verbatim, with `{{name}}` replaced by the
+  // person basename and `{{date}}` replaced by today's YYYY-MM-DD. Leave
+  // blank to fall back to a minimal frontmatter stub seeded from the
+  // configured `upcomingFields`.
+  personTemplate: string;
   // Frontmatter date-fields scanned on each person note. Each entry pairs a
   // field name (parsed flexibly via parseUpcomingDate) with the Lucide icon
   // shown for matching events. Defaults are birthday / cake and
@@ -221,6 +228,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
   peopleFolder: "",
+  personTemplate: "",
   upcomingFields: DEFAULT_UPCOMING_FIELDS.map((f) => ({ ...f })),
   upcomingDaysAhead: 7,
   upcomingTagOverrides: [],
@@ -1240,6 +1248,35 @@ export class TodaySettingTab extends PluginSettingTab {
         new FolderSuggest(this.app, t.inputEl, async (folder) => {
           t.setValue(folder.path);
           this.plugin.settings.peopleFolder = folder.path;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    const personTemplateDesc = document.createDocumentFragment();
+    personTemplateDesc.append(
+      "Vault path to a markdown file used when the ",
+      makeCode("@Name"),
+      " autocomplete creates a new person (",
+      makeCode("Create new person: …"),
+      "). The file's contents are copied verbatim, with ",
+      makeCode("{{name}}"),
+      " replaced by the person basename and ",
+      makeCode("{{date}}"),
+      " by today's date. Leave blank to fall back to an auto-stub seeded from the configured date fields below.",
+    );
+    new Setting(containerEl)
+      .setName("New-person template")
+      .setDesc(personTemplateDesc)
+      .addText((t) => {
+        t.setPlaceholder("Templates/Person.md")
+          .setValue(this.plugin.settings.personTemplate)
+          .onChange(async (v) => {
+            this.plugin.settings.personTemplate = v.trim();
+            await this.plugin.saveSettings();
+          });
+        new FileSuggest(this.app, t.inputEl, async (file) => {
+          t.setValue(file.path);
+          this.plugin.settings.personTemplate = file.path;
           await this.plugin.saveSettings();
         });
       });

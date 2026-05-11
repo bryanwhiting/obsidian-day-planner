@@ -578,6 +578,7 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
           folder: settings.peopleFolder,
           name: item.payload!,
           seedFields: settings.upcomingFields.map((f) => f.field),
+          templatePath: settings.personTemplate,
         });
         if (!file) return;
         const insert = buildPersonLinkInsert(this.app, file.path) + " ";

@@ -79,15 +79,21 @@ export function findPersonByName(
 interface CreatePersonOptions {
   folder: string;
   name: string;
-  // Frontmatter keys to seed in the new note. Each becomes an empty
-  // `key: ` line in the stub. Duplicates and empty keys are dropped.
+  // Frontmatter keys to seed in the new note when no template is configured.
+  // Each becomes an empty `key: ` line in the auto-stub. Duplicates and empty
+  // keys are dropped.
   seedFields: string[];
+  // Optional vault path to a template file. When present and readable, the
+  // file's contents become the new note (with `{{name}}` / `{{date}}`
+  // substituted). Falls back to the auto-stub when the path is empty or the
+  // file can't be found.
+  templatePath?: string;
 }
 
-// Creates `<folder>/<name>.md` with a minimal frontmatter stub seeded for the
-// configured date fields. If the file already exists it's returned as-is.
-// Empty `seedFields` yields a blank file. Surfaces a Notice on creation so
-// the user can confirm the file landed where they expected.
+// Creates `<folder>/<name>.md` with either a configured template (read from
+// `templatePath` and expanded for `{{name}}` / `{{date}}`) or a minimal
+// frontmatter stub seeded from `seedFields`. If the file already exists it's
+// returned as-is. Surfaces a Notice on creation.
 export async function createPerson(
   app: App,
   opts: CreatePersonOptions,
@@ -106,19 +112,55 @@ export async function createPerson(
   const path = `${cleanFolder}/${cleanName}.md`;
   const existing = app.vault.getAbstractFileByPath(path);
   if (existing instanceof TFile) return existing;
+  const content = await buildPersonContent(app, cleanName, opts);
+  const file = await app.vault.create(path, content);
+  new Notice(`Created ${path}`);
+  return file;
+}
+
+async function buildPersonContent(
+  app: App,
+  cleanName: string,
+  opts: CreatePersonOptions,
+): Promise<string> {
+  const tplPath = (opts.templatePath || "").trim();
+  if (tplPath) {
+    const tplFile = app.vault.getAbstractFileByPath(tplPath);
+    if (tplFile instanceof TFile) {
+      const raw = await app.vault.read(tplFile);
+      return expandPersonTemplate(raw, cleanName);
+    }
+    new Notice(`Person template not found: ${tplPath} — using default stub`);
+  }
+  return buildAutoStub(opts.seedFields);
+}
+
+// Substitutes the supported placeholders in a person template:
+//   {{name}}  -> the new person's basename (already sanitized)
+//   {{date}}  -> today's date as YYYY-MM-DD
+// Unknown placeholders are left untouched so users can fill them in manually
+// or with another plugin.
+export function expandPersonTemplate(raw: string, name: string): string {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, "0");
+  const d = String(today.getDate()).padStart(2, "0");
+  const dateStr = `${y}-${m}-${d}`;
+  return raw
+    .replace(/\{\{name\}\}/g, name)
+    .replace(/\{\{date\}\}/g, dateStr);
+}
+
+function buildAutoStub(seedFields: string[]): string {
   const seen = new Set<string>();
   const fmLines: string[] = [];
-  for (const raw of opts.seedFields) {
+  for (const raw of seedFields) {
     const key = (raw || "").trim();
     if (!key || seen.has(key)) continue;
     seen.add(key);
     fmLines.push(`${key}: `);
   }
-  const content =
-    fmLines.length > 0 ? `---\n${fmLines.join("\n")}\n---\n` : "";
-  const file = await app.vault.create(path, content);
-  new Notice(`Created ${path}`);
-  return file;
+  return fmLines.length > 0 ? `---\n${fmLines.join("\n")}\n---\n` : "";
 }
 
 // Builds the inline replacement string for a picked person. Mirrors
