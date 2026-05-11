@@ -30,7 +30,13 @@ import {
   applyDailyNoteTemplateIfEmpty,
   ensureDailyNote,
 } from "./dailyNote";
-import { buildPeopleSuggestions, buildPersonLinkInsert } from "./people";
+import {
+  buildPeopleSuggestions,
+  buildPersonLinkInsert,
+  createPerson,
+  findPersonByName,
+  sanitizePersonName,
+} from "./people";
 import { collectUnfinished } from "./collect";
 import { HabitsScanner } from "./habits";
 import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
@@ -317,6 +323,14 @@ interface SuggestItem {
   // Optional sub-segment shown muted alongside the display (e.g. "/back-end"
   // for a sub-project).
   subDisplay?: string;
+  // Optional async action that runs before the insert. Currently used by the
+  // "Create new person" entry under the @-trigger picker: at selection time we
+  // create the file in the people folder, then resolve the insert from the
+  // created path so the inserted wiki link points at the real note.
+  action?: "create-person";
+  // Free-form payload — for "create-person" it's the sanitized basename to
+  // create (separate from `display` so we can render "Create new person: …").
+  payload?: string;
 }
 
 // Single editor-suggest that handles every configured inline trigger
@@ -450,7 +464,34 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
         subDisplay: p.folder ? ` ${p.folder}` : undefined,
         insert: buildPersonLinkInsert(this.app, p.path) + " ",
       }));
-      return [...dateItems, ...personItems];
+
+      // Offer "Create new person: <name>" as the last entry when the user
+      // typed something, the people folder is configured, and nobody already
+      // has that exact basename. Skipped for queries that match a relative
+      // date keyword exactly so "today" / "tomorrow" don't tempt the user
+      // into creating a person literally named "today".
+      const createItems: SuggestItem[] = [];
+      const trimmed = query.trim();
+      const sanitized = sanitizePersonName(trimmed);
+      const exactDateMatch = dateItems.some(
+        (d) => d.display.toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (
+        settings.peopleFolder &&
+        sanitized.length > 0 &&
+        !exactDateMatch &&
+        !findPersonByName(this.app, settings.peopleFolder, sanitized)
+      ) {
+        createItems.push({
+          kind,
+          display: `Create new person: ${sanitized}`,
+          subDisplay: ` in ${settings.peopleFolder}`,
+          insert: "",
+          action: "create-person",
+          payload: sanitized,
+        });
+      }
+      return [...dateItems, ...personItems, ...createItems];
     }
     const pool = this.plugin.settings.quickDurationsMin.map((m) =>
       formatCompactDuration(m),
@@ -475,6 +516,25 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
     _evt: MouseEvent | KeyboardEvent,
   ): void {
     if (!this.context) return;
+    if (item.action === "create-person" && item.payload) {
+      // Capture context up front — close() clears `this.context` and we still
+      // need to know which range to replace once the async create resolves.
+      const ctx = this.context;
+      const settings = this.plugin.settings;
+      this.close();
+      void (async () => {
+        const file = await createPerson(this.app, {
+          folder: settings.peopleFolder,
+          name: item.payload!,
+          birthdayField: settings.birthdayField,
+          anniversaryField: settings.anniversaryField,
+        });
+        if (!file) return;
+        const insert = buildPersonLinkInsert(this.app, file.path) + " ";
+        ctx.editor.replaceRange(insert, ctx.start, ctx.end);
+      })();
+      return;
+    }
     this.context.editor.replaceRange(
       item.insert,
       this.context.start,

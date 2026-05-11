@@ -1,4 +1,4 @@
-import { App, TFile } from "obsidian";
+import { App, Notice, TFile } from "obsidian";
 
 // One entry returned by buildPeopleSuggestions. `path` is the full vault path
 // (used as a stable key when mixing with date suggestions); `basename` and
@@ -43,6 +43,77 @@ export function buildPeopleSuggestions(
     path: f.path,
     folder: f.parent?.path || "",
   }));
+}
+
+// Strips characters that aren't valid in a vault filename. Keeps spaces and
+// most punctuation Obsidian itself tolerates; replaces the obvious offenders
+// (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) with `-`. Also collapses
+// repeated whitespace and trims edges so "Jane   Doe" → "Jane Doe".
+export function sanitizePersonName(raw: string): string {
+  return raw
+    .replace(/[\/\\:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Returns the existing person file whose basename matches `name`
+// (case-insensitive), or null. Used by the autocomplete to decide whether
+// "Create new person: X" is offered.
+export function findPersonByName(
+  app: App,
+  folder: string,
+  name: string,
+): TFile | null {
+  const cleanFolder = (folder || "").replace(/^\/+|\/+$/g, "");
+  if (!cleanFolder || !name.trim()) return null;
+  const folderLc = cleanFolder.toLowerCase();
+  const target = name.trim().toLowerCase();
+  for (const f of app.vault.getMarkdownFiles()) {
+    const dir = (f.parent?.path || "").toLowerCase();
+    const inFolder = dir === folderLc || dir.startsWith(folderLc + "/");
+    if (inFolder && f.basename.toLowerCase() === target) return f;
+  }
+  return null;
+}
+
+interface CreatePersonOptions {
+  folder: string;
+  name: string;
+  birthdayField: string;
+  anniversaryField: string;
+}
+
+// Creates `<folder>/<name>.md` with a minimal frontmatter stub seeded for the
+// configured birthday/anniversary fields. If the file already exists it's
+// returned as-is. Empty `birthdayField` / `anniversaryField` keep that line
+// out of the stub. Surfaces a Notice on creation so the user can confirm the
+// file landed where they expected.
+export async function createPerson(
+  app: App,
+  opts: CreatePersonOptions,
+): Promise<TFile | null> {
+  const cleanFolder = (opts.folder || "").replace(/^\/+|\/+$/g, "");
+  const cleanName = sanitizePersonName(opts.name);
+  if (!cleanFolder || !cleanName) return null;
+  const folderExists = app.vault.getAbstractFileByPath(cleanFolder);
+  if (!folderExists) {
+    try {
+      await app.vault.createFolder(cleanFolder);
+    } catch {
+      // Folder may have been created between the check and now — fine.
+    }
+  }
+  const path = `${cleanFolder}/${cleanName}.md`;
+  const existing = app.vault.getAbstractFileByPath(path);
+  if (existing instanceof TFile) return existing;
+  const fmLines: string[] = [];
+  if (opts.birthdayField) fmLines.push(`${opts.birthdayField}: `);
+  if (opts.anniversaryField) fmLines.push(`${opts.anniversaryField}: `);
+  const content =
+    fmLines.length > 0 ? `---\n${fmLines.join("\n")}\n---\n` : "";
+  const file = await app.vault.create(path, content);
+  new Notice(`Created ${path}`);
+  return file;
 }
 
 // Builds the inline replacement string for a picked person. Mirrors
