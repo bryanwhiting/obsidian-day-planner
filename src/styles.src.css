@@ -2327,6 +2327,7 @@
   .dp-project-color-drag .svg-icon {
     width: 14px;
     height: 14px;
+    pointer-events: none;
   }
 
   .dp-project-color-name-wrap {

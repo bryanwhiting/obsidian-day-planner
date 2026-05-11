@@ -2139,19 +2139,70 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
     );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
     let dragSrcIdx = null;
+    const rows = [];
+    const computeTarget = (clientY) => {
+      if (rows.length === 0)
+        return null;
+      for (let i = 0; i < rows.length; i++) {
+        const rect = rows[i].getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) {
+          return { hoverIdx: i, after: false };
+        }
+      }
+      return { hoverIdx: rows.length - 1, after: true };
+    };
+    const clearIndicators = () => {
+      rows.forEach(
+        (r) => r.removeClasses(["is-drop-above", "is-drop-below"])
+      );
+    };
     list.addEventListener("dragover", (ev) => {
       if (dragSrcIdx === null)
         return;
       ev.preventDefault();
       if (ev.dataTransfer)
         ev.dataTransfer.dropEffect = "move";
+      const target = computeTarget(ev.clientY);
+      clearIndicators();
+      if (!target)
+        return;
+      const { hoverIdx, after } = target;
+      let dest = after ? hoverIdx + 1 : hoverIdx;
+      if (dragSrcIdx < dest)
+        dest -= 1;
+      if (dest === dragSrcIdx)
+        return;
+      rows[hoverIdx].toggleClass("is-drop-above", !after);
+      rows[hoverIdx].toggleClass("is-drop-below", after);
+    });
+    list.addEventListener("drop", async (ev) => {
+      if (dragSrcIdx === null)
+        return;
+      ev.preventDefault();
+      const target = computeTarget(ev.clientY);
+      clearIndicators();
+      const src = dragSrcIdx;
+      dragSrcIdx = null;
+      if (!target)
+        return;
+      let dest = target.after ? target.hoverIdx + 1 : target.hoverIdx;
+      if (src < dest)
+        dest -= 1;
+      if (dest === src)
+        return;
+      const arr = this.plugin.settings.projectColors;
+      const [moved] = arr.splice(src, 1);
+      arr.splice(dest, 0, moved);
+      await this.plugin.saveSettings();
+      this.display();
     });
     this.plugin.settings.projectColors.forEach((entry, idx) => {
       var _a;
       const row = list.createDiv({ cls: "dp-project-color-row" });
+      rows.push(row);
       const handle = row.createDiv({ cls: "dp-project-color-drag" });
       (0, import_obsidian2.setIcon)(handle, "grip-vertical");
-      handle.setAttr("draggable", "true");
+      handle.draggable = true;
       handle.setAttr("aria-label", "Drag to reorder");
       handle.addEventListener("dragstart", (ev) => {
         dragSrcIdx = idx;
@@ -2164,39 +2215,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       handle.addEventListener("dragend", () => {
         dragSrcIdx = null;
         row.removeClass("is-dragging");
-        list.querySelectorAll(".is-drop-above, .is-drop-below").forEach((el) => el.removeClasses(["is-drop-above", "is-drop-below"]));
-      });
-      row.addEventListener("dragover", (ev) => {
-        if (dragSrcIdx === null || dragSrcIdx === idx)
-          return;
-        ev.preventDefault();
-        const rect = row.getBoundingClientRect();
-        const after = ev.clientY > rect.top + rect.height / 2;
-        row.toggleClass("is-drop-above", !after);
-        row.toggleClass("is-drop-below", after);
-      });
-      row.addEventListener("dragleave", (ev) => {
-        const related = ev.relatedTarget;
-        if (!related || !row.contains(related)) {
-          row.removeClasses(["is-drop-above", "is-drop-below"]);
-        }
-      });
-      row.addEventListener("drop", async (ev) => {
-        if (dragSrcIdx === null || dragSrcIdx === idx)
-          return;
-        ev.preventDefault();
-        const rect = row.getBoundingClientRect();
-        const after = ev.clientY > rect.top + rect.height / 2;
-        const src = dragSrcIdx;
-        let dest = after ? idx + 1 : idx;
-        if (src < dest)
-          dest -= 1;
-        const arr = this.plugin.settings.projectColors;
-        const [moved] = arr.splice(src, 1);
-        arr.splice(dest, 0, moved);
-        dragSrcIdx = null;
-        await this.plugin.saveSettings();
-        this.display();
+        clearIndicators();
       });
       const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
       nameWrap.createSpan({
