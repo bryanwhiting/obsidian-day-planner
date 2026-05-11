@@ -2200,21 +2200,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       makeCode("tags:"),
       "). When multiple overrides match one person, the largest lookahead wins."
     );
-    new import_obsidian2.Setting(containerEl).setName("Tag overrides").setDesc(overridesDesc).addButton(
-      (b) => b.setButtonText("Add tag override").setCta().onClick(async () => {
-        this.plugin.settings.upcomingTagOverrides.push({
-          tag: "",
-          daysAhead: 21
-        });
-        await this.plugin.saveSettings();
-        this.display();
-        this.focusLastInput("upcoming-overrides");
-      })
-    );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
     list.dataset.list = "upcoming-overrides";
-    this.plugin.settings.upcomingTagOverrides.forEach((entry, idx) => {
+    const appendRow = (entry) => {
       const row = list.createDiv({ cls: "dp-project-color-row" });
+      const findIdx = () => this.plugin.settings.upcomingTagOverrides.indexOf(entry);
       const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
       nameWrap.createSpan({ cls: "dp-project-color-prefix", text: "#" });
       const nameInput = nameWrap.createEl("input", {
@@ -2233,7 +2223,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       nameInput.addEventListener("change", async () => {
         const v = nameInput.value.trim().replace(/^#+/, "");
         nameInput.value = v;
-        this.plugin.settings.upcomingTagOverrides[idx].tag = v;
+        entry.tag = v;
         await this.plugin.saveSettings();
       });
       const daysInput = row.createEl("input", {
@@ -2249,7 +2239,7 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       daysInput.addEventListener("change", async () => {
         const n = parseInt(daysInput.value, 10);
         if (Number.isFinite(n) && n >= 0 && n <= 365) {
-          this.plugin.settings.upcomingTagOverrides[idx].daysAhead = n;
+          entry.daysAhead = n;
           await this.plugin.saveSettings();
         } else {
           daysInput.value = String(entry.daysAhead);
@@ -2264,10 +2254,33 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         text: "Remove"
       });
       remove.addEventListener("click", async () => {
+        const idx = findIdx();
+        if (idx < 0)
+          return;
         this.plugin.settings.upcomingTagOverrides.splice(idx, 1);
+        row.remove();
         await this.plugin.saveSettings();
-        this.display();
       });
+      return row;
+    };
+    new import_obsidian2.Setting(containerEl).setName("Tag overrides").setDesc(overridesDesc).addButton(
+      (b) => b.setButtonText("Add tag override").setCta().onClick(async () => {
+        const entry = { tag: "", daysAhead: 21 };
+        this.plugin.settings.upcomingTagOverrides.push(entry);
+        const row = appendRow(entry);
+        const input = row.querySelector(
+          ".dp-project-color-name"
+        );
+        if (input) {
+          input.scrollIntoView({ block: "center" });
+          input.focus();
+        }
+        await this.plugin.saveSettings();
+      })
+    );
+    containerEl.appendChild(list);
+    this.plugin.settings.upcomingTagOverrides.forEach((entry) => {
+      appendRow(entry);
     });
   }
   // After re-rendering, scroll the most recently appended row in the named

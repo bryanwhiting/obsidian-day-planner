@@ -1379,28 +1379,17 @@ export class TodaySettingTab extends PluginSettingTab {
       makeCode("tags:"),
       "). When multiple overrides match one person, the largest lookahead wins.",
     );
-    new Setting(containerEl)
-      .setName("Tag overrides")
-      .setDesc(overridesDesc)
-      .addButton((b) =>
-        b
-          .setButtonText("Add tag override")
-          .setCta()
-          .onClick(async () => {
-            this.plugin.settings.upcomingTagOverrides.push({
-              tag: "",
-              daysAhead: 21,
-            });
-            await this.plugin.saveSettings();
-            this.display();
-            this.focusLastInput("upcoming-overrides");
-          }),
-      );
-
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
     list.dataset.list = "upcoming-overrides";
-    this.plugin.settings.upcomingTagOverrides.forEach((entry, idx) => {
+
+    // Append a single row tied to one entry. Handlers mutate `entry` directly
+    // (which is the same object reference held in `upcomingTagOverrides`), so
+    // they stay correct even when entries above this row are spliced out and
+    // numeric indices shift.
+    const appendRow = (entry: UpcomingTagOverride): HTMLElement => {
       const row = list.createDiv({ cls: "dp-project-color-row" });
+      const findIdx = (): number =>
+        this.plugin.settings.upcomingTagOverrides.indexOf(entry);
 
       const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
       nameWrap.createSpan({ cls: "dp-project-color-prefix", text: "#" });
@@ -1419,7 +1408,7 @@ export class TodaySettingTab extends PluginSettingTab {
       nameInput.addEventListener("change", async () => {
         const v = nameInput.value.trim().replace(/^#+/, "");
         nameInput.value = v;
-        this.plugin.settings.upcomingTagOverrides[idx].tag = v;
+        entry.tag = v;
         await this.plugin.saveSettings();
       });
 
@@ -1436,7 +1425,7 @@ export class TodaySettingTab extends PluginSettingTab {
       daysInput.addEventListener("change", async () => {
         const n = parseInt(daysInput.value, 10);
         if (Number.isFinite(n) && n >= 0 && n <= 365) {
-          this.plugin.settings.upcomingTagOverrides[idx].daysAhead = n;
+          entry.daysAhead = n;
           await this.plugin.saveSettings();
         } else {
           daysInput.value = String(entry.daysAhead);
@@ -1453,10 +1442,50 @@ export class TodaySettingTab extends PluginSettingTab {
         text: "Remove",
       });
       remove.addEventListener("click", async () => {
+        const idx = findIdx();
+        if (idx < 0) return;
         this.plugin.settings.upcomingTagOverrides.splice(idx, 1);
+        row.remove();
         await this.plugin.saveSettings();
-        this.display();
       });
+
+      return row;
+    };
+
+    // Render the "Add" button BEFORE the list, but append rows into `list`
+    // (declared above) so the on-click handler can grow it in place — no
+    // full settings re-render needed. The previous version called
+    // this.display() after pushing, which intermittently failed to surface
+    // the new row until the settings pane was closed and reopened.
+    new Setting(containerEl)
+      .setName("Tag overrides")
+      .setDesc(overridesDesc)
+      .addButton((b) =>
+        b
+          .setButtonText("Add tag override")
+          .setCta()
+          .onClick(async () => {
+            const entry: UpcomingTagOverride = { tag: "", daysAhead: 21 };
+            this.plugin.settings.upcomingTagOverrides.push(entry);
+            const row = appendRow(entry);
+            const input = row.querySelector<HTMLInputElement>(
+              ".dp-project-color-name",
+            );
+            if (input) {
+              input.scrollIntoView({ block: "center" });
+              input.focus();
+            }
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    // Move the list element so it appears AFTER the "Tag overrides" Setting
+    // (which we declared after it). The DOM order otherwise has the list
+    // above the Add button, which reads backwards.
+    containerEl.appendChild(list);
+
+    this.plugin.settings.upcomingTagOverrides.forEach((entry) => {
+      appendRow(entry);
     });
   }
 
