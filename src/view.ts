@@ -8,6 +8,7 @@ import {
   Platform,
   setIcon,
   moment,
+  normalizePath,
   MarkdownRenderer,
 } from "obsidian";
 import { parseTimelineHeight } from "./settings";
@@ -77,6 +78,8 @@ import {
   buildDateSuggestions,
   buildDateLinkInsert,
   todayDateStr,
+  getDailyNoteOptions,
+  formatDate,
 } from "./dailyNote";
 import type { DailyNoteFallback } from "./dailyNote";
 import {
@@ -216,7 +219,9 @@ export class TodayView extends ItemView {
   async onOpen(): Promise<void> {
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
-        if (file instanceof TFile) this.scheduleRender();
+        if (file instanceof TFile && file.path === this.currentDailyNotePath()) {
+          this.scheduleRender();
+        }
       }),
     );
     this.registerEvent(
@@ -226,7 +231,11 @@ export class TodayView extends ItemView {
       }),
     );
     this.registerEvent(
-      this.app.vault.on("modify", () => this.scheduleRender()),
+      this.app.vault.on("modify", (file) => {
+        if (file instanceof TFile && file.path === this.currentDailyNotePath()) {
+          this.scheduleRender();
+        }
+      }),
     );
     this.registerDomEvent(this.containerEl, "keydown", (ev) =>
       this.handleKeydown(ev),
@@ -432,6 +441,18 @@ export class TodayView extends ItemView {
       this.rerenderTimer = null;
       void this.render();
     }, 100);
+  }
+
+  // Path of the daily note for the currently-selected day. Used by vault
+  // change listeners to ignore edits to unrelated files so typing in any
+  // other note doesn't trigger a re-render (and the flicker that came with it).
+  private currentDailyNotePath(): string {
+    const { folder, format } = getDailyNoteOptions(this.app, {
+      folder: this.plugin.settings.dailyNoteFolderFallback,
+      format: this.plugin.settings.dailyNoteFormatFallback,
+    });
+    const fileName = formatDate(this.selectedDate, format) + ".md";
+    return normalizePath(folder ? `${folder}/${fileName}` : fileName);
   }
 
   openCalendar(): void {
