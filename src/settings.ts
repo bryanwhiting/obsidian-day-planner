@@ -1215,6 +1215,27 @@ export class TodaySettingTab extends PluginSettingTab {
       });
   }
 
+  // After re-rendering, scroll the most recently appended row in the named
+  // list into view and focus its name input. Without this, the full pane
+  // rebuild from this.display() resets scroll to the top and the user can't
+  // see that the new row was actually added — making the "Add" buttons look
+  // broken even though they pushed the entry.
+  private focusLastInput(listName: "project-colors" | "context-tags"): void {
+    requestAnimationFrame(() => {
+      const list = this.containerEl.querySelector<HTMLElement>(
+        `[data-list="${listName}"]`,
+      );
+      if (!list) return;
+      const inputs = list.querySelectorAll<HTMLInputElement>(
+        ".dp-project-color-name",
+      );
+      const last = inputs[inputs.length - 1];
+      if (!last) return;
+      last.scrollIntoView({ block: "center" });
+      last.focus();
+    });
+  }
+
   private renderProjectsSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Projects").setHeading();
 
@@ -1273,10 +1294,12 @@ export class TodaySettingTab extends PluginSettingTab {
             });
             await this.plugin.saveSettings();
             this.display();
+            this.focusLastInput("project-colors");
           }),
       );
 
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    list.dataset.list = "project-colors";
     let dragSrcIdx: number | null = null;
     const rows: HTMLElement[] = [];
 
@@ -1473,10 +1496,12 @@ export class TodaySettingTab extends PluginSettingTab {
             });
             await this.plugin.saveSettings();
             this.display();
+            this.focusLastInput("context-tags");
           }),
       );
 
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    list.dataset.list = "context-tags";
     this.plugin.settings.contextTags.forEach((entry, idx) => {
       const row = list.createDiv({ cls: "dp-project-color-row" });
 

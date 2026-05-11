@@ -2094,6 +2094,28 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
       });
     });
   }
+  // After re-rendering, scroll the most recently appended row in the named
+  // list into view and focus its name input. Without this, the full pane
+  // rebuild from this.display() resets scroll to the top and the user can't
+  // see that the new row was actually added — making the "Add" buttons look
+  // broken even though they pushed the entry.
+  focusLastInput(listName) {
+    requestAnimationFrame(() => {
+      const list = this.containerEl.querySelector(
+        `[data-list="${listName}"]`
+      );
+      if (!list)
+        return;
+      const inputs = list.querySelectorAll(
+        ".dp-project-color-name"
+      );
+      const last = inputs[inputs.length - 1];
+      if (!last)
+        return;
+      last.scrollIntoView({ block: "center" });
+      last.focus();
+    });
+  }
   renderProjectsSection(containerEl) {
     new import_obsidian2.Setting(containerEl).setName("Projects").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Project tag prefix").setDesc(buildProjectPrefixDesc()).addText(
@@ -2135,9 +2157,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         });
         await this.plugin.saveSettings();
         this.display();
+        this.focusLastInput("project-colors");
       })
     );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    list.dataset.list = "project-colors";
     let dragSrcIdx = null;
     const rows = [];
     const computeTarget = (clientY) => {
@@ -2318,9 +2342,11 @@ var TodaySettingTab = class extends import_obsidian2.PluginSettingTab {
         });
         await this.plugin.saveSettings();
         this.display();
+        this.focusLastInput("context-tags");
       })
     );
     const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    list.dataset.list = "context-tags";
     this.plugin.settings.contextTags.forEach((entry, idx) => {
       var _a;
       const row = list.createDiv({ cls: "dp-project-color-row" });
