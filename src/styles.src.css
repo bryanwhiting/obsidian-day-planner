@@ -435,6 +435,64 @@
     /* Empty workout line collapses to nothing — no chrome, no min-height. */
   }
 
+  .dp-upcoming {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--color-ink-muted);
+    letter-spacing: 0.02em;
+  }
+
+  .dp-upcoming-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .dp-upcoming-item.is-today {
+    color: var(--color-accent);
+    font-weight: 600;
+  }
+
+  .dp-upcoming-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-accent);
+  }
+
+  .dp-upcoming-icon .svg-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .dp-upcoming-name {
+    color: var(--color-ink);
+    text-decoration: none;
+    cursor: pointer;
+    border-bottom: 1px dotted color-mix(in srgb, var(--color-accent) 50%, transparent);
+    transition: color 100ms, border-color 100ms;
+  }
+
+  .dp-upcoming-name:hover {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+  }
+
+  .dp-upcoming-date {
+    color: var(--color-ink-muted);
+  }
+
+  .dp-upcoming-sep {
+    color: var(--color-ink-faint);
+    user-select: none;
+  }
+
   .dp-workout:empty {
     display: none;
   }

@@ -180,6 +180,15 @@ export default class TodayPlugin extends Plugin {
             (c) => c && typeof c.project === "string" && typeof c.color === "string",
           )
         : [],
+      upcomingTagOverrides: Array.isArray(data?.upcomingTagOverrides)
+        ? data!.upcomingTagOverrides!.filter(
+            (o) =>
+              o &&
+              typeof o.tag === "string" &&
+              typeof o.daysAhead === "number" &&
+              Number.isFinite(o.daysAhead),
+          )
+        : [],
     };
   }
 

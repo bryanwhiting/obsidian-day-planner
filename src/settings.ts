@@ -15,6 +15,7 @@ import {
   parseCompactDuration,
 } from "./parser";
 import { ContextTag, ProjectColor, DEFAULT_PALETTE, isValidHex } from "./colors";
+import { UpcomingTagOverride } from "./upcoming";
 import { TagMigrationModal, PrefixChange } from "./migrate";
 
 // Inline-autocomplete trigger strings. Each opens a different picker when
@@ -139,6 +140,22 @@ export interface TodaySettings {
   // suggestions so typing "@bob" surfaces every Bob alongside today/tomorrow.
   // Empty disables people lookup entirely.
   peopleFolder: string;
+  // Frontmatter field names on person files that hold a birthday / anniversary
+  // date (parsed flexibly — see parseUpcomingDate). Default "birthday" /
+  // "anniversary". Empty string disables that kind of event entirely.
+  birthdayField: string;
+  anniversaryField: string;
+  // Lucide icon names used in the dashboard's upcoming-events row. Defaults:
+  // "cake" for birthdays, "gem" for anniversaries.
+  birthdayIcon: string;
+  anniversaryIcon: string;
+  // Default lookahead window for birthday/anniversary alerts. An event is
+  // shown when it is within this many days, every day through the date.
+  upcomingDaysAhead: number;
+  // Per-tag overrides that lengthen the lookahead. e.g. `{tag: "p/family",
+  // daysAhead: 21}` makes anyone with `#p/family` (inline or frontmatter)
+  // show up 3 weeks ahead instead of the default 7.
+  upcomingTagOverrides: UpcomingTagOverride[];
   // Path to the habits-source file (e.g. "daily/_habits.md"). Plain hashtag
   // lines like `#h-day/call-mom Call mom` define habits. Append `/N` to set a
   // weekly/monthly target (e.g. `#h-week/laundry/2`, `#h-day/drink/4`).
@@ -204,6 +221,12 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   taskIdLength: 4,
   dateLinkFormat: "ddd, MMM D, YYYY",
   peopleFolder: "",
+  birthdayField: "birthday",
+  anniversaryField: "anniversary",
+  birthdayIcon: "cake",
+  anniversaryIcon: "gem",
+  upcomingDaysAhead: 7,
+  upcomingTagOverrides: [],
   habitsFile: "daily/_habits.md",
   habitPrefix: "h",
   habitWeekStart: 0,
@@ -1213,6 +1236,218 @@ export class TodaySettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+
+    this.renderUpcomingSection(containerEl);
+  }
+
+  private renderUpcomingSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Upcoming events").setHeading();
+
+    const intro = document.createDocumentFragment();
+    intro.append(
+      "Scans the People folder for ",
+      makeCode("birthday"),
+      " and ",
+      makeCode("anniversary"),
+      " frontmatter fields and shows a row at the top of the Today view for each event in the next N days. The row stays visible through the event date itself, then disappears. Accepts dates like ",
+      makeCode("1990-05-15"),
+      ", ",
+      makeCode("05-15"),
+      ", ",
+      makeCode("May 15"),
+      ", or ",
+      makeCode("May 15, 1990"),
+      ". Year is ignored for the countdown.",
+    );
+    containerEl.createDiv({ cls: "setting-item-description", text: "" }).append(intro);
+
+    new Setting(containerEl)
+      .setName("Default lookahead (days)")
+      .setDesc(
+        "How many days before the event the alert begins. Default 7.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("7")
+          .setValue(String(this.plugin.settings.upcomingDaysAhead))
+          .onChange(async (v) => {
+            const n = parseInt(v.trim(), 10);
+            if (Number.isFinite(n) && n >= 0 && n <= 365) {
+              this.plugin.settings.upcomingDaysAhead = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Birthday frontmatter field")
+      .setDesc("Frontmatter key on person files holding the birthday date. Empty disables birthdays.")
+      .addText((t) =>
+        t
+          .setPlaceholder("birthday")
+          .setValue(this.plugin.settings.birthdayField)
+          .onChange(async (v) => {
+            this.plugin.settings.birthdayField = v.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Birthday icon")
+      .setDesc(
+        document.createDocumentFragment().appendChild(
+          (() => {
+            const f = document.createDocumentFragment();
+            f.append(
+              "Lucide icon shown next to birthday rows. Default ",
+              makeCode("cake"),
+              ". Browse names at ",
+              makeAnchor("https://lucide.dev/icons", "lucide.dev/icons"),
+              ".",
+            );
+            return f;
+          })(),
+        ),
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("cake")
+          .setValue(this.plugin.settings.birthdayIcon)
+          .onChange(async (v) => {
+            this.plugin.settings.birthdayIcon = v.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Anniversary frontmatter field")
+      .setDesc("Frontmatter key on person files holding the anniversary date. Empty disables anniversaries.")
+      .addText((t) =>
+        t
+          .setPlaceholder("anniversary")
+          .setValue(this.plugin.settings.anniversaryField)
+          .onChange(async (v) => {
+            this.plugin.settings.anniversaryField = v.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Anniversary icon")
+      .setDesc(
+        document.createDocumentFragment().appendChild(
+          (() => {
+            const f = document.createDocumentFragment();
+            f.append(
+              "Lucide icon shown next to anniversary rows. Default ",
+              makeCode("gem"),
+              ".",
+            );
+            return f;
+          })(),
+        ),
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("gem")
+          .setValue(this.plugin.settings.anniversaryIcon)
+          .onChange(async (v) => {
+            this.plugin.settings.anniversaryIcon = v.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    const overridesDesc = document.createDocumentFragment();
+    overridesDesc.append(
+      "Override the lookahead for people tagged with a specific hashtag. Enter the bare tag without ",
+      makeCode("#"),
+      " — e.g. ",
+      makeCode("p/family"),
+      " matches ",
+      makeCode("#p/family"),
+      " anywhere in the person's note (inline or in frontmatter ",
+      makeCode("tags:"),
+      "). When multiple overrides match one person, the largest lookahead wins.",
+    );
+    new Setting(containerEl)
+      .setName("Tag overrides")
+      .setDesc(overridesDesc)
+      .addButton((b) =>
+        b
+          .setButtonText("Add tag override")
+          .setCta()
+          .onClick(async () => {
+            this.plugin.settings.upcomingTagOverrides.push({
+              tag: "",
+              daysAhead: 21,
+            });
+            await this.plugin.saveSettings();
+            this.display();
+            this.focusLastInput("upcoming-overrides");
+          }),
+      );
+
+    const list = containerEl.createDiv({ cls: "dp-project-colors-list" });
+    list.dataset.list = "upcoming-overrides";
+    this.plugin.settings.upcomingTagOverrides.forEach((entry, idx) => {
+      const row = list.createDiv({ cls: "dp-project-color-row" });
+
+      const nameWrap = row.createDiv({ cls: "dp-project-color-name-wrap" });
+      nameWrap.createSpan({ cls: "dp-project-color-prefix", text: "#" });
+      const nameInput = nameWrap.createEl("input", {
+        cls: "dp-project-color-name",
+        attr: { type: "text", placeholder: "p/family" },
+      });
+      nameInput.value = entry.tag;
+      nameInput.addEventListener("input", () => {
+        if (nameInput.value.startsWith("#")) {
+          const pos = Math.max(0, (nameInput.selectionStart ?? 1) - 1);
+          nameInput.value = nameInput.value.replace(/^#+/, "");
+          nameInput.setSelectionRange(pos, pos);
+        }
+      });
+      nameInput.addEventListener("change", async () => {
+        const v = nameInput.value.trim().replace(/^#+/, "");
+        nameInput.value = v;
+        this.plugin.settings.upcomingTagOverrides[idx].tag = v;
+        await this.plugin.saveSettings();
+      });
+
+      const daysInput = row.createEl("input", {
+        cls: "dp-project-color-hex",
+        attr: {
+          type: "number",
+          min: "0",
+          max: "365",
+          placeholder: "21",
+        },
+      });
+      daysInput.value = String(entry.daysAhead);
+      daysInput.addEventListener("change", async () => {
+        const n = parseInt(daysInput.value, 10);
+        if (Number.isFinite(n) && n >= 0 && n <= 365) {
+          this.plugin.settings.upcomingTagOverrides[idx].daysAhead = n;
+          await this.plugin.saveSettings();
+        } else {
+          daysInput.value = String(entry.daysAhead);
+        }
+      });
+
+      row.createSpan({
+        cls: "dp-upcoming-days-label",
+        text: "days",
+      });
+
+      const remove = row.createEl("button", {
+        cls: "dp-project-color-remove",
+        text: "Remove",
+      });
+      remove.addEventListener("click", async () => {
+        this.plugin.settings.upcomingTagOverrides.splice(idx, 1);
+        await this.plugin.saveSettings();
+        this.display();
+      });
+    });
   }
 
   // After re-rendering, scroll the most recently appended row in the named
@@ -1220,7 +1455,7 @@ export class TodaySettingTab extends PluginSettingTab {
   // rebuild from this.display() resets scroll to the top and the user can't
   // see that the new row was actually added — making the "Add" buttons look
   // broken even though they pushed the entry.
-  private focusLastInput(listName: "project-colors" | "context-tags"): void {
+  private focusLastInput(listName: "project-colors" | "context-tags" | "upcoming-overrides"): void {
     requestAnimationFrame(() => {
       const list = this.containerEl.querySelector<HTMLElement>(
         `[data-list="${listName}"]`,

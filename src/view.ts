@@ -86,6 +86,11 @@ import {
 } from "./people";
 import { moveTaskBetweenDailyNotes } from "./taskMove";
 import {
+  UpcomingEvent,
+  getUpcomingEvents,
+  formatDaysUntil,
+} from "./upcoming";
+import {
   Habit,
   HabitPeriod,
   parseHabitsFile,
@@ -527,6 +532,15 @@ export class TodayView extends ItemView {
       fallback,
     );
 
+    const upcomingEvents = getUpcomingEvents(this.app, {
+      peopleFolder: this.plugin.settings.peopleFolder,
+      birthdayField: this.plugin.settings.birthdayField,
+      anniversaryField: this.plugin.settings.anniversaryField,
+      defaultDaysAhead: this.plugin.settings.upcomingDaysAhead,
+      tagOverrides: this.plugin.settings.upcomingTagOverrides,
+      today: this.selectedDate,
+    });
+
     this.renderSection(
       root,
       this.formatDateLabel(this.selectedDate),
@@ -541,6 +555,7 @@ export class TodayView extends ItemView {
       showOpenActiveLink ? activeFile : null,
       intention,
       quote,
+      upcomingEvents,
     );
 
     this.renderTimelineHints(root);
@@ -829,6 +844,7 @@ export class TodayView extends ItemView {
     openActiveTarget: TFile | null = null,
     intention: string | null = null,
     quote: string | null = null,
+    upcomingEvents: UpcomingEvent[] = [],
   ): void {
     const section = parent.createDiv({ cls: "dp-section" });
     if (this.summariesCollapsed) section.addClass("is-summaries-collapsed");
@@ -881,6 +897,10 @@ export class TodayView extends ItemView {
       const quoteRow = header.createDiv({ cls: "dp-quote-row" });
       const quoteEl = quoteRow.createSpan({ cls: "dp-quote" });
       this.renderInlineMarkdown(quote, quoteEl, path);
+    }
+
+    if (isPrimary && upcomingEvents.length > 0) {
+      this.renderUpcomingRow(header, upcomingEvents);
     }
 
     if (isPrimary) {
@@ -3016,6 +3036,40 @@ export class TodayView extends ItemView {
       });
     }
     return out;
+  }
+
+  private renderUpcomingRow(
+    parent: HTMLElement,
+    events: UpcomingEvent[],
+  ): void {
+    const settings = this.plugin.settings;
+    const wrap = parent.createDiv({ cls: "dp-upcoming" });
+    events.forEach((ev, idx) => {
+      if (idx > 0) wrap.createSpan({ cls: "dp-upcoming-sep", text: " • " });
+      const chip = wrap.createSpan({
+        cls: "dp-upcoming-item" + (ev.daysUntil === 0 ? " is-today" : ""),
+      });
+      const iconName =
+        ev.kind === "birthday" ? settings.birthdayIcon : settings.anniversaryIcon;
+      if (iconName) {
+        const iconEl = chip.createSpan({ cls: "dp-upcoming-icon" });
+        setIcon(iconEl, iconName);
+      }
+      const file = this.app.vault.getAbstractFileByPath(ev.path);
+      const nameEl = chip.createEl("a", {
+        cls: "dp-upcoming-name",
+        text: ev.name,
+        attr: { href: "#", title: `Open ${ev.path}` },
+      });
+      nameEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (file instanceof TFile) void this.openFile(file);
+      });
+      chip.createSpan({
+        cls: "dp-upcoming-date",
+        text: ` — ${ev.dateLabel} (${formatDaysUntil(ev.daysUntil)})`,
+      });
+    });
   }
 
   private renderHabitsLine(
