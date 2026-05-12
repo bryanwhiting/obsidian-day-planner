@@ -1589,8 +1589,12 @@
     display: none;
   }
 
+  /* Keep flex-grow at 0 so the title span hugs its text — clicks outside
+   * the text (empty row space) fall through to the block's edit handler
+   * instead of toggling done. flex-shrink stays at 1 so long titles still
+   * wrap within the available row width. */
   .dp-block.is-mobile-condensed .dp-block-text {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     white-space: normal;
     overflow-wrap: anywhere;
