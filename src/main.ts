@@ -17,6 +17,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_AUTOCOMPLETE,
   DEFAULT_WEEKDAY_TEMPLATES,
+  DEFAULT_JOURNAL_SETTINGS,
 } from "./settings";
 import {
   DEFAULT_PREFIXES,
@@ -38,6 +39,7 @@ import {
   sanitizePersonName,
 } from "./people";
 import { collectUnfinished } from "./collect";
+import { runJournal } from "./journal";
 import { HabitsScanner } from "./habits";
 import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
 import { MultiDayView, VIEW_TYPE_MULTI_DAY } from "./multiDayView";
@@ -139,6 +141,24 @@ export default class TodayPlugin extends Plugin {
       callback: () => void collectUnfinished(this),
     });
 
+    this.addCommand({
+      id: "journal-begin-day",
+      name: "Log Begin Day",
+      callback: () => void runJournal(this, "beginDay"),
+    });
+
+    this.addCommand({
+      id: "journal-close-day",
+      name: "Log Close Day",
+      callback: () => void runJournal(this, "closeDay"),
+    });
+
+    this.addCommand({
+      id: "journal-distraction",
+      name: "Log Distraction",
+      callback: () => void runJournal(this, "distractions"),
+    });
+
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
 
@@ -180,6 +200,20 @@ export default class TodayPlugin extends Plugin {
       dailyNoteTemplatesByDay: {
         ...DEFAULT_WEEKDAY_TEMPLATES,
         ...(data?.dailyNoteTemplatesByDay ?? {}),
+      },
+      journal: {
+        beginDay: {
+          ...DEFAULT_JOURNAL_SETTINGS.beginDay,
+          ...(data?.journal?.beginDay ?? {}),
+        },
+        closeDay: {
+          ...DEFAULT_JOURNAL_SETTINGS.closeDay,
+          ...(data?.journal?.closeDay ?? {}),
+        },
+        distractions: {
+          ...DEFAULT_JOURNAL_SETTINGS.distractions,
+          ...(data?.journal?.distractions ?? {}),
+        },
       },
       projectColors: Array.isArray(data?.projectColors)
         ? data!.projectColors!.filter(

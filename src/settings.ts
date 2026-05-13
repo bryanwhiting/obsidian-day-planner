@@ -81,6 +81,30 @@ export const WEEKDAY_NAMES: (keyof DailyNoteWeekdayTemplates)[] = [
   "saturday",
 ];
 
+// Per-flow configuration for a journaling command. `sectionTitle` is the
+// heading body (without the leading `## `) that the flow targets in today's
+// daily note — if the section is missing it gets appended at the end of the
+// note. `templatePath` points at a markdown file whose lines are the
+// questions asked, one per line, in order. Blank lines are skipped.
+export interface JournalFlow {
+  sectionTitle: string;
+  templatePath: string;
+}
+
+export interface JournalSettings {
+  beginDay: JournalFlow;
+  closeDay: JournalFlow;
+  distractions: JournalFlow;
+}
+
+export type JournalFlowKey = keyof JournalSettings;
+
+export const DEFAULT_JOURNAL_SETTINGS: JournalSettings = {
+  beginDay: { sectionTitle: "Begin Day", templatePath: "" },
+  closeDay: { sectionTitle: "Close Day", templatePath: "" },
+  distractions: { sectionTitle: "Distractions", templatePath: "" },
+};
+
 export interface TodaySettings {
   visibleStartHour: number;
   visibleEndHour: number;
@@ -192,6 +216,14 @@ export interface TodaySettings {
   confirmCollectMigration: boolean;
   // Default number of day columns shown in the multi-day view (3 or 7).
   multiDayCount: number;
+  // Configuration for the three journal commands (Log Begin Day, Log Close
+  // Day, Log Distraction). Each flow has a heading body the flow targets
+  // inside today's daily note (`## <sectionTitle>`) and a path to a markdown
+  // template whose non-empty lines are the questions asked sequentially via a
+  // modal. Begin/Close render answers as `> question` + answer blocks;
+  // Distraction appends each answer as a `- bullet` to the section (for quick
+  // idea capture).
+  journal: JournalSettings;
 }
 
 export const DEFAULT_SETTINGS: TodaySettings = {
@@ -241,6 +273,11 @@ export const DEFAULT_SETTINGS: TodaySettings = {
   inboxPath: "{daily}/_inbox.md",
   confirmCollectMigration: true,
   multiDayCount: 7,
+  journal: {
+    beginDay: { ...DEFAULT_JOURNAL_SETTINGS.beginDay },
+    closeDay: { ...DEFAULT_JOURNAL_SETTINGS.closeDay },
+    distractions: { ...DEFAULT_JOURNAL_SETTINGS.distractions },
+  },
 };
 
 const CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -291,7 +328,8 @@ type SettingsTab =
   | "projects"
   | "people"
   | "pomodoro"
-  | "habits";
+  | "habits"
+  | "journal";
 
 interface TabSpec {
   label: string;
@@ -308,6 +346,7 @@ const TAB_SPECS: Record<SettingsTab, TabSpec> = {
   people: { label: "People", icon: "users" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
   habits: { label: "Habits", icon: "repeat" },
+  journal: { label: "Journal & Logs", icon: "book-open" },
 };
 
 export class TodaySettingTab extends PluginSettingTab {
@@ -366,6 +405,9 @@ export class TodaySettingTab extends PluginSettingTab {
         break;
       case "habits":
         this.renderHabitsSection(pane);
+        break;
+      case "journal":
+        this.renderJournalSection(pane);
         break;
     }
   }
@@ -2113,6 +2155,95 @@ export class TodaySettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+  }
+
+  private renderJournalSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Journal & Logs").setHeading();
+
+    const intro = containerEl.createEl("p", {
+      cls: "setting-item-description",
+    });
+    intro.append(
+      "Three command-palette flows that log against today's daily note. Each flow targets a ",
+      makeCode("## Heading"),
+      " in the note (created at the end of the file if missing) and reads its questions from a markdown template — one question per line, asked sequentially via a modal. ",
+      makeCode("Log Begin Day"),
+      " and ",
+      makeCode("Log Close Day"),
+      " write each answer as a ",
+      makeCode("> question"),
+      " block followed by the answer; ",
+      makeCode("Log Distraction"),
+      " appends each answer as a ",
+      makeCode("- bullet"),
+      " for quick idea capture. Press ",
+      makeCode("Enter"),
+      " to submit each answer, ",
+      makeCode("Shift+Enter"),
+      " for a newline inside the textarea, ",
+      makeCode("Escape"),
+      " to abort the rest of the flow (prior answers stay).",
+    );
+
+    this.renderJournalFlow(containerEl, "beginDay", {
+      label: "Begin Day",
+      description: "Morning intention-setting. Writes Q+A blocks.",
+    });
+    this.renderJournalFlow(containerEl, "closeDay", {
+      label: "Close Day",
+      description: "Evening retrospective. Writes Q+A blocks.",
+    });
+    this.renderJournalFlow(containerEl, "distractions", {
+      label: "Distractions",
+      description:
+        "Quick-capture log. Each answer becomes a bullet under the section.",
+    });
+  }
+
+  private renderJournalFlow(
+    containerEl: HTMLElement,
+    key: "beginDay" | "closeDay" | "distractions",
+    spec: { label: string; description: string },
+  ): void {
+    new Setting(containerEl).setName(spec.label).setHeading();
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: spec.description,
+    });
+
+    new Setting(containerEl)
+      .setName("Section title")
+      .setDesc(
+        "Heading body in today's daily note that this flow appends to. The flow writes `## <title>` if the heading isn't already there.",
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder(spec.label)
+          .setValue(this.plugin.settings.journal[key].sectionTitle)
+          .onChange(async (v) => {
+            this.plugin.settings.journal[key].sectionTitle = v.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Template file")
+      .setDesc(
+        "Vault path to a markdown file with one question per line. Each non-empty line is asked sequentially via a modal.",
+      )
+      .addText((t) => {
+        t.setPlaceholder("templates/_journal-begin.md")
+          .setValue(this.plugin.settings.journal[key].templatePath)
+          .onChange(async (v) => {
+            this.plugin.settings.journal[key].templatePath = v.trim();
+            await this.plugin.saveSettings();
+          });
+        new FileSuggest(this.app, t.inputEl, async (file) => {
+          t.setValue(file.path);
+          this.plugin.settings.journal[key].templatePath = file.path;
+          await this.plugin.saveSettings();
+        });
+      });
   }
 }
 

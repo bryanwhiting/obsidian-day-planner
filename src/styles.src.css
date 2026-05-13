@@ -2911,6 +2911,41 @@
     background: color-mix(in srgb, var(--color-accent) 24%, transparent);
   }
 
+  /* ---------- journal question modal ---------- */
+
+  .dp-journal-prompt {
+    margin-top: 4px;
+    padding: 10px 12px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    white-space: pre-wrap;
+  }
+
+  .dp-journal-input {
+    margin-top: 10px;
+    width: 100%;
+    min-height: 88px;
+    padding: 10px 12px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--color-ink);
+    background: var(--color-paper);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-card);
+    resize: vertical;
+  }
+
+  .dp-journal-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+
   /* ---------- tag-migration modal ---------- */
 
   .dp-migrate-modal .modal-content {

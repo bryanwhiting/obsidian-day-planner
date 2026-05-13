@@ -1021,7 +1021,7 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
@@ -1505,6 +1505,11 @@ var WEEKDAY_NAMES = [
   "friday",
   "saturday"
 ];
+var DEFAULT_JOURNAL_SETTINGS = {
+  beginDay: { sectionTitle: "Begin Day", templatePath: "" },
+  closeDay: { sectionTitle: "Close Day", templatePath: "" },
+  distractions: { sectionTitle: "Distractions", templatePath: "" }
+};
 var DEFAULT_SETTINGS = {
   visibleStartHour: 6,
   visibleEndHour: 23,
@@ -1551,7 +1556,12 @@ var DEFAULT_SETTINGS = {
   copySubtasksOnAutocomplete: false,
   inboxPath: "{daily}/_inbox.md",
   confirmCollectMigration: true,
-  multiDayCount: 7
+  multiDayCount: 7,
+  journal: {
+    beginDay: { ...DEFAULT_JOURNAL_SETTINGS.beginDay },
+    closeDay: { ...DEFAULT_JOURNAL_SETTINGS.closeDay },
+    distractions: { ...DEFAULT_JOURNAL_SETTINGS.distractions }
+  }
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
 var MAX_QUICK_DURATIONS = 9;
@@ -1594,7 +1604,8 @@ var TAB_SPECS = {
   projects: { label: "Projects", icon: "folder-kanban" },
   people: { label: "People", icon: "users" },
   pomodoro: { label: "Pomodoro", icon: "timer" },
-  habits: { label: "Habits", icon: "repeat" }
+  habits: { label: "Habits", icon: "repeat" },
+  journal: { label: "Journal & Logs", icon: "book-open" }
 };
 var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
@@ -1647,6 +1658,9 @@ var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
         break;
       case "habits":
         this.renderHabitsSection(pane);
+        break;
+      case "journal":
+        this.renderJournalSection(pane);
         break;
     }
   }
@@ -2974,6 +2988,73 @@ var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+  }
+  renderJournalSection(containerEl) {
+    new import_obsidian3.Setting(containerEl).setName("Journal & Logs").setHeading();
+    const intro = containerEl.createEl("p", {
+      cls: "setting-item-description"
+    });
+    intro.append(
+      "Three command-palette flows that log against today's daily note. Each flow targets a ",
+      makeCode("## Heading"),
+      " in the note (created at the end of the file if missing) and reads its questions from a markdown template \u2014 one question per line, asked sequentially via a modal. ",
+      makeCode("Log Begin Day"),
+      " and ",
+      makeCode("Log Close Day"),
+      " write each answer as a ",
+      makeCode("> question"),
+      " block followed by the answer; ",
+      makeCode("Log Distraction"),
+      " appends each answer as a ",
+      makeCode("- bullet"),
+      " for quick idea capture. Press ",
+      makeCode("Enter"),
+      " to submit each answer, ",
+      makeCode("Shift+Enter"),
+      " for a newline inside the textarea, ",
+      makeCode("Escape"),
+      " to abort the rest of the flow (prior answers stay)."
+    );
+    this.renderJournalFlow(containerEl, "beginDay", {
+      label: "Begin Day",
+      description: "Morning intention-setting. Writes Q+A blocks."
+    });
+    this.renderJournalFlow(containerEl, "closeDay", {
+      label: "Close Day",
+      description: "Evening retrospective. Writes Q+A blocks."
+    });
+    this.renderJournalFlow(containerEl, "distractions", {
+      label: "Distractions",
+      description: "Quick-capture log. Each answer becomes a bullet under the section."
+    });
+  }
+  renderJournalFlow(containerEl, key, spec) {
+    new import_obsidian3.Setting(containerEl).setName(spec.label).setHeading();
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: spec.description
+    });
+    new import_obsidian3.Setting(containerEl).setName("Section title").setDesc(
+      "Heading body in today's daily note that this flow appends to. The flow writes `## <title>` if the heading isn't already there."
+    ).addText(
+      (t) => t.setPlaceholder(spec.label).setValue(this.plugin.settings.journal[key].sectionTitle).onChange(async (v) => {
+        this.plugin.settings.journal[key].sectionTitle = v.trim();
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName("Template file").setDesc(
+      "Vault path to a markdown file with one question per line. Each non-empty line is asked sequentially via a modal."
+    ).addText((t) => {
+      t.setPlaceholder("templates/_journal-begin.md").setValue(this.plugin.settings.journal[key].templatePath).onChange(async (v) => {
+        this.plugin.settings.journal[key].templatePath = v.trim();
+        await this.plugin.saveSettings();
+      });
+      new FileSuggest(this.app, t.inputEl, async (file) => {
+        t.setValue(file.path);
+        this.plugin.settings.journal[key].templatePath = file.path;
+        await this.plugin.saveSettings();
+      });
+    });
   }
 };
 function clampInt(v, lo, hi, fallback) {
@@ -9540,13 +9621,241 @@ function extractTitle(rawLine) {
   return m[3].replace(/#[A-Za-z][\w-]*(?:\/[\w./_-]+)?/g, "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim();
 }
 
-// src/habitsView.ts
+// src/journal.ts
 var import_obsidian8 = require("obsidian");
+var FLOWS = {
+  beginDay: { key: "beginDay", format: "qa", label: "Begin Day" },
+  closeDay: { key: "closeDay", format: "qa", label: "Close Day" },
+  distractions: { key: "distractions", format: "bullet", label: "Distraction" }
+};
+async function runJournal(plugin, flowKey) {
+  const spec = FLOWS[flowKey];
+  const flow = plugin.settings.journal[flowKey];
+  const sectionTitle = (flow.sectionTitle || "").trim();
+  if (!sectionTitle) {
+    new import_obsidian8.Notice(`Today: set a section title for ${spec.label} in settings.`);
+    return;
+  }
+  const questions = await readQuestions(plugin.app, flow);
+  if (questions === null)
+    return;
+  if (questions.length === 0) {
+    new import_obsidian8.Notice(
+      `Today: template for ${spec.label} has no questions \u2014 add one line per question.`
+    );
+    return;
+  }
+  const file = await ensureTodaysNote(plugin);
+  let wroteAny = false;
+  for (const question of questions) {
+    const answer = await askQuestion(plugin.app, spec.label, question);
+    if (answer === null)
+      break;
+    if (answer.length === 0)
+      continue;
+    if (spec.format === "qa") {
+      await appendToSection(
+        plugin.app,
+        file,
+        sectionTitle,
+        formatQABlock(question, answer)
+      );
+    } else {
+      await appendToSection(
+        plugin.app,
+        file,
+        sectionTitle,
+        formatBullet(answer)
+      );
+    }
+    wroteAny = true;
+  }
+  if (wroteAny)
+    new import_obsidian8.Notice(`${spec.label} logged.`);
+}
+async function ensureTodaysNote(plugin) {
+  const settings = plugin.settings;
+  return ensureDailyNote(
+    plugin.app,
+    new Date(),
+    {
+      folder: settings.dailyNoteFolderFallback,
+      format: settings.dailyNoteFormatFallback,
+      template: settings.dailyNoteTemplate,
+      templatesByDay: settings.dailyNoteTemplatesByDay,
+      dateLinkFormat: settings.dateLinkFormat,
+      prefixes: settings.prefixes,
+      quotesFile: settings.quotesFile,
+      addCreatedTag: settings.addCreatedTagToFrontmatter
+    },
+    false
+  );
+}
+async function readQuestions(app, flow) {
+  const raw = (flow.templatePath || "").trim();
+  if (!raw) {
+    new import_obsidian8.Notice(
+      `Today: pick a template file for "${flow.sectionTitle}" in Settings \u2192 Journal & Logs.`
+    );
+    return null;
+  }
+  const withExt = raw.toLowerCase().endsWith(".md") ? raw : `${raw}.md`;
+  const path = (0, import_obsidian8.normalizePath)(withExt);
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof import_obsidian8.TFile)) {
+    new import_obsidian8.Notice(`Today: template not found at ${path}`);
+    return null;
+  }
+  const content = await app.vault.read(file);
+  return content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+}
+function formatQABlock(question, answer) {
+  const quoted = question.split(/\r?\n/).map((l) => `> ${l}`).join("\n");
+  return `${quoted}
+
+${answer}
+`;
+}
+function formatBullet(answer) {
+  const lines = answer.split(/\r?\n/);
+  if (lines.length === 1)
+    return `- ${lines[0]}
+`;
+  const head = lines[0];
+  const rest = lines.slice(1).map((l) => `  ${l}`);
+  return `- ${head}
+${rest.join("\n")}
+`;
+}
+async function appendToSection(app, file, sectionTitle, block) {
+  await app.vault.process(
+    file,
+    (content) => insertIntoSection(content, sectionTitle, block)
+  );
+}
+function insertIntoSection(content, sectionTitle, block) {
+  const lines = content.split("\n");
+  const headingRe = /^(#{1,6})\s+(.*?)\s*$/;
+  const target = sectionTitle.trim().toLowerCase();
+  let headingIdx = -1;
+  let headingDepth = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(headingRe);
+    if (!m)
+      continue;
+    if (m[2].trim().toLowerCase() === target) {
+      headingIdx = i;
+      headingDepth = m[1].length;
+      break;
+    }
+  }
+  if (headingIdx < 0) {
+    const sep = content.length === 0 || content.endsWith("\n\n") ? "" : content.endsWith("\n") ? "\n" : "\n\n";
+    const trailingBlock = block.endsWith("\n") ? block : block + "\n";
+    return `${content}${sep}## ${sectionTitle}
+
+${trailingBlock}`;
+  }
+  let endIdx = lines.length;
+  for (let i = headingIdx + 1; i < lines.length; i++) {
+    const m = lines[i].match(headingRe);
+    if (m && m[1].length <= headingDepth) {
+      endIdx = i;
+      break;
+    }
+  }
+  let insertAt = endIdx;
+  while (insertAt > headingIdx + 1 && lines[insertAt - 1].trim() === "") {
+    insertAt--;
+  }
+  const needsLeadingBlank = insertAt === headingIdx + 1;
+  const trimmedBlock = block.replace(/\n+$/, "");
+  const blockLines = trimmedBlock.split("\n");
+  const insertLines = [];
+  if (needsLeadingBlank) {
+    insertLines.push("");
+    insertLines.push(...blockLines);
+    insertLines.push("");
+  } else {
+    insertLines.push("");
+    insertLines.push(...blockLines);
+    insertLines.push("");
+  }
+  const before = lines.slice(0, insertAt);
+  const after = lines.slice(endIdx);
+  return [...before, ...insertLines, ...after].join("\n");
+}
+function askQuestion(app, flowLabel, question) {
+  return new Promise((resolve) => {
+    new QuestionModal(app, flowLabel, question, resolve).open();
+  });
+}
+var QuestionModal = class extends import_obsidian8.Modal {
+  constructor(app, flowLabel, question, resolve) {
+    super(app);
+    this.settled = false;
+    this.flowLabel = flowLabel;
+    this.question = question;
+    this.resolve = resolve;
+  }
+  onOpen() {
+    this.modalEl.addClass("dp-title-modal");
+    this.modalEl.addClass("dp-journal-modal");
+    this.titleEl.setText(this.flowLabel);
+    const prompt = this.contentEl.createDiv({ cls: "dp-journal-prompt" });
+    prompt.setText(this.question);
+    this.textarea = this.contentEl.createEl("textarea", {
+      cls: "dp-journal-input"
+    });
+    this.textarea.rows = 4;
+    this.textarea.placeholder = "Type your answer\u2026";
+    this.textarea.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        this.submit();
+      }
+    });
+    window.setTimeout(() => this.textarea.focus(), 0);
+    const actions = this.contentEl.createDiv({ cls: "dp-edit-actions" });
+    const cancel = actions.createEl("button", {
+      cls: "dp-edit-show-btn",
+      text: "Cancel"
+    });
+    cancel.type = "button";
+    cancel.addEventListener("click", () => this.close());
+    const save = actions.createEl("button", {
+      cls: "dp-edit-save-btn mod-cta",
+      text: "Save"
+    });
+    save.type = "button";
+    save.addEventListener("click", () => this.submit());
+  }
+  submit() {
+    const value = this.textarea.value.trim();
+    if (value.length === 0) {
+      this.settled = true;
+      this.close();
+      this.resolve("");
+      return;
+    }
+    this.settled = true;
+    this.close();
+    this.resolve(value);
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.settled)
+      this.resolve(null);
+  }
+};
+
+// src/habitsView.ts
+var import_obsidian9 = require("obsidian");
 init_parser();
 var VIEW_TYPE_HABITS_STATS = "today-habits-stats";
 var UNCATEGORIZED = "Uncategorized";
 var UNCATEGORIZED_COLOR = "#8a8f98";
-var HabitsStatsView = class extends import_obsidian8.ItemView {
+var HabitsStatsView = class extends import_obsidian9.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -9882,7 +10191,7 @@ ${formatHoursDecimal(mins)}`;
   async loadHabitsAndGoals() {
     const path = this.plugin.settings.habitsFile;
     const f = this.app.vault.getAbstractFileByPath(path);
-    if (!(f instanceof import_obsidian8.TFile))
+    if (!(f instanceof import_obsidian9.TFile))
       return { habits: [], goals: [] };
     const content = await this.plugin.habitsScanner.getContent(f);
     const settings = this.plugin.settings;
@@ -10255,10 +10564,10 @@ function formatMonthRange(start, endExclusive) {
 }
 
 // src/multiDayView.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/multiDay.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 init_parser();
 function buildFallback(settings) {
   return {
@@ -10280,7 +10589,7 @@ async function loadInboxTasks(app, settings) {
   if (!path)
     return { path: "", file: null, tasks: [] };
   const af = app.vault.getAbstractFileByPath(path);
-  if (!(af instanceof import_obsidian9.TFile))
+  if (!(af instanceof import_obsidian10.TFile))
     return { path, file: null, tasks: [] };
   const content = await app.vault.read(af);
   const all = parseFileTasks(
@@ -10356,7 +10665,7 @@ function colorFor(task, colorMap) {
 init_parser();
 
 // src/taskMove.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 init_parser();
 async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fallback, options = {}) {
   var _a;
@@ -10364,7 +10673,7 @@ async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fall
   const targetFile = (_a = options.targetFile) != null ? _a : await ensureDailyNote(app, targetDate, fallback);
   if (targetFile.path === sourceFile.path) {
     if (notify)
-      new import_obsidian10.Notice("Source and target are the same file.");
+      new import_obsidian11.Notice("Source and target are the same file.");
     return false;
   }
   const lineNumbers = [
@@ -10384,7 +10693,7 @@ async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fall
   });
   if (movedLines.length === 0) {
     if (notify)
-      new import_obsidian10.Notice("Today: nothing to move.");
+      new import_obsidian11.Notice("Today: nothing to move.");
     return false;
   }
   await app.vault.process(targetFile, (content) => {
@@ -10395,7 +10704,7 @@ async function moveTaskBetweenDailyNotes(app, sourceFile, task, targetDate, fall
     return lines.join("\n");
   });
   if (notify)
-    new import_obsidian10.Notice(`Moved to ${targetFile.path}`);
+    new import_obsidian11.Notice(`Moved to ${targetFile.path}`);
   return true;
 }
 
@@ -10405,7 +10714,7 @@ var VISIBLE_DAYS = 3;
 var TIMELINE_PX_PER_MIN = 0.9;
 var INBOX_PX_PER_MIN = 0.6;
 var INBOX_FLAT_HEIGHT_PX = 28;
-var MultiDayView = class extends import_obsidian11.ItemView {
+var MultiDayView = class extends import_obsidian12.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.rerenderTimer = null;
@@ -11129,7 +11438,7 @@ var MultiDayView = class extends import_obsidian11.ItemView {
     });
     const updatedTask = await this.refetchTask(drag.fromFile, drag.task);
     if (!updatedTask) {
-      new import_obsidian11.Notice("Today: source line changed since drag started.");
+      new import_obsidian12.Notice("Today: source line changed since drag started.");
       await this.refresh();
       return;
     }
@@ -11231,7 +11540,7 @@ var MultiDayView = class extends import_obsidian11.ItemView {
     }
     const view = await this.ensureTodayView();
     if (!view) {
-      new import_obsidian11.Notice("Could not open Today view to host the new-task modal.");
+      new import_obsidian12.Notice("Could not open Today view to host the new-task modal.");
       return;
     }
     view.createTaskAtTimeForDay(file, day.date, startMin);
@@ -11282,13 +11591,13 @@ function uniqueProjects(tasks) {
 }
 
 // src/main.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian12.Plugin {
+var TodayPlugin = class extends import_obsidian13.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    if (import_obsidian12.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian13.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
@@ -11356,11 +11665,26 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
       name: "Collect unfinished tasks into inbox",
       callback: () => void collectUnfinished(this)
     });
+    this.addCommand({
+      id: "journal-begin-day",
+      name: "Log Begin Day",
+      callback: () => void runJournal(this, "beginDay")
+    });
+    this.addCommand({
+      id: "journal-close-day",
+      name: "Log Close Day",
+      callback: () => void runJournal(this, "closeDay")
+    });
+    this.addCommand({
+      id: "journal-distraction",
+      name: "Log Distraction",
+      callback: () => void runJournal(this, "distractions")
+    });
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian12.TFile))
+        if (!(af instanceof import_obsidian13.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -11378,7 +11702,7 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
   async onunload() {
   }
   async loadSettings() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
     const data = await this.loadData();
     this.settings = {
       ...DEFAULT_SETTINGS,
@@ -11391,6 +11715,20 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
       dailyNoteTemplatesByDay: {
         ...DEFAULT_WEEKDAY_TEMPLATES,
         ...(_c = data == null ? void 0 : data.dailyNoteTemplatesByDay) != null ? _c : {}
+      },
+      journal: {
+        beginDay: {
+          ...DEFAULT_JOURNAL_SETTINGS.beginDay,
+          ...(_e = (_d = data == null ? void 0 : data.journal) == null ? void 0 : _d.beginDay) != null ? _e : {}
+        },
+        closeDay: {
+          ...DEFAULT_JOURNAL_SETTINGS.closeDay,
+          ...(_g = (_f = data == null ? void 0 : data.journal) == null ? void 0 : _f.closeDay) != null ? _g : {}
+        },
+        distractions: {
+          ...DEFAULT_JOURNAL_SETTINGS.distractions,
+          ...(_i = (_h = data == null ? void 0 : data.journal) == null ? void 0 : _h.distractions) != null ? _i : {}
+        }
       },
       projectColors: Array.isArray(data == null ? void 0 : data.projectColors) ? data.projectColors.filter(
         (c) => c && typeof c.project === "string" && typeof c.color === "string"
@@ -11466,7 +11804,7 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     }
   }
   async openDailyNoteForOffset(dayOffset) {
-    const target = (0, import_obsidian13.moment)().startOf("day").add(dayOffset, "day").toDate();
+    const target = (0, import_obsidian14.moment)().startOf("day").add(dayOffset, "day").toDate();
     const fallback = {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
@@ -11501,7 +11839,7 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
   async openCombinedPopout() {
-    if (import_obsidian12.Platform.isMobile) {
+    if (import_obsidian13.Platform.isMobile) {
       await this.activateView();
       await this.activateMultiDayView();
       await this.activateHabitsStatsView();
@@ -11544,7 +11882,7 @@ var TodayPlugin = class extends import_obsidian12.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
 };
-var InlineSuggest = class extends import_obsidian12.EditorSuggest {
+var InlineSuggest = class extends import_obsidian13.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -11636,7 +11974,7 @@ var InlineSuggest = class extends import_obsidian12.EditorSuggest {
       const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian13.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian14.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,
