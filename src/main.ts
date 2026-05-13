@@ -43,6 +43,7 @@ import { runJournal } from "./journal";
 import { HabitsScanner } from "./habits";
 import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
 import { MultiDayView, VIEW_TYPE_MULTI_DAY } from "./multiDayView";
+import { ShellView, VIEW_TYPE_SHELL } from "./shellView";
 import { moment } from "obsidian";
 
 let polyfillInstalled = false;
@@ -78,12 +79,27 @@ export default class TodayPlugin extends Plugin {
       (leaf) => new MultiDayView(leaf, this),
     );
 
+    this.registerView(
+      VIEW_TYPE_SHELL,
+      (leaf) => new ShellView(leaf, this),
+    );
+
+    this.addRibbonIcon("layout-dashboard", "Open Today shell", () => {
+      void this.activateShellView();
+    });
+
     this.addRibbonIcon("calendar-clock", "Open Today", () => {
       void this.activateView();
     });
 
     this.addRibbonIcon("calendar-range", "Open multi-day view", () => {
       void this.activateMultiDayView();
+    });
+
+    this.addCommand({
+      id: "open-today-shell",
+      name: "Open Today shell",
+      callback: () => void this.activateShellView(),
     });
 
     this.addCommand({
@@ -375,6 +391,23 @@ export default class TodayPlugin extends Plugin {
       active: false,
     });
     this.app.workspace.setActiveLeaf(todayLeaf, { focus: true });
+  }
+
+  async activateShellView(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_SHELL);
+    let leaf: WorkspaceLeaf | null;
+    if (existing.length > 0) {
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      return;
+    }
+    leaf = this.app.workspace.getLeaf("tab");
+    if (!leaf) return;
+    await leaf.setViewState({
+      type: VIEW_TYPE_SHELL,
+      active: true,
+    });
+    this.app.workspace.revealLeaf(leaf);
   }
 
   async activateMultiDayView(): Promise<void> {

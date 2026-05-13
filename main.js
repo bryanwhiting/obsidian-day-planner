@@ -1021,7 +1021,7 @@ __export(main_exports, {
   default: () => TodayPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var import_mobile_drag_drop = __toESM(require_index_min());
 
 // src/view.ts
@@ -11672,14 +11672,100 @@ function uniqueProjects(tasks) {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
+// src/shellView.ts
+var import_obsidian13 = require("obsidian");
+var VIEW_TYPE_SHELL = "today-shell";
+var ENTRIES = [
+  {
+    label: "Today",
+    description: "Today's daily-note dashboard \u2014 timeline, unscheduled rail, habits, intentions, pomodoro.",
+    icon: "calendar-clock",
+    target: VIEW_TYPE_TODAY
+  },
+  {
+    label: "This week",
+    description: "Multi-day view \u2014 drag tasks between days, see the week at a glance.",
+    icon: "calendar-range",
+    target: VIEW_TYPE_MULTI_DAY
+  },
+  {
+    label: "Reporting",
+    description: "Habits, projects, and time-tracking stats with three tabs.",
+    icon: "bar-chart-3",
+    target: VIEW_TYPE_HABITS_STATS
+  }
+];
+var ShellView = class extends import_obsidian13.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return VIEW_TYPE_SHELL;
+  }
+  getDisplayText() {
+    return "Today shell";
+  }
+  getIcon() {
+    return "layout-dashboard";
+  }
+  async onOpen() {
+    this.render();
+  }
+  async onClose() {
+    this.contentEl.empty();
+  }
+  render() {
+    const root = this.contentEl;
+    root.empty();
+    root.addClass("dp-shell");
+    const sidebar = root.createDiv({ cls: "dp-shell-sidebar" });
+    const header = sidebar.createDiv({ cls: "dp-shell-sidebar-header" });
+    header.setText("Today");
+    for (const entry of ENTRIES) {
+      const item = sidebar.createDiv({ cls: "dp-shell-nav-item" });
+      const iconEl = item.createSpan({ cls: "dp-shell-nav-icon" });
+      (0, import_obsidian13.setIcon)(iconEl, entry.icon);
+      item.createSpan({ cls: "dp-shell-nav-label", text: entry.label });
+      item.addEventListener("click", () => void this.openTarget(entry));
+    }
+    const content = root.createDiv({ cls: "dp-shell-content" });
+    const card = content.createDiv({ cls: "dp-shell-welcome" });
+    card.createEl("h2", { text: "Today plugin" });
+    card.createEl("p", {
+      cls: "dp-shell-welcome-sub",
+      text: "Pick a view from the left. Clicking a row opens that view in this pane."
+    });
+    const list = card.createDiv({ cls: "dp-shell-welcome-list" });
+    for (const entry of ENTRIES) {
+      const row = list.createDiv({ cls: "dp-shell-welcome-row" });
+      const iconEl = row.createSpan({ cls: "dp-shell-welcome-icon" });
+      (0, import_obsidian13.setIcon)(iconEl, entry.icon);
+      const text = row.createDiv({ cls: "dp-shell-welcome-text" });
+      text.createDiv({ cls: "dp-shell-welcome-label", text: entry.label });
+      text.createDiv({
+        cls: "dp-shell-welcome-desc",
+        text: entry.description
+      });
+      row.addEventListener("click", () => void this.openTarget(entry));
+    }
+  }
+  async openTarget(entry) {
+    await this.leaf.setViewState({
+      type: entry.target,
+      active: true
+    });
+  }
+};
+
 // src/main.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 var polyfillInstalled = false;
-var TodayPlugin = class extends import_obsidian13.Plugin {
+var TodayPlugin = class extends import_obsidian14.Plugin {
   async onload() {
     await this.loadSettings();
     this.habitsScanner = new HabitsScanner(this.app);
-    if (import_obsidian13.Platform.isMobile && !polyfillInstalled) {
+    if (import_obsidian14.Platform.isMobile && !polyfillInstalled) {
       (0, import_mobile_drag_drop.polyfill)({ holdToDrag: 200 });
       polyfillInstalled = true;
     }
@@ -11695,11 +11781,23 @@ var TodayPlugin = class extends import_obsidian13.Plugin {
       VIEW_TYPE_MULTI_DAY,
       (leaf) => new MultiDayView(leaf, this)
     );
+    this.registerView(
+      VIEW_TYPE_SHELL,
+      (leaf) => new ShellView(leaf, this)
+    );
+    this.addRibbonIcon("layout-dashboard", "Open Today shell", () => {
+      void this.activateShellView();
+    });
     this.addRibbonIcon("calendar-clock", "Open Today", () => {
       void this.activateView();
     });
     this.addRibbonIcon("calendar-range", "Open multi-day view", () => {
       void this.activateMultiDayView();
+    });
+    this.addCommand({
+      id: "open-today-shell",
+      name: "Open Today shell",
+      callback: () => void this.activateShellView()
     });
     this.addCommand({
       id: "open-today",
@@ -11766,7 +11864,7 @@ var TodayPlugin = class extends import_obsidian13.Plugin {
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
       this.app.vault.on("create", (af) => {
-        if (!(af instanceof import_obsidian13.TFile))
+        if (!(af instanceof import_obsidian14.TFile))
           return;
         void applyDailyNoteTemplateIfEmpty(this.app, af, {
           folder: this.settings.dailyNoteFolderFallback,
@@ -11886,7 +11984,7 @@ var TodayPlugin = class extends import_obsidian13.Plugin {
     }
   }
   async openDailyNoteForOffset(dayOffset) {
-    const target = (0, import_obsidian14.moment)().startOf("day").add(dayOffset, "day").toDate();
+    const target = (0, import_obsidian15.moment)().startOf("day").add(dayOffset, "day").toDate();
     const fallback = {
       folder: this.settings.dailyNoteFolderFallback,
       format: this.settings.dailyNoteFormatFallback,
@@ -11921,7 +12019,7 @@ var TodayPlugin = class extends import_obsidian13.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
   async openCombinedPopout() {
-    if (import_obsidian13.Platform.isMobile) {
+    if (import_obsidian14.Platform.isMobile) {
       await this.activateView();
       await this.activateMultiDayView();
       await this.activateHabitsStatsView();
@@ -11946,6 +12044,23 @@ var TodayPlugin = class extends import_obsidian13.Plugin {
     });
     this.app.workspace.setActiveLeaf(todayLeaf, { focus: true });
   }
+  async activateShellView() {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_SHELL);
+    let leaf;
+    if (existing.length > 0) {
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      return;
+    }
+    leaf = this.app.workspace.getLeaf("tab");
+    if (!leaf)
+      return;
+    await leaf.setViewState({
+      type: VIEW_TYPE_SHELL,
+      active: true
+    });
+    this.app.workspace.revealLeaf(leaf);
+  }
   async activateMultiDayView() {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_MULTI_DAY);
     let leaf;
@@ -11964,7 +12079,7 @@ var TodayPlugin = class extends import_obsidian13.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
 };
-var InlineSuggest = class extends import_obsidian13.EditorSuggest {
+var InlineSuggest = class extends import_obsidian14.EditorSuggest {
   constructor(plugin) {
     super(plugin.app);
     this.plugin = plugin;
@@ -12056,7 +12171,7 @@ var InlineSuggest = class extends import_obsidian13.EditorSuggest {
       const dateItems = buildDateSuggestions(query).map((s) => ({
         kind,
         display: s.keyword,
-        subDisplay: fmt.trim() ? ` ${(0, import_obsidian14.moment)(s.date).format(fmt.trim())}` : void 0,
+        subDisplay: fmt.trim() ? ` ${(0, import_obsidian15.moment)(s.date).format(fmt.trim())}` : void 0,
         insert: buildDateLinkInsert(
           this.app,
           s.date,
