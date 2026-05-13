@@ -2913,13 +2913,21 @@
 
   /* ---------- shell view (inline app shell) ---------- */
 
+  /* Mark applied to the shell's contentEl. Zero padding so the app fills the
+   * pane edge-to-edge, and a positioning context for the absolutely-placed
+   * `.dp-shell-app` child. */
+  .dp-shell-root {
+    padding: 0 !important;
+    position: relative;
+    overflow: hidden;
+  }
+
   .dp-shell-app {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: row;
-    height: 100%;
-    width: 100%;
     background: var(--color-bg);
-    overflow: hidden;
   }
 
   .dp-shell-sidebar {
@@ -2944,20 +2952,24 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
+    position: relative;
   }
 
   /* Stub stand-in for the leaf header the embedded view would normally see.
-   * It just reserves children[0] so the view's `containerEl.children[1]`
-   * indexing still points at the real content. Kept zero-height. */
+   * Reserves children[0] so the embedded view's `containerEl.children[1]`
+   * indexing points at the real content. `display: none` keeps it out of
+   * layout but doesn't change its index. */
   .dp-shell-host-stub {
     display: none;
   }
 
+  /* The view's render code adds `.today-root` (or its own root class) onto
+   * this element. We let the embedded view own its own height + overflow —
+   * nesting an outer scroller here was breaking sticky positioning inside
+   * the embedded views' own scroll containers. */
   .dp-shell-host-content {
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
     position: relative;
   }
 

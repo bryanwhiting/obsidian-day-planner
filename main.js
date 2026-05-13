@@ -11725,21 +11725,25 @@ var ShellView = class extends import_obsidian13.ItemView {
     this.contentEl.empty();
   }
   // Builds the two-pane layout: sidebar nav on the left, a host div on the
-  // right that will receive the embedded view's DOM. Re-rendered only when
-  // the shell itself opens; nav switches just update the active highlight
-  // and swap the host's contents.
+  // right that will receive the embedded view's DOM. The shell's contentEl
+  // gets a marker class (`dp-shell-root`) that zeroes its padding and turns
+  // it into a positioning context; the actual app (`dp-shell-app`) is a
+  // child div that fills the contentEl absolutely. Avoids height-resolution
+  // surprises across themes where contentEl's own height isn't a defined
+  // flex context.
   renderChrome() {
     const root = this.contentEl;
     root.empty();
-    root.addClass("dp-shell-app");
-    const sidebar = root.createDiv({ cls: "dp-shell-sidebar" });
+    root.addClass("dp-shell-root");
+    const app = root.createDiv({ cls: "dp-shell-app" });
+    const sidebar = app.createDiv({ cls: "dp-shell-sidebar" });
     sidebar.createDiv({
       cls: "dp-shell-sidebar-header",
       text: "Today"
     });
     this.navItemsEl = sidebar.createDiv({ cls: "dp-shell-sidebar-items" });
     this.renderNav();
-    const host = root.createDiv({ cls: "dp-shell-host" });
+    const host = app.createDiv({ cls: "dp-shell-host" });
     host.createDiv({ cls: "dp-shell-host-stub" });
     host.createDiv({ cls: "dp-shell-host-content" });
     this.hostEl = host;

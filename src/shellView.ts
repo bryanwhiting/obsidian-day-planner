@@ -79,15 +79,20 @@ export class ShellView extends ItemView {
   }
 
   // Builds the two-pane layout: sidebar nav on the left, a host div on the
-  // right that will receive the embedded view's DOM. Re-rendered only when
-  // the shell itself opens; nav switches just update the active highlight
-  // and swap the host's contents.
+  // right that will receive the embedded view's DOM. The shell's contentEl
+  // gets a marker class (`dp-shell-root`) that zeroes its padding and turns
+  // it into a positioning context; the actual app (`dp-shell-app`) is a
+  // child div that fills the contentEl absolutely. Avoids height-resolution
+  // surprises across themes where contentEl's own height isn't a defined
+  // flex context.
   private renderChrome(): void {
     const root = this.contentEl;
     root.empty();
-    root.addClass("dp-shell-app");
+    root.addClass("dp-shell-root");
 
-    const sidebar = root.createDiv({ cls: "dp-shell-sidebar" });
+    const app = root.createDiv({ cls: "dp-shell-app" });
+
+    const sidebar = app.createDiv({ cls: "dp-shell-sidebar" });
     sidebar.createDiv({
       cls: "dp-shell-sidebar-header",
       text: "Today",
@@ -96,13 +101,13 @@ export class ShellView extends ItemView {
     this.navItemsEl = sidebar.createDiv({ cls: "dp-shell-sidebar-items" });
     this.renderNav();
 
-    const host = root.createDiv({ cls: "dp-shell-host" });
+    const host = app.createDiv({ cls: "dp-shell-host" });
     // The embedded view's render code reads `containerEl.children[1]` as its
-    // root, so the host needs at least two children. children[0] is a stub
-    // (it stands in for the leaf header that ItemView normally renders);
-    // children[1] is where the view actually paints. Both are nodes we
-    // control, so we can teardown by clearing children[1] without touching
-    // the stub.
+    // render root, so the host needs at least two children. children[0] is a
+    // hidden stub that stands in for the leaf header ItemView normally puts
+    // at children[0]; children[1] is where the view paints. The stub uses
+    // `display: none` so it doesn't take layout space but is still indexable
+    // via `.children`.
     host.createDiv({ cls: "dp-shell-host-stub" });
     host.createDiv({ cls: "dp-shell-host-content" });
     this.hostEl = host;
