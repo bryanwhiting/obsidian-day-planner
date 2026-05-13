@@ -2571,8 +2571,8 @@ export class TodayView extends ItemView {
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
       onUnschedule: () => this.unscheduleTask(file, task),
-      onDuplicate: (includeSubtasks) =>
-        this.duplicateTask(file, task, includeSubtasks),
+      onDuplicate: (subsMode) =>
+        this.duplicateTask(file, task, subsMode),
       hasSubtasks: task.subtasks.length > 0,
     }).open();
   }
@@ -2601,7 +2601,7 @@ export class TodayView extends ItemView {
   private async duplicateTask(
     file: TFile,
     task: ParsedTask,
-    includeSubtasks: boolean,
+    subsMode: DuplicateSubsMode,
   ): Promise<void> {
     const prefixes = this.plugin.settings.prefixes;
     const escTid = prefixes.taskId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -2609,26 +2609,44 @@ export class TodayView extends ItemView {
     const stripTid = (line: string): string =>
       line.replace(tidRe, "").replace(/[ \t]+$/, "");
 
+    // Pick which sub-tasks survive the copy. "unchecked" is the "keep
+    // working" path — finished items don't repeat. Ordering by lineNumber
+    // keeps the block contiguous and preserves the source's visual order.
+    const subsToCopy = task.subtasks.filter((s) => {
+      if (subsMode === "all") return true;
+      if (subsMode === "unchecked") return !s.checked;
+      return false;
+    });
+
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       if (task.lineNumber >= lines.length) return content;
-      const subNums = task.subtasks
+      const subNums = subsToCopy
         .map((s) => s.lineNumber)
         .filter((n) => n < lines.length)
         .sort((a, b) => a - b);
+      // Insertion point is just past the *last* line of the source block,
+      // which is the highest sub-task line on disk regardless of whether
+      // we're copying it — otherwise the copy would land inside the source
+      // block when we filtered to a strict subset.
+      const allSubNums = task.subtasks
+        .map((s) => s.lineNumber)
+        .filter((n) => n < lines.length);
       const lastIdx =
-        subNums.length > 0 ? subNums[subNums.length - 1] : task.lineNumber;
+        allSubNums.length > 0 ? Math.max(...allSubNums) : task.lineNumber;
 
       const copyBlock: string[] = [stripTid(lines[task.lineNumber])];
-      if (includeSubtasks) {
-        for (const n of subNums) copyBlock.push(stripTid(lines[n]));
-      }
+      for (const n of subNums) copyBlock.push(stripTid(lines[n]));
       lines.splice(lastIdx + 1, 0, ...copyBlock);
       return lines.join("\n");
     });
-    new Notice(
-      includeSubtasks ? "Task duplicated (with sub-tasks)" : "Task duplicated",
-    );
+    const noticeText =
+      subsMode === "all"
+        ? "Task duplicated (with sub-tasks)"
+        : subsMode === "unchecked"
+          ? "Task duplicated (with unchecked sub-tasks)"
+          : "Task duplicated";
+    new Notice(noticeText);
   }
 
   // Strips the `#t/` time tag from the task's parent line. The modal closes
@@ -3969,13 +3987,17 @@ interface TaskEditOpts {
   // Strips the `#t/` time tag from the task line so it falls out of the
   // schedule and back into the unscheduled bucket.
   onUnschedule?: () => Promise<void>;
-  // Duplicates the task. The modal prompts for "include sub-tasks?" before
-  // calling this — when there are no sub-tasks the prompt is skipped and
-  // `includeSubtasks` is always false.
-  onDuplicate?: (includeSubtasks: boolean) => Promise<void>;
-  // Drives whether the duplicate flow asks the y/n sub-task prompt at all.
+  // Duplicates the task. The modal prompts for sub-task scope ("all" /
+  // "unchecked" / "none") before calling this — when there are no sub-tasks
+  // the prompt is skipped and `subsMode` is always "none".
+  onDuplicate?: (subsMode: DuplicateSubsMode) => Promise<void>;
+  // Drives whether the duplicate flow asks the sub-task-scope prompt at all.
   hasSubtasks?: boolean;
 }
+
+// Which subset of the source's sub-tasks the duplicate should carry over.
+// "unchecked" is the "keep working" path — finished items don't repeat.
+type DuplicateSubsMode = "all" | "unchecked" | "none";
 
 interface MoveChoice {
   label: string;
@@ -5817,13 +5839,17 @@ class TaskEditModal extends Modal {
     };
     const runDuplicate = async (): Promise<void> => {
       if (!this.opts.onDuplicate) return;
-      // Only ask the y/n question when the task actually has sub-tasks.
-      // window.confirm OK = yes, Cancel = no — same pattern the Delete
-      // confirm uses.
-      const includeSubs = this.opts.hasSubtasks
-        ? window.confirm("Copy sub-tasks too?")
-        : false;
-      await this.opts.onDuplicate(includeSubs);
+      // Tasks without sub-tasks skip the picker — there's nothing to choose.
+      if (!this.opts.hasSubtasks) {
+        await this.opts.onDuplicate("none");
+        this.close();
+        return;
+      }
+      const mode = await new Promise<DuplicateSubsMode | null>((resolve) => {
+        new DuplicateSubsModeModal(this.app, resolve).open();
+      });
+      if (!mode) return;
+      await this.opts.onDuplicate(mode);
       this.close();
     };
 
@@ -6242,5 +6268,52 @@ class SubtaskQuickAddModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
+  }
+}
+
+// Picker shown after pressing Duplicate on a task that has sub-tasks. Three
+// buttons: copy all sub-tasks, copy only the unchecked ones (for recurring
+// checklists where finished items shouldn't repeat), or copy parent only.
+// Closing without picking resolves to null so the caller can no-op.
+class DuplicateSubsModeModal extends Modal {
+  private resolve: (mode: DuplicateSubsMode | null) => void;
+  private picked = false;
+
+  constructor(
+    app: App,
+    resolve: (mode: DuplicateSubsMode | null) => void,
+  ) {
+    super(app);
+    this.resolve = resolve;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-dup-mode-modal");
+    this.titleEl.setText("Duplicate — copy sub-tasks?");
+    this.contentEl.empty();
+
+    const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
+    const choices: { label: string; mode: DuplicateSubsMode }[] = [
+      { label: "All sub-tasks", mode: "all" },
+      { label: "Only unchecked", mode: "unchecked" },
+      { label: "No sub-tasks", mode: "none" },
+    ];
+    for (const c of choices) {
+      const btn = row.createEl("button", {
+        cls: "dp-dup-mode-btn",
+        text: c.label,
+      });
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        this.picked = true;
+        this.resolve(c.mode);
+        this.close();
+      });
+    }
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.picked) this.resolve(null);
   }
 }

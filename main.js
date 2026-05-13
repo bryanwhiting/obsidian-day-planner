@@ -6164,7 +6164,7 @@ var TodayView = class extends import_obsidian7.ItemView {
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
       onUnschedule: () => this.unscheduleTask(file, task),
-      onDuplicate: (includeSubtasks) => this.duplicateTask(file, task, includeSubtasks),
+      onDuplicate: (subsMode) => this.duplicateTask(file, task, subsMode),
       hasSubtasks: task.subtasks.length > 0
     }).open();
   }
@@ -6189,28 +6189,33 @@ var TodayView = class extends import_obsidian7.ItemView {
   // under the existing block. Strips any `#tid/<id>` tag from the copies so
   // task IDs stay unique — the duplicate stays untagged until the user edits
   // it (or another flow re-assigns one).
-  async duplicateTask(file, task, includeSubtasks) {
+  async duplicateTask(file, task, subsMode) {
     const prefixes = this.plugin.settings.prefixes;
     const escTid = prefixes.taskId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const tidRe = new RegExp(`\\s*#${escTid}\\/[A-Za-z0-9]+\\b`, "g");
     const stripTid = (line) => line.replace(tidRe, "").replace(/[ \t]+$/, "");
+    const subsToCopy = task.subtasks.filter((s) => {
+      if (subsMode === "all")
+        return true;
+      if (subsMode === "unchecked")
+        return !s.checked;
+      return false;
+    });
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
       if (task.lineNumber >= lines.length)
         return content;
-      const subNums = task.subtasks.map((s) => s.lineNumber).filter((n) => n < lines.length).sort((a, b) => a - b);
-      const lastIdx = subNums.length > 0 ? subNums[subNums.length - 1] : task.lineNumber;
+      const subNums = subsToCopy.map((s) => s.lineNumber).filter((n) => n < lines.length).sort((a, b) => a - b);
+      const allSubNums = task.subtasks.map((s) => s.lineNumber).filter((n) => n < lines.length);
+      const lastIdx = allSubNums.length > 0 ? Math.max(...allSubNums) : task.lineNumber;
       const copyBlock = [stripTid(lines[task.lineNumber])];
-      if (includeSubtasks) {
-        for (const n of subNums)
-          copyBlock.push(stripTid(lines[n]));
-      }
+      for (const n of subNums)
+        copyBlock.push(stripTid(lines[n]));
       lines.splice(lastIdx + 1, 0, ...copyBlock);
       return lines.join("\n");
     });
-    new import_obsidian7.Notice(
-      includeSubtasks ? "Task duplicated (with sub-tasks)" : "Task duplicated"
-    );
+    const noticeText = subsMode === "all" ? "Task duplicated (with sub-tasks)" : subsMode === "unchecked" ? "Task duplicated (with unchecked sub-tasks)" : "Task duplicated";
+    new import_obsidian7.Notice(noticeText);
   }
   // Strips the `#t/` time tag from the task's parent line. The modal closes
   // afterwards; the caller (Today view) re-renders on file modify, dropping
@@ -8769,8 +8774,17 @@ var TaskEditModal = class extends import_obsidian7.Modal {
     const runDuplicate = async () => {
       if (!this.opts.onDuplicate)
         return;
-      const includeSubs = this.opts.hasSubtasks ? window.confirm("Copy sub-tasks too?") : false;
-      await this.opts.onDuplicate(includeSubs);
+      if (!this.opts.hasSubtasks) {
+        await this.opts.onDuplicate("none");
+        this.close();
+        return;
+      }
+      const mode = await new Promise((resolve) => {
+        new DuplicateSubsModeModal(this.app, resolve).open();
+      });
+      if (!mode)
+        return;
+      await this.opts.onDuplicate(mode);
       this.close();
     };
     if (this.opts.mode === "edit" && this.opts.onDelete) {
@@ -9116,6 +9130,41 @@ var SubtaskQuickAddModal = class extends import_obsidian7.Modal {
   }
   onClose() {
     this.contentEl.empty();
+  }
+};
+var DuplicateSubsModeModal = class extends import_obsidian7.Modal {
+  constructor(app, resolve) {
+    super(app);
+    this.picked = false;
+    this.resolve = resolve;
+  }
+  onOpen() {
+    this.modalEl.addClass("dp-dup-mode-modal");
+    this.titleEl.setText("Duplicate \u2014 copy sub-tasks?");
+    this.contentEl.empty();
+    const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
+    const choices = [
+      { label: "All sub-tasks", mode: "all" },
+      { label: "Only unchecked", mode: "unchecked" },
+      { label: "No sub-tasks", mode: "none" }
+    ];
+    for (const c of choices) {
+      const btn = row.createEl("button", {
+        cls: "dp-dup-mode-btn",
+        text: c.label
+      });
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        this.picked = true;
+        this.resolve(c.mode);
+        this.close();
+      });
+    }
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.picked)
+      this.resolve(null);
   }
 };
 
