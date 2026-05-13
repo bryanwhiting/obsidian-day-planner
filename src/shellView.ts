@@ -68,6 +68,14 @@ export class ShellView extends ItemView {
     return "layout-dashboard";
   }
 
+  // Lets the plugin reuse the shell's embedded TodayView (e.g. for the
+  // quick-add-task command) instead of opening a separate TodayView leaf.
+  // Returns null when the shell is currently showing a different target.
+  public getMountedTodayView(): TodayView | null {
+    if (!this.mounted || this.mounted.target !== "today") return null;
+    return this.mounted.view as TodayView;
+  }
+
   async onOpen(): Promise<void> {
     this.renderChrome();
     await this.mount(this.active);

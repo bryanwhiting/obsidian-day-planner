@@ -181,6 +181,12 @@ export default class TodayPlugin extends Plugin {
       callback: () => void runJournal(this, "brainDump"),
     });
 
+    this.addCommand({
+      id: "quick-add-task",
+      name: "Quick add task",
+      callback: () => void this.quickAddTask(),
+    });
+
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
 
@@ -316,6 +322,36 @@ export default class TodayPlugin extends Plugin {
     )) {
       const view = leaf.view as TodayView;
       view.scheduleRender();
+    }
+  }
+
+  // Quick-add entry point — pops the standard "new unscheduled task" modal
+  // targeting today's daily note from anywhere in Obsidian. Prefers reusing
+  // an already-open TodayView (raw leaf or shell-embedded) without changing
+  // focus; falls back to activating the Today view if none is mounted.
+  async quickAddTask(): Promise<void> {
+    const todayLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY);
+    for (const leaf of todayLeaves) {
+      if (leaf.view instanceof TodayView) {
+        await leaf.view.quickAddUnscheduledTaskToToday();
+        return;
+      }
+    }
+    const shellLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_SHELL);
+    for (const leaf of shellLeaves) {
+      if (leaf.view instanceof ShellView) {
+        const embedded = leaf.view.getMountedTodayView();
+        if (embedded) {
+          await embedded.quickAddUnscheduledTaskToToday();
+          return;
+        }
+      }
+    }
+    await this.activateView();
+    const next = this.app.workspace.getLeavesOfType(VIEW_TYPE_TODAY);
+    const view = next[0]?.view;
+    if (view instanceof TodayView) {
+      await view.quickAddUnscheduledTaskToToday();
     }
   }
 

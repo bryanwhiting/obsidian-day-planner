@@ -2477,6 +2477,27 @@ export class TodayView extends ItemView {
     );
   }
 
+  // Quick-add entry point: ensures today's daily note exists, then pops the
+  // standard "new unscheduled task" modal anchored to that file. Used by the
+  // `quick-add-task` command so users can capture from anywhere without
+  // navigating to the Today view first.
+  public async quickAddUnscheduledTaskToToday(): Promise<void> {
+    const settings = this.plugin.settings;
+    const today = startOfDay(new Date());
+    const fallback: DailyNoteFallback = {
+      folder: settings.dailyNoteFolderFallback,
+      format: settings.dailyNoteFormatFallback,
+      template: settings.dailyNoteTemplate,
+      templatesByDay: settings.dailyNoteTemplatesByDay,
+      dateLinkFormat: settings.dateLinkFormat,
+      prefixes: settings.prefixes,
+      quotesFile: settings.quotesFile,
+      addCreatedTag: settings.addCreatedTagToFrontmatter,
+    };
+    const file = await ensureDailyNote(this.app, today, fallback, false);
+    this.createUnscheduledTask(file);
+  }
+
   private openTaskEditor(file: TFile, task: ParsedTask): void {
     const prefixes = this.plugin.settings.prefixes;
     // Compose the full "proj/sub" path so the input shows the actual
