@@ -22,6 +22,23 @@ const FLOWS: Record<JournalFlowKey, FlowSpec> = {
   distractions: { key: "distractions", format: "bullet", label: "Distraction" },
 };
 
+// Day choices offered by the journal day-picker. Distractions skip the
+// picker entirely (always today); Begin/Close Day open the picker so the
+// user can backfill yesterday's close-day or pre-fill tomorrow's begin-day.
+type DayChoice = "today" | "yesterday" | "tomorrow";
+
+const DAY_OFFSETS: Record<DayChoice, number> = {
+  today: 0,
+  yesterday: -1,
+  tomorrow: 1,
+};
+
+const DAY_LABELS: Record<DayChoice, string> = {
+  today: "Today",
+  yesterday: "Yesterday",
+  tomorrow: "Tomorrow",
+};
+
 export async function runJournal(
   plugin: TodayPlugin,
   flowKey: JournalFlowKey,
@@ -34,6 +51,16 @@ export async function runJournal(
     return;
   }
 
+  // Distractions are quick-capture by design — skip the day picker so the
+  // first modal the user sees is the question itself. Begin/Close Day open
+  // a three-option picker first; Enter on the picker selects Today.
+  let dayChoice: DayChoice = "today";
+  if (spec.format === "qa") {
+    const picked = await pickDay(plugin.app, spec.label);
+    if (picked === null) return;
+    dayChoice = picked;
+  }
+
   const questions = await readQuestions(plugin.app, flow);
   if (questions === null) return;
   if (questions.length === 0) {
@@ -43,7 +70,7 @@ export async function runJournal(
     return;
   }
 
-  const file = await ensureTodaysNote(plugin);
+  const file = await ensureNoteForOffset(plugin, DAY_OFFSETS[dayChoice]);
 
   let wroteAny = false;
   for (const question of questions) {
@@ -67,14 +94,27 @@ export async function runJournal(
     }
     wroteAny = true;
   }
-  if (wroteAny) new Notice(`${spec.label} logged.`);
+  if (wroteAny) {
+    const dayWord = DAY_LABELS[dayChoice].toLowerCase();
+    new Notice(
+      dayChoice === "today"
+        ? `${spec.label} logged.`
+        : `${spec.label} logged for ${dayWord}.`,
+    );
+  }
 }
 
-async function ensureTodaysNote(plugin: TodayPlugin): Promise<TFile> {
+async function ensureNoteForOffset(
+  plugin: TodayPlugin,
+  dayOffset: number,
+): Promise<TFile> {
   const settings = plugin.settings;
+  const target = new Date();
+  target.setHours(0, 0, 0, 0);
+  target.setDate(target.getDate() + dayOffset);
   return ensureDailyNote(
     plugin.app,
-    new Date(),
+    target,
     {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
@@ -87,6 +127,12 @@ async function ensureTodaysNote(plugin: TodayPlugin): Promise<TFile> {
     },
     false,
   );
+}
+
+function pickDay(app: App, flowLabel: string): Promise<DayChoice | null> {
+  return new Promise((resolve) => {
+    new DayChoiceModal(app, flowLabel, resolve).open();
+  });
 }
 
 // Loads the template, splits on lines, trims, drops empties. Returns null
@@ -315,4 +361,78 @@ class QuestionModal extends Modal {
     this.contentEl.empty();
     if (!this.settled) this.resolve(null);
   }
+}
+
+// Day-picker shown before Begin/Close Day flows. Three buttons (Today,
+// Yesterday, Tomorrow) — no button is focused by default, so plain Enter
+// does nothing and the user is forced to commit a choice. The Cmd/Ctrl+Enter
+// shortcut is a power-user accelerator that picks Today, so a frequent user
+// can blast through the picker without taking their hands off the keyboard.
+// Escape cancels the whole flow (no daily note touched).
+class DayChoiceModal extends Modal {
+  private flowLabel: string;
+  private resolve: (choice: DayChoice | null) => void;
+  private settled = false;
+
+  constructor(
+    app: App,
+    flowLabel: string,
+    resolve: (choice: DayChoice | null) => void,
+  ) {
+    super(app);
+    this.flowLabel = flowLabel;
+    this.resolve = resolve;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-title-modal");
+    this.titleEl.setText(`${this.flowLabel} — pick a day`);
+
+    const hint = this.contentEl.createDiv({ cls: "dp-journal-day-hint" });
+    hint.setText(
+      "Which day's note should this log against? Cmd/Ctrl + Enter picks Today.",
+    );
+
+    const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
+    const choices: DayChoice[] = ["today", "yesterday", "tomorrow"];
+    for (const c of choices) {
+      const btn = row.createEl("button", { cls: "dp-dup-mode-btn" });
+      btn.type = "button";
+      btn.createDiv({ cls: "dp-dup-mode-btn-label", text: DAY_LABELS[c] });
+      btn.createDiv({
+        cls: "dp-dup-mode-btn-sub",
+        text: describeOffset(DAY_OFFSETS[c]),
+      });
+      btn.addEventListener("click", () => this.finish(c));
+    }
+
+    this.scope.register(["Mod"], "Enter", (ev) => {
+      ev.preventDefault();
+      this.finish("today");
+    });
+  }
+
+  private finish(choice: DayChoice): void {
+    this.settled = true;
+    this.close();
+    this.resolve(choice);
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.settled) this.resolve(null);
+  }
+}
+
+// Short relative-date hint shown under each button, e.g. "Mon, May 12, 2026".
+function describeOffset(offset: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }

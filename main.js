@@ -9628,6 +9628,16 @@ var FLOWS = {
   closeDay: { key: "closeDay", format: "qa", label: "Close Day" },
   distractions: { key: "distractions", format: "bullet", label: "Distraction" }
 };
+var DAY_OFFSETS = {
+  today: 0,
+  yesterday: -1,
+  tomorrow: 1
+};
+var DAY_LABELS = {
+  today: "Today",
+  yesterday: "Yesterday",
+  tomorrow: "Tomorrow"
+};
 async function runJournal(plugin, flowKey) {
   const spec = FLOWS[flowKey];
   const flow = plugin.settings.journal[flowKey];
@@ -9635,6 +9645,13 @@ async function runJournal(plugin, flowKey) {
   if (!sectionTitle) {
     new import_obsidian8.Notice(`Today: set a section title for ${spec.label} in settings.`);
     return;
+  }
+  let dayChoice = "today";
+  if (spec.format === "qa") {
+    const picked = await pickDay(plugin.app, spec.label);
+    if (picked === null)
+      return;
+    dayChoice = picked;
   }
   const questions = await readQuestions(plugin.app, flow);
   if (questions === null)
@@ -9645,7 +9662,7 @@ async function runJournal(plugin, flowKey) {
     );
     return;
   }
-  const file = await ensureTodaysNote(plugin);
+  const file = await ensureNoteForOffset(plugin, DAY_OFFSETS[dayChoice]);
   let wroteAny = false;
   for (const question of questions) {
     const answer = await askQuestion(plugin.app, spec.label, question);
@@ -9670,14 +9687,21 @@ async function runJournal(plugin, flowKey) {
     }
     wroteAny = true;
   }
-  if (wroteAny)
-    new import_obsidian8.Notice(`${spec.label} logged.`);
+  if (wroteAny) {
+    const dayWord = DAY_LABELS[dayChoice].toLowerCase();
+    new import_obsidian8.Notice(
+      dayChoice === "today" ? `${spec.label} logged.` : `${spec.label} logged for ${dayWord}.`
+    );
+  }
 }
-async function ensureTodaysNote(plugin) {
+async function ensureNoteForOffset(plugin, dayOffset) {
   const settings = plugin.settings;
+  const target = new Date();
+  target.setHours(0, 0, 0, 0);
+  target.setDate(target.getDate() + dayOffset);
   return ensureDailyNote(
     plugin.app,
-    new Date(),
+    target,
     {
       folder: settings.dailyNoteFolderFallback,
       format: settings.dailyNoteFormatFallback,
@@ -9690,6 +9714,11 @@ async function ensureTodaysNote(plugin) {
     },
     false
   );
+}
+function pickDay(app, flowLabel) {
+  return new Promise((resolve) => {
+    new DayChoiceModal(app, flowLabel, resolve).open();
+  });
 }
 async function readQuestions(app, flow) {
   const raw = (flow.templatePath || "").trim();
@@ -9848,6 +9877,59 @@ var QuestionModal = class extends import_obsidian8.Modal {
       this.resolve(null);
   }
 };
+var DayChoiceModal = class extends import_obsidian8.Modal {
+  constructor(app, flowLabel, resolve) {
+    super(app);
+    this.settled = false;
+    this.flowLabel = flowLabel;
+    this.resolve = resolve;
+  }
+  onOpen() {
+    this.modalEl.addClass("dp-title-modal");
+    this.titleEl.setText(`${this.flowLabel} \u2014 pick a day`);
+    const hint = this.contentEl.createDiv({ cls: "dp-journal-day-hint" });
+    hint.setText(
+      "Which day's note should this log against? Cmd/Ctrl + Enter picks Today."
+    );
+    const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
+    const choices = ["today", "yesterday", "tomorrow"];
+    for (const c of choices) {
+      const btn = row.createEl("button", { cls: "dp-dup-mode-btn" });
+      btn.type = "button";
+      btn.createDiv({ cls: "dp-dup-mode-btn-label", text: DAY_LABELS[c] });
+      btn.createDiv({
+        cls: "dp-dup-mode-btn-sub",
+        text: describeOffset(DAY_OFFSETS[c])
+      });
+      btn.addEventListener("click", () => this.finish(c));
+    }
+    this.scope.register(["Mod"], "Enter", (ev) => {
+      ev.preventDefault();
+      this.finish("today");
+    });
+  }
+  finish(choice) {
+    this.settled = true;
+    this.close();
+    this.resolve(choice);
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.settled)
+      this.resolve(null);
+  }
+};
+function describeOffset(offset) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString(void 0, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
 
 // src/habitsView.ts
 var import_obsidian9 = require("obsidian");

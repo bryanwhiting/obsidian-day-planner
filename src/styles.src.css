@@ -2946,6 +2946,13 @@
     border-color: var(--color-accent);
   }
 
+  .dp-journal-day-hint {
+    margin: 4px 0 8px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    color: var(--color-ink-faint);
+  }
+
   /* ---------- tag-migration modal ---------- */
 
   .dp-migrate-modal .modal-content {
