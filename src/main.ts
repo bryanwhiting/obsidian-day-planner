@@ -445,8 +445,11 @@ class InlineSuggest extends EditorSuggest<SuggestItem> {
     const query = before.slice(best.idx + best.trigger.length);
     if (/#/.test(query)) return null;
     if (/\s/.test(query)) {
-      // Only the date trigger accepts a space — for "@apr 5" style queries.
-      if (best.kind !== "date" || !/^[A-Za-z]+ \d{0,2}$/.test(query)) {
+      // The date trigger doubles as the people trigger: allow up to one space
+      // so "@apr 5" date queries and two-word person names like "@Bob Dylan"
+      // (existing match or "Create new person: …") keep the popover open. A
+      // second space closes it.
+      if (best.kind !== "date" || /\s.*\s/.test(query)) {
         return null;
       }
     }

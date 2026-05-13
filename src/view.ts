@@ -5036,9 +5036,10 @@ class TaskEditModal extends Modal {
         const fmt = this.opts.dateLinkFormat;
         return {
           trigger: this.opts.dateTrigger,
-          acceptQuery: (q) =>
-            !/#/.test(q) &&
-            (!/\s/.test(q) || /^[A-Za-z]+ \d{0,2}$/.test(q)),
+          // Allow up to one space so two-word person names like "Bob Dylan"
+          // keep the popover active. "@apr 5" date queries still work — they
+          // have exactly one space — and a second space closes the popover.
+          acceptQuery: (q) => !/#/.test(q) && !/\s.*\s/.test(q),
           getSuggestions: (q) => {
             dateMap.clear();
             personMap.clear();
