@@ -3536,8 +3536,10 @@
     background: color-mix(in srgb, var(--color-danger) 8%, transparent);
   }
 
-  /* "Duplicate — copy sub-tasks?" picker. Three side-by-side buttons; on
-   * narrow widths they stack so each label stays readable. */
+  /* Migrate picker (stage one: Split / Move / Copy) and the Copy sub-task
+   * scope picker (stage two: all / unchecked / none) share these styles —
+   * three side-by-side buttons that stack on narrow widths. Stage one's
+   * buttons stack a label + a small sub-label inside each button. */
   .dp-dup-mode-row {
     display: flex;
     gap: 8px;
@@ -3558,11 +3560,25 @@
     color: var(--color-ink);
     border: 1px solid var(--color-hairline);
     transition: border-color 120ms ease, background-color 120ms ease;
+    text-align: left;
   }
 
   .dp-dup-mode-btn:hover {
     border-color: var(--color-accent);
     background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+
+  .dp-dup-mode-btn-label {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .dp-dup-mode-btn-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-ink-muted, var(--color-ink));
+    opacity: 0.75;
   }
 
   .dp-edit-show-btn {

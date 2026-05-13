@@ -38,6 +38,7 @@ import {
   setTaskTitle,
   setTaskDescription,
   setTaskChecked,
+  setTaskMigrated,
   addActualTimeTag,
   setTaskIdTag,
   parseTaskId,
@@ -90,7 +91,6 @@ import {
   buildPersonLinkInsert,
   PersonSuggestion,
 } from "./people";
-import { moveTaskBetweenDailyNotes } from "./taskMove";
 import {
   UpcomingEvent,
   getUpcomingEvents,
@@ -2566,14 +2566,11 @@ export class TodayView extends ItemView {
         hotkey: "c",
         initialMonth: this.selectedDate,
         selectedDate: this.selectedDate,
-        onPick: (d) => this.moveTaskWholeToDate(file, task, d),
+        onPick: (d) => this.migrateTaskToDate(file, task, d),
       },
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
       onUnschedule: () => this.unscheduleTask(file, task),
-      onDuplicate: (subsMode) =>
-        this.duplicateTask(file, task, subsMode),
-      hasSubtasks: task.subtasks.length > 0,
     }).open();
   }
 
@@ -2592,61 +2589,6 @@ export class TodayView extends ItemView {
       return lines.join("\n");
     });
     new Notice("Task deleted");
-  }
-
-  // Inserts a copy of the task line (and optionally its sub-tasks) directly
-  // under the existing block. Strips any `#tid/<id>` tag from the copies so
-  // task IDs stay unique — the duplicate stays untagged until the user edits
-  // it (or another flow re-assigns one).
-  private async duplicateTask(
-    file: TFile,
-    task: ParsedTask,
-    subsMode: DuplicateSubsMode,
-  ): Promise<void> {
-    const prefixes = this.plugin.settings.prefixes;
-    const escTid = prefixes.taskId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const tidRe = new RegExp(`\\s*#${escTid}\\/[A-Za-z0-9]+\\b`, "g");
-    const stripTid = (line: string): string =>
-      line.replace(tidRe, "").replace(/[ \t]+$/, "");
-
-    // Pick which sub-tasks survive the copy. "unchecked" is the "keep
-    // working" path — finished items don't repeat. Ordering by lineNumber
-    // keeps the block contiguous and preserves the source's visual order.
-    const subsToCopy = task.subtasks.filter((s) => {
-      if (subsMode === "all") return true;
-      if (subsMode === "unchecked") return !s.checked;
-      return false;
-    });
-
-    await this.app.vault.process(file, (content) => {
-      const lines = content.split("\n");
-      if (task.lineNumber >= lines.length) return content;
-      const subNums = subsToCopy
-        .map((s) => s.lineNumber)
-        .filter((n) => n < lines.length)
-        .sort((a, b) => a - b);
-      // Insertion point is just past the *last* line of the source block,
-      // which is the highest sub-task line on disk regardless of whether
-      // we're copying it — otherwise the copy would land inside the source
-      // block when we filtered to a strict subset.
-      const allSubNums = task.subtasks
-        .map((s) => s.lineNumber)
-        .filter((n) => n < lines.length);
-      const lastIdx =
-        allSubNums.length > 0 ? Math.max(...allSubNums) : task.lineNumber;
-
-      const copyBlock: string[] = [stripTid(lines[task.lineNumber])];
-      for (const n of subNums) copyBlock.push(stripTid(lines[n]));
-      lines.splice(lastIdx + 1, 0, ...copyBlock);
-      return lines.join("\n");
-    });
-    const noticeText =
-      subsMode === "all"
-        ? "Task duplicated (with sub-tasks)"
-        : subsMode === "unchecked"
-          ? "Task duplicated (with unchecked sub-tasks)"
-          : "Task duplicated";
-    new Notice(noticeText);
   }
 
   // Strips the `#t/` time tag from the task's parent line. The modal closes
@@ -2683,17 +2625,17 @@ export class TodayView extends ItemView {
       {
         label: "tomorrow",
         hotkey: "1",
-        onChoose: () => this.moveTaskWholeToDate(file, task, day1),
+        onChoose: () => this.migrateTaskToDate(file, task, day1),
       },
       {
         label: dayLabel(day2),
         hotkey: "2",
-        onChoose: () => this.moveTaskWholeToDate(file, task, day2),
+        onChoose: () => this.migrateTaskToDate(file, task, day2),
       },
       {
         label: dayLabel(day3),
         hotkey: "3",
-        onChoose: () => this.moveTaskWholeToDate(file, task, day3),
+        onChoose: () => this.migrateTaskToDate(file, task, day3),
       },
     ];
     const nextWeekIsDup =
@@ -2704,21 +2646,14 @@ export class TodayView extends ItemView {
       choices.push({
         label: "next week",
         hotkey: "4",
-        onChoose: () => this.moveTaskWholeToDate(file, task, nextWeek),
+        onChoose: () => this.migrateTaskToDate(file, task, nextWeek),
       });
     }
     return choices;
   }
 
-  // Moves a task line (and its sub-task lines) from `file` to the daily note
-  // for `targetDate`. No-op if source and target are the same file.
-  // Returns true on success.
-  private async moveTaskWholeToDate(
-    file: TFile,
-    task: ParsedTask,
-    targetDate: Date,
-  ): Promise<boolean> {
-    const fallback = {
+  private buildDailyNoteFallback(): DailyNoteFallback {
+    return {
       folder: this.plugin.settings.dailyNoteFolderFallback,
       format: this.plugin.settings.dailyNoteFormatFallback,
       template: this.plugin.settings.dailyNoteTemplate,
@@ -2728,36 +2663,63 @@ export class TodayView extends ItemView {
       quotesFile: this.plugin.settings.quotesFile,
       addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
     };
-    return moveTaskBetweenDailyNotes(
-      this.app,
-      file,
-      task,
-      targetDate,
-      fallback,
+  }
+
+  // Orchestrator for the date-picker buttons. Opens the Split/Move/Copy
+  // picker, then dispatches. Copy gets a second prompt for sub-task scope
+  // (all / unchecked / none). Returns true if the modal should close.
+  private async migrateTaskToDate(
+    file: TFile,
+    task: ParsedTask,
+    targetDate: Date,
+  ): Promise<boolean> {
+    const action = await new Promise<MigrateAction | null>((resolve) => {
+      new MigrateActionModal(this.app, resolve).open();
+    });
+    if (!action) return false;
+    if (action === "split") return this.splitTaskToDate(file, task, targetDate);
+    if (action === "move") return this.moveTaskToDate(file, task, targetDate);
+    const mode = await new Promise<SubtaskScope | null>((resolve) => {
+      new SubtaskScopeModal(this.app, resolve).open();
+    });
+    if (!mode) return false;
+    return this.copyTaskToDate(file, task, targetDate, mode);
+  }
+
+  // Re-parses the source file to pick up any sub-task changes made in the
+  // edit modal since it opened — line numbers / checked-state on the captured
+  // `task` are stale by the time the user fires a migrate.
+  private async refreshTask(
+    file: TFile,
+    task: ParsedTask,
+  ): Promise<ParsedTask | null> {
+    const fresh = parseFileTasks(
+      file.path,
+      await this.app.vault.read(file),
+      this.plugin.settings.prefixes,
+      this.plugin.settings.defaultDurationMin,
+    );
+    return (
+      fresh.find((t) => t.lineNumber === task.lineNumber) ??
+      fresh.find(
+        (t) => this.cleanBody(t.body) === this.cleanBody(task.body),
+      ) ??
+      null
     );
   }
 
-  // Carries the task title (with most tags) and any unfinished sub-tasks into
-  // the daily note for `targetDate`, while keeping the completed sub-tasks on
-  // the source day as a record of partial progress. The source parent is
-  // checked off and stamped with a #tid/<id> tag; the new-day copy gets the
-  // same tag, so the two can be cross-referenced via search. The order tag
-  // (#o/) is stripped on the new copy because positioning is per-day.
-  private async migrateIncompleteToDate(
+  // SPLIT — partial migration. Source parent is checked off and stamped with
+  // a shared #tid/<id>; unchecked sub-tasks stay on the source as `- [>]` so
+  // the original day shows what attempted vs. what carried over. Target day
+  // gets a fresh `[ ]` parent (same tid) + the unchecked sub-task lines
+  // verbatim (their metadata, incl. any existing tids, is left alone — only
+  // the parent participates in the cross-day sync).
+  private async splitTaskToDate(
     file: TFile,
     task: ParsedTask,
     targetDate: Date,
   ): Promise<boolean> {
-    const fallback = {
-      folder: this.plugin.settings.dailyNoteFolderFallback,
-      format: this.plugin.settings.dailyNoteFormatFallback,
-      template: this.plugin.settings.dailyNoteTemplate,
-      templatesByDay: this.plugin.settings.dailyNoteTemplatesByDay,
-      dateLinkFormat: this.plugin.settings.dateLinkFormat,
-      prefixes: this.plugin.settings.prefixes,
-      quotesFile: this.plugin.settings.quotesFile,
-      addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter,
-    };
+    const fallback = this.buildDailyNoteFallback();
     const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
     if (targetFile.path === file.path) {
       new Notice("Source and target are the same file.");
@@ -2765,27 +2727,15 @@ export class TodayView extends ItemView {
     }
 
     const prefixes = this.plugin.settings.prefixes;
-
-    // Re-parse to pick up any sub-task changes the user made in the modal
-    // since it opened — those persist immediately in edit mode and the
-    // captured `task` argument is stale on the sub-task front.
-    const fresh = parseFileTasks(
-      file.path,
-      await this.app.vault.read(file),
-      prefixes,
-      this.plugin.settings.defaultDurationMin,
-    );
-    let current =
-      fresh.find((t) => t.lineNumber === task.lineNumber) ??
-      fresh.find((t) => this.cleanBody(t.body) === this.cleanBody(task.body));
+    const current = await this.refreshTask(file, task);
     if (!current) {
       new Notice("Couldn't locate the task to migrate.");
       return false;
     }
 
-    const existingId = parseTaskId(current.body, prefixes);
     const taskId =
-      existingId ?? generateTaskId(this.plugin.settings.taskIdLength);
+      parseTaskId(current.body, prefixes) ??
+      generateTaskId(this.plugin.settings.taskIdLength);
 
     const orderRe = new RegExp(
       `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`,
@@ -2794,24 +2744,21 @@ export class TodayView extends ItemView {
     newParentLine = setTaskChecked(newParentLine, false);
     newParentLine = setTaskIdTag(newParentLine, taskId, prefixes);
 
-    const uncheckedSubLines = current.subtasks
-      .filter((s) => !s.checked)
-      .map((s) => s.rawLine);
+    const uncheckedSubs = current.subtasks.filter((s) => !s.checked);
+    const uncheckedSubLines = uncheckedSubs.map((s) => s.rawLine);
 
     await this.app.vault.process(file, (content) => {
       const lines = content.split("\n");
-      if (current!.lineNumber < lines.length) {
-        let parent = lines[current!.lineNumber];
+      if (current.lineNumber < lines.length) {
+        let parent = lines[current.lineNumber];
         parent = setTaskChecked(parent, true);
         parent = setTaskIdTag(parent, taskId, prefixes);
-        lines[current!.lineNumber] = parent;
+        lines[current.lineNumber] = parent;
       }
-      const removeNumbers = current!.subtasks
-        .filter((s) => !s.checked)
-        .map((s) => s.lineNumber)
-        .sort((a, b) => b - a);
-      for (const n of removeNumbers) {
-        if (n < lines.length) lines.splice(n, 1);
+      for (const s of uncheckedSubs) {
+        if (s.lineNumber < lines.length) {
+          lines[s.lineNumber] = setTaskMigrated(lines[s.lineNumber]);
+        }
       }
       return lines.join("\n");
     });
@@ -2824,7 +2771,133 @@ export class TodayView extends ItemView {
       return lines.join("\n");
     });
 
-    new Notice(`Migrated to ${targetFile.path}`);
+    new Notice(`Split to ${targetFile.path}`);
+    return true;
+  }
+
+  // MOVE — full migration. Source parent becomes `- [>]` with a shared
+  // #tid/<id>; all sub-tasks (checked or not) are stripped from the source.
+  // Target day gets a fresh `[ ]` parent (same tid) + every sub-task line
+  // verbatim. Order tag (#o/) is stripped from the new parent since position
+  // is per-day.
+  private async moveTaskToDate(
+    file: TFile,
+    task: ParsedTask,
+    targetDate: Date,
+  ): Promise<boolean> {
+    const fallback = this.buildDailyNoteFallback();
+    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
+    if (targetFile.path === file.path) {
+      new Notice("Source and target are the same file.");
+      return false;
+    }
+
+    const prefixes = this.plugin.settings.prefixes;
+    const current = await this.refreshTask(file, task);
+    if (!current) {
+      new Notice("Couldn't locate the task to migrate.");
+      return false;
+    }
+
+    const taskId =
+      parseTaskId(current.body, prefixes) ??
+      generateTaskId(this.plugin.settings.taskIdLength);
+
+    const orderRe = new RegExp(
+      `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`,
+    );
+    let newParentLine = current.rawLine.replace(orderRe, "");
+    newParentLine = setTaskChecked(newParentLine, false);
+    newParentLine = setTaskIdTag(newParentLine, taskId, prefixes);
+
+    const allSubLines = current.subtasks.map((s) => s.rawLine);
+
+    await this.app.vault.process(file, (content) => {
+      const lines = content.split("\n");
+      if (current.lineNumber < lines.length) {
+        let parent = lines[current.lineNumber];
+        parent = setTaskMigrated(parent);
+        parent = setTaskIdTag(parent, taskId, prefixes);
+        lines[current.lineNumber] = parent;
+      }
+      const subNums = current.subtasks
+        .map((s) => s.lineNumber)
+        .sort((a, b) => b - a);
+      for (const n of subNums) {
+        if (n < lines.length) lines.splice(n, 1);
+      }
+      return lines.join("\n");
+    });
+
+    await this.app.vault.process(targetFile, (content) => {
+      const lines = content.split("\n");
+      const lastIdx = findLastTaskLine(content);
+      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      lines.splice(insertAt, 0, newParentLine, ...allSubLines);
+      return lines.join("\n");
+    });
+
+    new Notice(`Moved to ${targetFile.path}`);
+    return true;
+  }
+
+  // COPY — clones to the target day without touching the source. Both the
+  // parent and any copied sub-tasks have their #tid/<id> stripped so the
+  // clone is a fresh, unlinked task. Sub-task scope is picked by the caller:
+  // "all" (everything), "unchecked" (keep-working), or "none" (parent only).
+  private async copyTaskToDate(
+    file: TFile,
+    task: ParsedTask,
+    targetDate: Date,
+    subsMode: SubtaskScope,
+  ): Promise<boolean> {
+    const fallback = this.buildDailyNoteFallback();
+    const targetFile = await ensureDailyNote(this.app, targetDate, fallback);
+    if (targetFile.path === file.path) {
+      new Notice("Source and target are the same file.");
+      return false;
+    }
+
+    const prefixes = this.plugin.settings.prefixes;
+    const current = await this.refreshTask(file, task);
+    if (!current) {
+      new Notice("Couldn't locate the task to copy.");
+      return false;
+    }
+
+    const escTid = prefixes.taskId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const tidRe = new RegExp(`\\s*#${escTid}\\/[A-Za-z0-9]+\\b`, "g");
+    const stripTid = (line: string): string =>
+      line.replace(tidRe, "").replace(/[ \t]+$/, "");
+    const orderRe = new RegExp(
+      `\\s*#${prefixes.order.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/\\d+\\b`,
+    );
+
+    const subsToCopy = current.subtasks.filter((s) => {
+      if (subsMode === "all") return true;
+      if (subsMode === "unchecked") return !s.checked;
+      return false;
+    });
+
+    let parentLine = stripTid(current.rawLine).replace(orderRe, "");
+    parentLine = setTaskChecked(parentLine, false);
+    const subLines = subsToCopy.map((s) => stripTid(s.rawLine));
+
+    await this.app.vault.process(targetFile, (content) => {
+      const lines = content.split("\n");
+      const lastIdx = findLastTaskLine(content);
+      const insertAt = lastIdx === -1 ? lines.length : lastIdx + 1;
+      lines.splice(insertAt, 0, parentLine, ...subLines);
+      return lines.join("\n");
+    });
+
+    const noticeText =
+      subsMode === "all"
+        ? `Copied to ${targetFile.path} (with sub-tasks)`
+        : subsMode === "unchecked"
+          ? `Copied to ${targetFile.path} (with unchecked sub-tasks)`
+          : `Copied to ${targetFile.path}`;
+    new Notice(noticeText);
     return true;
   }
 
@@ -3987,17 +4060,16 @@ interface TaskEditOpts {
   // Strips the `#t/` time tag from the task line so it falls out of the
   // schedule and back into the unscheduled bucket.
   onUnschedule?: () => Promise<void>;
-  // Duplicates the task. The modal prompts for sub-task scope ("all" /
-  // "unchecked" / "none") before calling this — when there are no sub-tasks
-  // the prompt is skipped and `subsMode` is always "none".
-  onDuplicate?: (subsMode: DuplicateSubsMode) => Promise<void>;
-  // Drives whether the duplicate flow asks the sub-task-scope prompt at all.
-  hasSubtasks?: boolean;
 }
 
-// Which subset of the source's sub-tasks the duplicate should carry over.
+// Sub-action chosen after a target date has been picked. Split + Move
+// preserve a cross-day `#tid/<id>` sync on the parent; Copy is a fresh
+// clone with no taskId.
+type MigrateAction = "split" | "move" | "copy";
+
+// Which subset of the source's sub-tasks the Copy action carries over.
 // "unchecked" is the "keep working" path — finished items don't repeat.
-type DuplicateSubsMode = "all" | "unchecked" | "none";
+type SubtaskScope = "all" | "unchecked" | "none";
 
 interface MoveChoice {
   label: string;
@@ -5837,21 +5909,6 @@ class TaskEditModal extends Modal {
       await this.opts.onUnschedule();
       this.close();
     };
-    const runDuplicate = async (): Promise<void> => {
-      if (!this.opts.onDuplicate) return;
-      // Tasks without sub-tasks skip the picker — there's nothing to choose.
-      if (!this.opts.hasSubtasks) {
-        await this.opts.onDuplicate("none");
-        this.close();
-        return;
-      }
-      const mode = await new Promise<DuplicateSubsMode | null>((resolve) => {
-        new DuplicateSubsModeModal(this.app, resolve).open();
-      });
-      if (!mode) return;
-      await this.opts.onDuplicate(mode);
-      this.close();
-    };
 
     if (this.opts.mode === "edit" && this.opts.onDelete) {
       const deleteBtn = actions.createEl("button", {
@@ -6097,16 +6154,6 @@ class TaskEditModal extends Modal {
       unschedBtn.addEventListener("click", () => void runUnschedule());
     }
 
-    if (this.opts.mode === "edit" && this.opts.onDuplicate) {
-      const dupBtn = actions.createEl("button", {
-        cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Duplicate (y)" },
-      });
-      dupBtn.type = "button";
-      setIcon(dupBtn, "copy");
-      dupBtn.addEventListener("click", () => void runDuplicate());
-    }
-
     const saveBtn = actions.createEl("button", {
       cls: "dp-edit-save-btn mod-cta",
       text: this.opts.mode === "new" ? "Add task" : "Save",
@@ -6118,7 +6165,7 @@ class TaskEditModal extends Modal {
     //   i → focus title          o → focus description
     //   d → focus selected duration button
     //   s → show in note         m → open move popover
-    //   p → pomodoro             y → duplicate
+    //   p → pomodoro
     //   x → delete (with confirm)
     //   u → unschedule (strip #t/)
     // Attached to `modalEl` so events from the default-focused close button
@@ -6191,9 +6238,6 @@ class TaskEditModal extends Modal {
       } else if (k === "u" && this.opts.onUnschedule) {
         ev.preventDefault();
         void runUnschedule();
-      } else if (k === "y" && this.opts.onDuplicate) {
-        ev.preventDefault();
-        void runDuplicate();
       }
     };
     this.modalEl.addEventListener("keydown", onModalKey);
@@ -6271,29 +6315,86 @@ class SubtaskQuickAddModal extends Modal {
   }
 }
 
-// Picker shown after pressing Duplicate on a task that has sub-tasks. Three
-// buttons: copy all sub-tasks, copy only the unchecked ones (for recurring
-// checklists where finished items shouldn't repeat), or copy parent only.
-// Closing without picking resolves to null so the caller can no-op.
-class DuplicateSubsModeModal extends Modal {
-  private resolve: (mode: DuplicateSubsMode | null) => void;
+// Stage one of the migrate flow. After the user picks a target date the
+// edit modal hands off here to choose how the task should land on the new
+// day: Split (partial migration), Move (full migration with `- [>]` on the
+// source), or Copy (fresh clone, no taskId sync). Closing without picking
+// resolves to null so the caller can keep the edit modal open.
+class MigrateActionModal extends Modal {
+  private resolve: (action: MigrateAction | null) => void;
   private picked = false;
 
-  constructor(
-    app: App,
-    resolve: (mode: DuplicateSubsMode | null) => void,
-  ) {
+  constructor(app: App, resolve: (action: MigrateAction | null) => void) {
     super(app);
     this.resolve = resolve;
   }
 
   onOpen(): void {
     this.modalEl.addClass("dp-dup-mode-modal");
-    this.titleEl.setText("Duplicate — copy sub-tasks?");
+    this.titleEl.setText("Migrate task");
     this.contentEl.empty();
 
     const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
-    const choices: { label: string; mode: DuplicateSubsMode }[] = [
+    const choices: {
+      label: string;
+      sub: string;
+      action: MigrateAction;
+    }[] = [
+      {
+        label: "Split",
+        sub: "Carry unchecked over · keep partial progress",
+        action: "split",
+      },
+      {
+        label: "Move",
+        sub: "Whole task to the new day · source → [>]",
+        action: "move",
+      },
+      {
+        label: "Copy",
+        sub: "Fresh clone · no taskId sync",
+        action: "copy",
+      },
+    ];
+    for (const c of choices) {
+      const btn = row.createEl("button", { cls: "dp-dup-mode-btn" });
+      btn.type = "button";
+      btn.createDiv({ cls: "dp-dup-mode-btn-label", text: c.label });
+      btn.createDiv({ cls: "dp-dup-mode-btn-sub", text: c.sub });
+      btn.addEventListener("click", () => {
+        this.picked = true;
+        this.resolve(c.action);
+        this.close();
+      });
+    }
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.picked) this.resolve(null);
+  }
+}
+
+// Stage two of the Copy action. Three buttons: copy all sub-tasks, copy
+// only the unchecked ones (for recurring checklists where finished items
+// shouldn't repeat), or copy parent only. Closing without picking resolves
+// to null so the caller can no-op.
+class SubtaskScopeModal extends Modal {
+  private resolve: (mode: SubtaskScope | null) => void;
+  private picked = false;
+
+  constructor(app: App, resolve: (mode: SubtaskScope | null) => void) {
+    super(app);
+    this.resolve = resolve;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-dup-mode-modal");
+    this.titleEl.setText("Copy — which sub-tasks?");
+    this.contentEl.empty();
+
+    const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
+    const choices: { label: string; mode: SubtaskScope }[] = [
       { label: "All sub-tasks", mode: "all" },
       { label: "Only unchecked", mode: "unchecked" },
       { label: "No sub-tasks", mode: "none" },
