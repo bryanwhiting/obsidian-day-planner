@@ -11678,19 +11678,19 @@ var VIEW_TYPE_SHELL = "today-shell";
 var ENTRIES = [
   {
     label: "Today",
-    description: "Today's daily-note dashboard \u2014 timeline, unscheduled rail, habits, intentions, pomodoro.",
+    description: "Daily-note dashboard.",
     icon: "calendar-clock",
     target: VIEW_TYPE_TODAY
   },
   {
     label: "This week",
-    description: "Multi-day view \u2014 drag tasks between days, see the week at a glance.",
+    description: "Multi-day view.",
     icon: "calendar-range",
     target: VIEW_TYPE_MULTI_DAY
   },
   {
     label: "Reporting",
-    description: "Habits, projects, and time-tracking stats with three tabs.",
+    description: "Habits + projects + time stats.",
     icon: "bar-chart-3",
     target: VIEW_TYPE_HABITS_STATS
   }
@@ -11698,6 +11698,13 @@ var ENTRIES = [
 var ShellView = class extends import_obsidian13.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
+    // The leaf that hosts whichever target view is currently visible. Paired
+    // 1:1 with the shell at activation time; if the user closes it manually,
+    // `ensureContentLeaf` recreates it on the next nav click.
+    this.contentLeaf = null;
+    // Last target view-type opened, used to mark the matching nav row as
+    // active when re-rendering the sidebar.
+    this.activeTarget = VIEW_TYPE_TODAY;
     this.plugin = plugin;
   }
   getViewType() {
@@ -11709,6 +11716,15 @@ var ShellView = class extends import_obsidian13.ItemView {
   getIcon() {
     return "layout-dashboard";
   }
+  // Called by `activateShellView` immediately after the split is created so
+  // the sidebar knows which leaf to drive. Subsequent re-opens of an existing
+  // shell can call this again with a fresh content leaf if the prior one was
+  // closed by the user.
+  setContentLeaf(leaf, initialTarget) {
+    this.contentLeaf = leaf;
+    this.activeTarget = initialTarget;
+    this.render();
+  }
   async onOpen() {
     this.render();
   }
@@ -11718,45 +11734,44 @@ var ShellView = class extends import_obsidian13.ItemView {
   render() {
     const root = this.contentEl;
     root.empty();
-    root.addClass("dp-shell");
-    const sidebar = root.createDiv({ cls: "dp-shell-sidebar" });
-    const header = sidebar.createDiv({ cls: "dp-shell-sidebar-header" });
+    root.addClass("dp-shell-nav");
+    const header = root.createDiv({ cls: "dp-shell-sidebar-header" });
     header.setText("Today");
     for (const entry of ENTRIES) {
-      const item = sidebar.createDiv({ cls: "dp-shell-nav-item" });
+      const item = root.createDiv({ cls: "dp-shell-nav-item" });
+      if (entry.target === this.activeTarget) {
+        item.addClass("is-active");
+      }
       const iconEl = item.createSpan({ cls: "dp-shell-nav-icon" });
       (0, import_obsidian13.setIcon)(iconEl, entry.icon);
-      item.createSpan({ cls: "dp-shell-nav-label", text: entry.label });
+      const text = item.createDiv({ cls: "dp-shell-nav-text" });
+      text.createDiv({ cls: "dp-shell-nav-label", text: entry.label });
+      text.createDiv({ cls: "dp-shell-nav-desc", text: entry.description });
       item.addEventListener("click", () => void this.openTarget(entry));
-    }
-    const content = root.createDiv({ cls: "dp-shell-content" });
-    const card = content.createDiv({ cls: "dp-shell-welcome" });
-    card.createEl("h2", { text: "Today plugin" });
-    card.createEl("p", {
-      cls: "dp-shell-welcome-sub",
-      text: "Pick a view from the left. Clicking a row opens that view in this pane."
-    });
-    const list = card.createDiv({ cls: "dp-shell-welcome-list" });
-    for (const entry of ENTRIES) {
-      const row = list.createDiv({ cls: "dp-shell-welcome-row" });
-      const iconEl = row.createSpan({ cls: "dp-shell-welcome-icon" });
-      (0, import_obsidian13.setIcon)(iconEl, entry.icon);
-      const text = row.createDiv({ cls: "dp-shell-welcome-text" });
-      text.createDiv({ cls: "dp-shell-welcome-label", text: entry.label });
-      text.createDiv({
-        cls: "dp-shell-welcome-desc",
-        text: entry.description
-      });
-      row.addEventListener("click", () => void this.openTarget(entry));
     }
   }
   async openTarget(entry) {
-    await this.leaf.setViewState({
-      type: entry.target,
-      active: true
-    });
+    const leaf = await this.ensureContentLeaf();
+    await leaf.setViewState({ type: entry.target, active: true });
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
+    this.activeTarget = entry.target;
+    this.render();
+  }
+  // Returns the paired content leaf, recreating it if the user closed it.
+  // The fresh leaf is opened to the right of the shell via `createLeafBySplit`
+  // so the layout matches what `activateShellView` set up initially.
+  async ensureContentLeaf() {
+    if (this.contentLeaf && isLeafAttached(this.contentLeaf)) {
+      return this.contentLeaf;
+    }
+    const fresh = this.app.workspace.createLeafBySplit(this.leaf, "vertical");
+    this.contentLeaf = fresh;
+    return fresh;
   }
 };
+function isLeafAttached(leaf) {
+  return !!leaf.parent;
+}
 
 // src/main.ts
 var import_obsidian15 = require("obsidian");
@@ -12046,20 +12061,29 @@ var TodayPlugin = class extends import_obsidian14.Plugin {
   }
   async activateShellView() {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_SHELL);
-    let leaf;
     if (existing.length > 0) {
-      leaf = existing[0];
-      this.app.workspace.revealLeaf(leaf);
+      this.app.workspace.revealLeaf(existing[0]);
       return;
     }
-    leaf = this.app.workspace.getLeaf("tab");
-    if (!leaf)
+    const navLeaf = this.app.workspace.getLeaf("tab");
+    if (!navLeaf)
       return;
-    await leaf.setViewState({
+    await navLeaf.setViewState({
       type: VIEW_TYPE_SHELL,
+      active: false
+    });
+    const contentLeaf = this.app.workspace.createLeafBySplit(
+      navLeaf,
+      "vertical"
+    );
+    await contentLeaf.setViewState({
+      type: VIEW_TYPE_TODAY,
       active: true
     });
-    this.app.workspace.revealLeaf(leaf);
+    const navView = navLeaf.view;
+    navView.setContentLeaf(contentLeaf, VIEW_TYPE_TODAY);
+    this.app.workspace.revealLeaf(navLeaf);
+    this.app.workspace.setActiveLeaf(contentLeaf, { focus: true });
   }
   async activateMultiDayView() {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_MULTI_DAY);

@@ -6,11 +6,10 @@ import { VIEW_TYPE_HABITS_STATS } from "./habitsView";
 
 export const VIEW_TYPE_SHELL = "today-shell";
 
-// Sidebar entries shown in the shell. Each `target` is the view-type string
-// that `leaf.setViewState` is called with when the row is clicked — the leaf
-// is swapped to that view in place, so the user lands on a full-fidelity
-// Today / Multi-day / Reporting pane. To return to the shell, re-open it via
-// the ribbon icon or the command palette.
+// Nav entries rendered in the shell sidebar. `target` is the view-type string
+// the content leaf is swapped to when the row is clicked — the sidebar
+// itself stays put, so the user keeps a persistent nav while bouncing
+// between Today / This week / Reporting in the right-hand pane.
 interface ShellEntry {
   label: string;
   description: string;
@@ -21,21 +20,19 @@ interface ShellEntry {
 const ENTRIES: ShellEntry[] = [
   {
     label: "Today",
-    description:
-      "Today's daily-note dashboard — timeline, unscheduled rail, habits, intentions, pomodoro.",
+    description: "Daily-note dashboard.",
     icon: "calendar-clock",
     target: VIEW_TYPE_TODAY,
   },
   {
     label: "This week",
-    description:
-      "Multi-day view — drag tasks between days, see the week at a glance.",
+    description: "Multi-day view.",
     icon: "calendar-range",
     target: VIEW_TYPE_MULTI_DAY,
   },
   {
     label: "Reporting",
-    description: "Habits, projects, and time-tracking stats with three tabs.",
+    description: "Habits + projects + time stats.",
     icon: "bar-chart-3",
     target: VIEW_TYPE_HABITS_STATS,
   },
@@ -43,6 +40,13 @@ const ENTRIES: ShellEntry[] = [
 
 export class ShellView extends ItemView {
   private plugin: TodayPlugin;
+  // The leaf that hosts whichever target view is currently visible. Paired
+  // 1:1 with the shell at activation time; if the user closes it manually,
+  // `ensureContentLeaf` recreates it on the next nav click.
+  private contentLeaf: WorkspaceLeaf | null = null;
+  // Last target view-type opened, used to mark the matching nav row as
+  // active when re-rendering the sidebar.
+  private activeTarget: string = VIEW_TYPE_TODAY;
 
   constructor(leaf: WorkspaceLeaf, plugin: TodayPlugin) {
     super(leaf);
@@ -61,6 +65,16 @@ export class ShellView extends ItemView {
     return "layout-dashboard";
   }
 
+  // Called by `activateShellView` immediately after the split is created so
+  // the sidebar knows which leaf to drive. Subsequent re-opens of an existing
+  // shell can call this again with a fresh content leaf if the prior one was
+  // closed by the user.
+  setContentLeaf(leaf: WorkspaceLeaf, initialTarget: string): void {
+    this.contentLeaf = leaf;
+    this.activeTarget = initialTarget;
+    this.render();
+  }
+
   async onOpen(): Promise<void> {
     this.render();
   }
@@ -72,50 +86,50 @@ export class ShellView extends ItemView {
   private render(): void {
     const root = this.contentEl;
     root.empty();
-    root.addClass("dp-shell");
+    root.addClass("dp-shell-nav");
 
-    const sidebar = root.createDiv({ cls: "dp-shell-sidebar" });
-    const header = sidebar.createDiv({ cls: "dp-shell-sidebar-header" });
+    const header = root.createDiv({ cls: "dp-shell-sidebar-header" });
     header.setText("Today");
 
     for (const entry of ENTRIES) {
-      const item = sidebar.createDiv({ cls: "dp-shell-nav-item" });
+      const item = root.createDiv({ cls: "dp-shell-nav-item" });
+      if (entry.target === this.activeTarget) {
+        item.addClass("is-active");
+      }
       const iconEl = item.createSpan({ cls: "dp-shell-nav-icon" });
       setIcon(iconEl, entry.icon);
-      item.createSpan({ cls: "dp-shell-nav-label", text: entry.label });
+      const text = item.createDiv({ cls: "dp-shell-nav-text" });
+      text.createDiv({ cls: "dp-shell-nav-label", text: entry.label });
+      text.createDiv({ cls: "dp-shell-nav-desc", text: entry.description });
       item.addEventListener("click", () => void this.openTarget(entry));
-    }
-
-    const content = root.createDiv({ cls: "dp-shell-content" });
-    const card = content.createDiv({ cls: "dp-shell-welcome" });
-    card.createEl("h2", { text: "Today plugin" });
-    card.createEl("p", {
-      cls: "dp-shell-welcome-sub",
-      text: "Pick a view from the left. Clicking a row opens that view in this pane.",
-    });
-
-    const list = card.createDiv({ cls: "dp-shell-welcome-list" });
-    for (const entry of ENTRIES) {
-      const row = list.createDiv({ cls: "dp-shell-welcome-row" });
-      const iconEl = row.createSpan({ cls: "dp-shell-welcome-icon" });
-      setIcon(iconEl, entry.icon);
-      const text = row.createDiv({ cls: "dp-shell-welcome-text" });
-      text.createDiv({ cls: "dp-shell-welcome-label", text: entry.label });
-      text.createDiv({
-        cls: "dp-shell-welcome-desc",
-        text: entry.description,
-      });
-      row.addEventListener("click", () => void this.openTarget(entry));
     }
   }
 
   private async openTarget(entry: ShellEntry): Promise<void> {
-    // Swap the current leaf's view to the target. `active: true` focuses the
-    // new view; Obsidian destroys this ShellView instance as part of the
-    // state change, so we don't need to clean up containerEl ourselves.
-    await this.leaf.setViewState({
-      type: entry.target,
-      active: true,
-    });
+    const leaf = await this.ensureContentLeaf();
+    await leaf.setViewState({ type: entry.target, active: true });
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
+    this.activeTarget = entry.target;
+    this.render();
   }
+
+  // Returns the paired content leaf, recreating it if the user closed it.
+  // The fresh leaf is opened to the right of the shell via `createLeafBySplit`
+  // so the layout matches what `activateShellView` set up initially.
+  private async ensureContentLeaf(): Promise<WorkspaceLeaf> {
+    if (this.contentLeaf && isLeafAttached(this.contentLeaf)) {
+      return this.contentLeaf;
+    }
+    const fresh = this.app.workspace.createLeafBySplit(this.leaf, "vertical");
+    this.contentLeaf = fresh;
+    return fresh;
+  }
+}
+
+// True when the leaf is still part of the workspace tree (i.e. not closed).
+// `parent` is cleared by Obsidian when a leaf is detached, so this is the
+// cheapest signal we can read without instanceof-checking against internal
+// types.
+function isLeafAttached(leaf: WorkspaceLeaf): boolean {
+  return !!(leaf as unknown as { parent?: unknown }).parent;
 }
