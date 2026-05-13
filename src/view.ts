@@ -2583,12 +2583,6 @@ export class TodayView extends ItemView {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
       moveChoices: this.buildMoveChoices(file, task),
-      moveCalendarPick: {
-        hotkey: "c",
-        initialMonth: this.selectedDate,
-        selectedDate: this.selectedDate,
-        onPick: (d) => this.migrateTaskToDate(file, task, d),
-      },
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
       onUnschedule: () => this.unscheduleTask(file, task),
@@ -2626,51 +2620,33 @@ export class TodayView extends ItemView {
     new Notice("Unscheduled");
   }
 
-  // Computes the date-picker entries for the edit modal's "Move" button:
-  // tomorrow, +2 days, +3 days, and the first day of next week (driven by
-  // habitWeekStart). The `next week` entry is dropped when its date already
-  // appears as one of the next-3-days. All offsets are relative to the
-  // currently-viewed day, so opening the modal on a future-dated note pushes
-  // tasks forward from there rather than from real today.
+  // Action-first migrate picker shown when (m) is pressed on the edit modal.
+  // Three choices, each driving a different downstream flow:
+  //   (s) Split now → split to tomorrow with no further prompts (the common
+  //       case: check parent here, carry unchecked subtasks over).
+  //   (m) Move → ask "when?" (today/tomorrow/date), then "split or move whole".
+  //   (c) Copy → ask "when?", then sub-task scope (all/unchecked/none).
+  // "tomorrow" is relative to the currently-viewed day so opening the modal
+  // on a future-dated note still pushes forward by one day.
   private buildMoveChoices(file: TFile, task: ParsedTask): MoveChoice[] {
-    const sel = startOfDay(this.selectedDate);
-    const weekStart = this.plugin.settings.habitWeekStart;
-    const day1 = addDays(sel, 1);
-    const day2 = addDays(sel, 2);
-    const day3 = addDays(sel, 3);
-    const offset = ((weekStart - sel.getDay() + 7) % 7) || 7;
-    const nextWeek = addDays(sel, offset);
-    const dayLabel = (d: Date): string =>
-      d.toLocaleDateString(undefined, { weekday: "short" });
-    const choices: MoveChoice[] = [
+    const tomorrow = addDays(startOfDay(this.selectedDate), 1);
+    return [
       {
-        label: "tomorrow",
-        hotkey: "1",
-        onChoose: () => this.migrateTaskToDate(file, task, day1),
+        label: "split now",
+        hotkey: "s",
+        onChoose: () => this.splitTaskToDate(file, task, tomorrow),
       },
       {
-        label: dayLabel(day2),
-        hotkey: "2",
-        onChoose: () => this.migrateTaskToDate(file, task, day2),
+        label: "move",
+        hotkey: "m",
+        onChoose: () => this.migrateWithWhen(file, task, "move"),
       },
       {
-        label: dayLabel(day3),
-        hotkey: "3",
-        onChoose: () => this.migrateTaskToDate(file, task, day3),
+        label: "copy",
+        hotkey: "c",
+        onChoose: () => this.migrateWithWhen(file, task, "copy"),
       },
     ];
-    const nextWeekIsDup =
-      sameDay(nextWeek, day1) ||
-      sameDay(nextWeek, day2) ||
-      sameDay(nextWeek, day3);
-    if (!nextWeekIsDup) {
-      choices.push({
-        label: "next week",
-        hotkey: "4",
-        onChoose: () => this.migrateTaskToDate(file, task, nextWeek),
-      });
-    }
-    return choices;
   }
 
   private buildDailyNoteFallback(): DailyNoteFallback {
@@ -2686,25 +2662,39 @@ export class TodayView extends ItemView {
     };
   }
 
-  // Orchestrator for the date-picker buttons. Opens the Split/Move/Copy
-  // picker, then dispatches. Copy gets a second prompt for sub-task scope
-  // (all / unchecked / none). Returns true if the modal should close.
-  private async migrateTaskToDate(
+  // Two-stage flow for the Move and Copy buttons in the migrate picker.
+  // Stage 1: WhenModal asks today / tomorrow / pick-date and resolves to a
+  // target date. Stage 2 depends on `kind`: Move offers split-vs-move-whole
+  // (no Copy option per UX); Copy offers the sub-task scope picker. Either
+  // stage cancelling returns false so the edit modal stays open.
+  private async migrateWithWhen(
     file: TFile,
     task: ParsedTask,
-    targetDate: Date,
+    kind: "move" | "copy",
   ): Promise<boolean> {
-    const action = await new Promise<MigrateAction | null>((resolve) => {
-      new MigrateActionModal(this.app, resolve).open();
+    const date = await new Promise<Date | null>((resolve) => {
+      new WhenModal(
+        this.app,
+        kind === "move" ? "Move to when?" : "Copy to when?",
+        this.selectedDate,
+        resolve,
+      ).open();
     });
-    if (!action) return false;
-    if (action === "split") return this.splitTaskToDate(file, task, targetDate);
-    if (action === "move") return this.moveTaskToDate(file, task, targetDate);
+    if (!date) return false;
+    if (kind === "move") {
+      const action = await new Promise<"split" | "move" | null>((resolve) => {
+        new MoveActionModal(this.app, resolve).open();
+      });
+      if (!action) return false;
+      return action === "split"
+        ? this.splitTaskToDate(file, task, date)
+        : this.moveTaskToDate(file, task, date);
+    }
     const mode = await new Promise<SubtaskScope | null>((resolve) => {
       new SubtaskScopeModal(this.app, resolve).open();
     });
     if (!mode) return false;
-    return this.copyTaskToDate(file, task, targetDate, mode);
+    return this.copyTaskToDate(file, task, date, mode);
   }
 
   // Re-parses the source file to pick up any sub-task changes made in the
@@ -4059,21 +4049,10 @@ interface TaskEditOpts {
   onDeleteSubtask?: (sub: ParsedSubtask) => Promise<void>;
   onReorderSubtasks?: (ordered: ParsedSubtask[]) => Promise<void>;
   onShowInNote?: () => void;
-  // Date-picker entries shown when "Move" is clicked. Each is a `{label,
-  // hotkey, onChoose}` triple; the modal only renders / wires keys, the
-  // caller decides which dates appear and what happens on click.
+  // Action-first migrate entries shown when "Move" (m) is clicked. Each is a
+  // `{label, hotkey, onChoose}` triple; the modal only renders / wires keys,
+  // the caller decides which actions appear and what happens on click.
   moveChoices?: MoveChoice[];
-  // Optional last entry in the move cluster: a calendar-icon button that
-  // swaps the choices popover for an interactive calendar grid. The picker
-  // re-uses the same `dp-calendar` markup as the navbar widget so it visually
-  // matches. `onPick` is invoked when the user clicks a day; returning
-  // `true` closes the modal, `false` keeps it open.
-  moveCalendarPick?: {
-    hotkey: string;
-    initialMonth: Date;
-    selectedDate: Date;
-    onPick: (date: Date) => Promise<boolean>;
-  };
   onStartPomodoro?: () => void;
   // Drops the task line and any sub-tasks. The modal handles confirmation;
   // the caller just performs the file mutation.
@@ -4083,10 +4062,12 @@ interface TaskEditOpts {
   onUnschedule?: () => Promise<void>;
 }
 
-// Sub-action chosen after a target date has been picked. Split + Move
-// preserve a cross-day `#tid/<id>` sync on the parent; Copy is a fresh
-// clone with no taskId.
-type MigrateAction = "split" | "move" | "copy";
+// Sub-action chosen inside the Move flow after a target date is picked.
+// Split keeps partial progress on the source day (parent → checked, unchecked
+// subtasks → `[>]`) while seeding a fresh parent + unchecked subtasks on the
+// target. Move whole stamps the whole source parent as `[>]` and carries
+// every subtask line over. Both preserve a cross-day `#tid/<id>` sync.
+type MoveActionKind = "split" | "move";
 
 // Which subset of the source's sub-tasks the Copy action carries over.
 // "unchecked" is the "keep working" path — finished items don't repeat.
@@ -5962,11 +5943,10 @@ class TaskEditModal extends Modal {
     let editModeMoveBtn: HTMLButtonElement | null = null;
     if (this.opts.mode === "edit") {
       const moveChoices = this.opts.moveChoices ?? [];
-      const calendarPick = this.opts.moveCalendarPick;
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Move to… (m)" },
+        attr: { "aria-label": "Migrate… (m)" },
       });
       moveBtn.type = "button";
       setIcon(moveBtn, "forward");
@@ -5975,20 +5955,12 @@ class TaskEditModal extends Modal {
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
 
-      // Sibling popover that hosts the calendar picker. Lives next to the
-      // choices row inside the same wrap so it inherits the existing pointer
-      // anchor and z-index. Toggled in/out when the user picks "calendar".
-      const calPopover = moveWrap.createDiv({
-        cls: "dp-edit-move-calpopover",
-      });
-      calPopover.style.display = "none";
-
       const choiceBtns: HTMLButtonElement[] = [];
       for (const choice of moveChoices) {
         const btn = choices.createEl("button", {
           cls: "dp-edit-move-choice",
           attr: {
-            "aria-label": `Move to ${choice.label} (${choice.hotkey})`,
+            "aria-label": `${choice.label} (${choice.hotkey})`,
           },
         });
         btn.type = "button";
@@ -6001,30 +5973,7 @@ class TaskEditModal extends Modal {
         choiceBtns.push(btn);
       }
 
-      // Calendar-icon button at the end of the row (hotkey "c"). Clicking it
-      // swaps the choices popover for the calendar grid; picking a day fires
-      // the move and closes the modal on success.
-      let calBtn: HTMLButtonElement | null = null;
-      if (calendarPick) {
-        calBtn = choices.createEl("button", {
-          cls: "dp-edit-move-choice is-calendar",
-          attr: {
-            "aria-label": `Pick date (${calendarPick.hotkey})`,
-          },
-        });
-        calBtn.type = "button";
-        calBtn.createEl("span", {
-          cls: "dp-edit-move-hotkey",
-          text: `(${calendarPick.hotkey})`,
-        });
-        const iconWrap = calBtn.createSpan({ cls: "dp-edit-move-calicon" });
-        setIcon(iconWrap, "calendar");
-        calBtn.addEventListener("click", () => openCalendar());
-        choiceBtns.push(calBtn);
-      }
-
       let stageTwoActive = false;
-      let calendarActive = false;
       let keyHandler: ((ev: KeyboardEvent) => void) | null = null;
 
       const setSubBtnsDisabled = (disabled: boolean): void => {
@@ -6035,35 +5984,10 @@ class TaskEditModal extends Modal {
         stageTwoActive = false;
         choices.style.display = "none";
         choices.removeClass("is-open");
-        closeCalendar();
         if (keyHandler) {
           this.contentEl.removeEventListener("keydown", keyHandler, true);
           keyHandler = null;
         }
-      };
-
-      const closeCalendar = (): void => {
-        if (!calendarActive) return;
-        calendarActive = false;
-        calPopover.style.display = "none";
-        calPopover.empty();
-      };
-
-      const openCalendar = (): void => {
-        if (!calendarPick) return;
-        // Hide the choices row (calendar takes over the same anchor) but keep
-        // stageTwoActive true so Escape still routes here.
-        choices.style.display = "none";
-        choices.removeClass("is-open");
-        calendarActive = true;
-        calPopover.style.display = "";
-        renderPickerCalendar(calPopover, {
-          initialMonth: calendarPick.initialMonth,
-          selectedDate: calendarPick.selectedDate,
-          onPickDay: (date) => {
-            void runWith(() => calendarPick.onPick(date));
-          },
-        });
       };
 
       const runWith = async (
@@ -6072,18 +5996,7 @@ class TaskEditModal extends Modal {
         setSubBtnsDisabled(true);
         const moved = await action();
         if (moved) this.close();
-        else {
-          setSubBtnsDisabled(false);
-          // The action declined (e.g. same-file move). Restore the choices
-          // row so the user can pick something else.
-          if (calendarActive) {
-            closeCalendar();
-            choices.style.display = "";
-            choices.removeClass("is-open");
-            void choices.offsetWidth;
-            choices.addClass("is-open");
-          }
-        }
+        else setSubBtnsDisabled(false);
       };
 
       moveBtn.addEventListener("click", () => {
@@ -6115,21 +6028,10 @@ class TaskEditModal extends Modal {
           if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
-            if (calendarActive) {
-              // First Escape closes the calendar back to the choices row;
-              // the next Escape will dismiss the cluster entirely.
-              closeCalendar();
-              choices.style.display = "";
-              choices.removeClass("is-open");
-              void choices.offsetWidth;
-              choices.addClass("is-open");
-              return;
-            }
             exitStageTwo();
             moveBtn.focus();
             return;
           }
-          if (calendarActive) return;
           for (const choice of moveChoices) {
             if (ev.key === choice.hotkey) {
               ev.preventDefault();
@@ -6137,14 +6039,6 @@ class TaskEditModal extends Modal {
               void runWith(choice.onChoose);
               return;
             }
-          }
-          if (
-            calendarPick &&
-            ev.key.toLowerCase() === calendarPick.hotkey.toLowerCase()
-          ) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            openCalendar();
           }
         };
         this.contentEl.addEventListener("keydown", keyHandler, true);
@@ -6221,10 +6115,6 @@ class TaskEditModal extends Modal {
         ".dp-edit-move-choices",
       );
       if (moveOpen && moveOpen.style.display !== "none") return;
-      const calOpen = this.contentEl.querySelector<HTMLElement>(
-        ".dp-edit-move-calpopover",
-      );
-      if (calOpen && calOpen.style.display !== "none") return;
       // Modifier-augmented combos belong to the OS / browser, not us.
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
       const k = ev.key.toLowerCase();
@@ -6337,58 +6227,173 @@ class SubtaskQuickAddModal extends Modal {
   }
 }
 
-// Stage one of the migrate flow. After the user picks a target date the
-// edit modal hands off here to choose how the task should land on the new
-// day: Split (partial migration), Move (full migration with `- [>]` on the
-// source), or Copy (fresh clone, no taskId sync). Closing without picking
-// resolves to null so the caller can keep the edit modal open.
-class MigrateActionModal extends Modal {
-  private resolve: (action: MigrateAction | null) => void;
+// Stage 1 of the (m)Move and (c)Copy flows: pick a target date. Three
+// options — today, tomorrow, or a full calendar grid for further-out dates.
+// "Today" / "Tomorrow" are relative to the currently-viewed day so opening
+// the picker from a future-dated note still treats "tomorrow" as one day
+// past whatever you're looking at. Closing without picking resolves to null.
+class WhenModal extends Modal {
+  private resolve: (date: Date | null) => void;
+  private picked = false;
+  private base: Date;
+  private title: string;
+
+  constructor(
+    app: App,
+    title: string,
+    base: Date,
+    resolve: (date: Date | null) => void,
+  ) {
+    super(app);
+    this.title = title;
+    this.base = base;
+    this.resolve = resolve;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("dp-dup-mode-modal");
+    this.titleEl.setText(this.title);
+    this.contentEl.empty();
+
+    const sel = startOfDay(this.base);
+    const today = sel;
+    const tomorrow = addDays(sel, 1);
+
+    const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
+    const calWrap = this.contentEl.createDiv({
+      cls: "dp-dup-mode-calwrap",
+    });
+    calWrap.style.display = "none";
+
+    const pick = (date: Date): void => {
+      this.picked = true;
+      this.resolve(date);
+      this.close();
+    };
+
+    const openCalendar = (): void => {
+      row.style.display = "none";
+      calWrap.style.display = "";
+      renderPickerCalendar(calWrap, {
+        initialMonth: sel,
+        selectedDate: sel,
+        onPickDay: (date) => pick(date),
+      });
+    };
+
+    const buttons: { label: string; hotkey: string; onChoose: () => void }[] =
+      [
+        { label: "Today", hotkey: "t", onChoose: () => pick(today) },
+        { label: "Tomorrow", hotkey: "m", onChoose: () => pick(tomorrow) },
+        { label: "Pick date…", hotkey: "d", onChoose: () => openCalendar() },
+      ];
+
+    for (const b of buttons) {
+      const el = row.createEl("button", { cls: "dp-dup-mode-btn" });
+      el.type = "button";
+      el.createDiv({
+        cls: "dp-dup-mode-btn-label",
+        text: `(${b.hotkey}) ${b.label}`,
+      });
+      el.addEventListener("click", b.onChoose);
+    }
+
+    this.contentEl.addEventListener("keydown", (ev) => {
+      const target = ev.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        return;
+      }
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      const k = ev.key.toLowerCase();
+      const hit = buttons.find((b) => b.hotkey === k);
+      if (!hit) return;
+      ev.preventDefault();
+      hit.onChoose();
+    });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.picked) this.resolve(null);
+  }
+}
+
+// Stage 2 of the (m)Move flow. Two choices — Split (partial: parent checks
+// off, unchecked subtasks carry over) or Move whole (parent → `[>]`, all
+// subtasks migrate). Copy intentionally absent: that's a top-level entry.
+class MoveActionModal extends Modal {
+  private resolve: (action: MoveActionKind | null) => void;
   private picked = false;
 
-  constructor(app: App, resolve: (action: MigrateAction | null) => void) {
+  constructor(
+    app: App,
+    resolve: (action: MoveActionKind | null) => void,
+  ) {
     super(app);
     this.resolve = resolve;
   }
 
   onOpen(): void {
     this.modalEl.addClass("dp-dup-mode-modal");
-    this.titleEl.setText("Migrate task");
+    this.titleEl.setText("Migrate — how?");
     this.contentEl.empty();
 
     const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
     const choices: {
       label: string;
       sub: string;
-      action: MigrateAction;
+      hotkey: string;
+      action: MoveActionKind;
     }[] = [
       {
         label: "Split",
         sub: "Carry unchecked over · keep partial progress",
+        hotkey: "s",
         action: "split",
       },
       {
-        label: "Move",
+        label: "Move whole",
         sub: "Whole task to the new day · source → [>]",
+        hotkey: "m",
         action: "move",
       },
-      {
-        label: "Copy",
-        sub: "Fresh clone · no taskId sync",
-        action: "copy",
-      },
     ];
+
+    const pick = (a: MoveActionKind): void => {
+      this.picked = true;
+      this.resolve(a);
+      this.close();
+    };
+
     for (const c of choices) {
       const btn = row.createEl("button", { cls: "dp-dup-mode-btn" });
       btn.type = "button";
-      btn.createDiv({ cls: "dp-dup-mode-btn-label", text: c.label });
-      btn.createDiv({ cls: "dp-dup-mode-btn-sub", text: c.sub });
-      btn.addEventListener("click", () => {
-        this.picked = true;
-        this.resolve(c.action);
-        this.close();
+      btn.createDiv({
+        cls: "dp-dup-mode-btn-label",
+        text: `(${c.hotkey}) ${c.label}`,
       });
+      btn.createDiv({ cls: "dp-dup-mode-btn-sub", text: c.sub });
+      btn.addEventListener("click", () => pick(c.action));
     }
+
+    this.contentEl.addEventListener("keydown", (ev) => {
+      const target = ev.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        return;
+      }
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      const k = ev.key.toLowerCase();
+      const hit = choices.find((c) => c.hotkey === k);
+      if (!hit) return;
+      ev.preventDefault();
+      pick(hit.action);
+    });
   }
 
   onClose(): void {

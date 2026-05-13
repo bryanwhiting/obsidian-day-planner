@@ -3155,7 +3155,7 @@ function buildTaskIdDesc() {
     "Cross-references a task across days. Default prefix ",
     makeCode("tid"),
     ". When you migrate a task's incomplete sub-tasks to the next day from the edit modal (",
-    makeCode("Move to tomorrow \u2192 Migrate incomplete"),
+    makeCode("Migrate \u2192 Split now"),
     "), the plugin marks the original parent as completed, generates a short alphanumeric ID (length configurable below), and stamps ",
     makeCode("#tid/<id>"),
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
@@ -6223,12 +6223,6 @@ var TodayView = class extends import_obsidian6.ItemView {
         void this.openLine(file, task.lineNumber, this.endOfTitleCh(task.rawLine));
       },
       moveChoices: this.buildMoveChoices(file, task),
-      moveCalendarPick: {
-        hotkey: "c",
-        initialMonth: this.selectedDate,
-        selectedDate: this.selectedDate,
-        onPick: (d) => this.migrateTaskToDate(file, task, d)
-      },
       onStartPomodoro: () => this.enterPomodoro(file, task),
       onDelete: () => this.deleteTaskLines(file, task),
       onUnschedule: () => this.unscheduleTask(file, task)
@@ -6265,47 +6259,33 @@ var TodayView = class extends import_obsidian6.ItemView {
     });
     new import_obsidian6.Notice("Unscheduled");
   }
-  // Computes the date-picker entries for the edit modal's "Move" button:
-  // tomorrow, +2 days, +3 days, and the first day of next week (driven by
-  // habitWeekStart). The `next week` entry is dropped when its date already
-  // appears as one of the next-3-days. All offsets are relative to the
-  // currently-viewed day, so opening the modal on a future-dated note pushes
-  // tasks forward from there rather than from real today.
+  // Action-first migrate picker shown when (m) is pressed on the edit modal.
+  // Three choices, each driving a different downstream flow:
+  //   (s) Split now → split to tomorrow with no further prompts (the common
+  //       case: check parent here, carry unchecked subtasks over).
+  //   (m) Move → ask "when?" (today/tomorrow/date), then "split or move whole".
+  //   (c) Copy → ask "when?", then sub-task scope (all/unchecked/none).
+  // "tomorrow" is relative to the currently-viewed day so opening the modal
+  // on a future-dated note still pushes forward by one day.
   buildMoveChoices(file, task) {
-    const sel = startOfDay(this.selectedDate);
-    const weekStart = this.plugin.settings.habitWeekStart;
-    const day1 = addDays(sel, 1);
-    const day2 = addDays(sel, 2);
-    const day3 = addDays(sel, 3);
-    const offset = (weekStart - sel.getDay() + 7) % 7 || 7;
-    const nextWeek = addDays(sel, offset);
-    const dayLabel = (d) => d.toLocaleDateString(void 0, { weekday: "short" });
-    const choices = [
+    const tomorrow = addDays(startOfDay(this.selectedDate), 1);
+    return [
       {
-        label: "tomorrow",
-        hotkey: "1",
-        onChoose: () => this.migrateTaskToDate(file, task, day1)
+        label: "split now",
+        hotkey: "s",
+        onChoose: () => this.splitTaskToDate(file, task, tomorrow)
       },
       {
-        label: dayLabel(day2),
-        hotkey: "2",
-        onChoose: () => this.migrateTaskToDate(file, task, day2)
+        label: "move",
+        hotkey: "m",
+        onChoose: () => this.migrateWithWhen(file, task, "move")
       },
       {
-        label: dayLabel(day3),
-        hotkey: "3",
-        onChoose: () => this.migrateTaskToDate(file, task, day3)
+        label: "copy",
+        hotkey: "c",
+        onChoose: () => this.migrateWithWhen(file, task, "copy")
       }
     ];
-    const nextWeekIsDup = sameDay(nextWeek, day1) || sameDay(nextWeek, day2) || sameDay(nextWeek, day3);
-    if (!nextWeekIsDup) {
-      choices.push({
-        label: "next week",
-        hotkey: "4",
-        onChoose: () => this.migrateTaskToDate(file, task, nextWeek)
-      });
-    }
-    return choices;
   }
   buildDailyNoteFallback() {
     return {
@@ -6319,25 +6299,36 @@ var TodayView = class extends import_obsidian6.ItemView {
       addCreatedTag: this.plugin.settings.addCreatedTagToFrontmatter
     };
   }
-  // Orchestrator for the date-picker buttons. Opens the Split/Move/Copy
-  // picker, then dispatches. Copy gets a second prompt for sub-task scope
-  // (all / unchecked / none). Returns true if the modal should close.
-  async migrateTaskToDate(file, task, targetDate) {
-    const action = await new Promise((resolve) => {
-      new MigrateActionModal(this.app, resolve).open();
+  // Two-stage flow for the Move and Copy buttons in the migrate picker.
+  // Stage 1: WhenModal asks today / tomorrow / pick-date and resolves to a
+  // target date. Stage 2 depends on `kind`: Move offers split-vs-move-whole
+  // (no Copy option per UX); Copy offers the sub-task scope picker. Either
+  // stage cancelling returns false so the edit modal stays open.
+  async migrateWithWhen(file, task, kind) {
+    const date = await new Promise((resolve) => {
+      new WhenModal(
+        this.app,
+        kind === "move" ? "Move to when?" : "Copy to when?",
+        this.selectedDate,
+        resolve
+      ).open();
     });
-    if (!action)
+    if (!date)
       return false;
-    if (action === "split")
-      return this.splitTaskToDate(file, task, targetDate);
-    if (action === "move")
-      return this.moveTaskToDate(file, task, targetDate);
+    if (kind === "move") {
+      const action = await new Promise((resolve) => {
+        new MoveActionModal(this.app, resolve).open();
+      });
+      if (!action)
+        return false;
+      return action === "split" ? this.splitTaskToDate(file, task, date) : this.moveTaskToDate(file, task, date);
+    }
     const mode = await new Promise((resolve) => {
       new SubtaskScopeModal(this.app, resolve).open();
     });
     if (!mode)
       return false;
-    return this.copyTaskToDate(file, task, targetDate, mode);
+    return this.copyTaskToDate(file, task, date, mode);
   }
   // Re-parses the source file to pick up any sub-task changes made in the
   // edit modal since it opened — line numbers / checked-state on the captured
@@ -8940,27 +8931,22 @@ var TaskEditModal = class extends import_obsidian6.Modal {
     let editModeMoveBtn = null;
     if (this.opts.mode === "edit") {
       const moveChoices = (_c = this.opts.moveChoices) != null ? _c : [];
-      const calendarPick = this.opts.moveCalendarPick;
       const moveWrap = actions.createDiv({ cls: "dp-edit-move-wrap" });
       const moveBtn = moveWrap.createEl("button", {
         cls: "dp-edit-icon-btn",
-        attr: { "aria-label": "Move to\u2026 (m)" }
+        attr: { "aria-label": "Migrate\u2026 (m)" }
       });
       moveBtn.type = "button";
       (0, import_obsidian6.setIcon)(moveBtn, "forward");
       editModeMoveBtn = moveBtn;
       const choices = moveWrap.createDiv({ cls: "dp-edit-move-choices" });
       choices.style.display = "none";
-      const calPopover = moveWrap.createDiv({
-        cls: "dp-edit-move-calpopover"
-      });
-      calPopover.style.display = "none";
       const choiceBtns = [];
       for (const choice of moveChoices) {
         const btn = choices.createEl("button", {
           cls: "dp-edit-move-choice",
           attr: {
-            "aria-label": `Move to ${choice.label} (${choice.hotkey})`
+            "aria-label": `${choice.label} (${choice.hotkey})`
           }
         });
         btn.type = "button";
@@ -8972,26 +8958,7 @@ var TaskEditModal = class extends import_obsidian6.Modal {
         btn.addEventListener("click", () => void runWith(choice.onChoose));
         choiceBtns.push(btn);
       }
-      let calBtn = null;
-      if (calendarPick) {
-        calBtn = choices.createEl("button", {
-          cls: "dp-edit-move-choice is-calendar",
-          attr: {
-            "aria-label": `Pick date (${calendarPick.hotkey})`
-          }
-        });
-        calBtn.type = "button";
-        calBtn.createEl("span", {
-          cls: "dp-edit-move-hotkey",
-          text: `(${calendarPick.hotkey})`
-        });
-        const iconWrap = calBtn.createSpan({ cls: "dp-edit-move-calicon" });
-        (0, import_obsidian6.setIcon)(iconWrap, "calendar");
-        calBtn.addEventListener("click", () => openCalendar());
-        choiceBtns.push(calBtn);
-      }
       let stageTwoActive = false;
-      let calendarActive = false;
       let keyHandler = null;
       const setSubBtnsDisabled = (disabled) => {
         for (const b of choiceBtns)
@@ -9001,49 +8968,18 @@ var TaskEditModal = class extends import_obsidian6.Modal {
         stageTwoActive = false;
         choices.style.display = "none";
         choices.removeClass("is-open");
-        closeCalendar();
         if (keyHandler) {
           this.contentEl.removeEventListener("keydown", keyHandler, true);
           keyHandler = null;
         }
-      };
-      const closeCalendar = () => {
-        if (!calendarActive)
-          return;
-        calendarActive = false;
-        calPopover.style.display = "none";
-        calPopover.empty();
-      };
-      const openCalendar = () => {
-        if (!calendarPick)
-          return;
-        choices.style.display = "none";
-        choices.removeClass("is-open");
-        calendarActive = true;
-        calPopover.style.display = "";
-        renderPickerCalendar(calPopover, {
-          initialMonth: calendarPick.initialMonth,
-          selectedDate: calendarPick.selectedDate,
-          onPickDay: (date) => {
-            void runWith(() => calendarPick.onPick(date));
-          }
-        });
       };
       const runWith = async (action) => {
         setSubBtnsDisabled(true);
         const moved = await action();
         if (moved)
           this.close();
-        else {
+        else
           setSubBtnsDisabled(false);
-          if (calendarActive) {
-            closeCalendar();
-            choices.style.display = "";
-            choices.removeClass("is-open");
-            void choices.offsetWidth;
-            choices.addClass("is-open");
-          }
-        }
       };
       moveBtn.addEventListener("click", () => {
         if (stageTwoActive) {
@@ -9069,20 +9005,10 @@ var TaskEditModal = class extends import_obsidian6.Modal {
           if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
-            if (calendarActive) {
-              closeCalendar();
-              choices.style.display = "";
-              choices.removeClass("is-open");
-              void choices.offsetWidth;
-              choices.addClass("is-open");
-              return;
-            }
             exitStageTwo();
             moveBtn.focus();
             return;
           }
-          if (calendarActive)
-            return;
           for (const choice of moveChoices) {
             if (ev.key === choice.hotkey) {
               ev.preventDefault();
@@ -9090,11 +9016,6 @@ var TaskEditModal = class extends import_obsidian6.Modal {
               void runWith(choice.onChoose);
               return;
             }
-          }
-          if (calendarPick && ev.key.toLowerCase() === calendarPick.hotkey.toLowerCase()) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            openCalendar();
           }
         };
         this.contentEl.addEventListener("keydown", keyHandler, true);
@@ -9149,11 +9070,6 @@ var TaskEditModal = class extends import_obsidian6.Modal {
         ".dp-edit-move-choices"
       );
       if (moveOpen && moveOpen.style.display !== "none")
-        return;
-      const calOpen = this.contentEl.querySelector(
-        ".dp-edit-move-calpopover"
-      );
-      if (calOpen && calOpen.style.display !== "none")
         return;
       if (ev.metaKey || ev.ctrlKey || ev.altKey)
         return;
@@ -9247,7 +9163,76 @@ var SubtaskQuickAddModal = class extends import_obsidian6.Modal {
     this.contentEl.empty();
   }
 };
-var MigrateActionModal = class extends import_obsidian6.Modal {
+var WhenModal = class extends import_obsidian6.Modal {
+  constructor(app, title, base, resolve) {
+    super(app);
+    this.picked = false;
+    this.title = title;
+    this.base = base;
+    this.resolve = resolve;
+  }
+  onOpen() {
+    this.modalEl.addClass("dp-dup-mode-modal");
+    this.titleEl.setText(this.title);
+    this.contentEl.empty();
+    const sel = startOfDay(this.base);
+    const today = sel;
+    const tomorrow = addDays(sel, 1);
+    const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
+    const calWrap = this.contentEl.createDiv({
+      cls: "dp-dup-mode-calwrap"
+    });
+    calWrap.style.display = "none";
+    const pick = (date) => {
+      this.picked = true;
+      this.resolve(date);
+      this.close();
+    };
+    const openCalendar = () => {
+      row.style.display = "none";
+      calWrap.style.display = "";
+      renderPickerCalendar(calWrap, {
+        initialMonth: sel,
+        selectedDate: sel,
+        onPickDay: (date) => pick(date)
+      });
+    };
+    const buttons = [
+      { label: "Today", hotkey: "t", onChoose: () => pick(today) },
+      { label: "Tomorrow", hotkey: "m", onChoose: () => pick(tomorrow) },
+      { label: "Pick date\u2026", hotkey: "d", onChoose: () => openCalendar() }
+    ];
+    for (const b of buttons) {
+      const el = row.createEl("button", { cls: "dp-dup-mode-btn" });
+      el.type = "button";
+      el.createDiv({
+        cls: "dp-dup-mode-btn-label",
+        text: `(${b.hotkey}) ${b.label}`
+      });
+      el.addEventListener("click", b.onChoose);
+    }
+    this.contentEl.addEventListener("keydown", (ev) => {
+      const target = ev.target;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+        return;
+      }
+      if (ev.metaKey || ev.ctrlKey || ev.altKey)
+        return;
+      const k = ev.key.toLowerCase();
+      const hit = buttons.find((b) => b.hotkey === k);
+      if (!hit)
+        return;
+      ev.preventDefault();
+      hit.onChoose();
+    });
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.picked)
+      this.resolve(null);
+  }
+};
+var MoveActionModal = class extends import_obsidian6.Modal {
   constructor(app, resolve) {
     super(app);
     this.picked = false;
@@ -9255,37 +9240,52 @@ var MigrateActionModal = class extends import_obsidian6.Modal {
   }
   onOpen() {
     this.modalEl.addClass("dp-dup-mode-modal");
-    this.titleEl.setText("Migrate task");
+    this.titleEl.setText("Migrate \u2014 how?");
     this.contentEl.empty();
     const row = this.contentEl.createDiv({ cls: "dp-dup-mode-row" });
     const choices = [
       {
         label: "Split",
         sub: "Carry unchecked over \xB7 keep partial progress",
+        hotkey: "s",
         action: "split"
       },
       {
-        label: "Move",
+        label: "Move whole",
         sub: "Whole task to the new day \xB7 source \u2192 [>]",
+        hotkey: "m",
         action: "move"
-      },
-      {
-        label: "Copy",
-        sub: "Fresh clone \xB7 no taskId sync",
-        action: "copy"
       }
     ];
+    const pick = (a) => {
+      this.picked = true;
+      this.resolve(a);
+      this.close();
+    };
     for (const c of choices) {
       const btn = row.createEl("button", { cls: "dp-dup-mode-btn" });
       btn.type = "button";
-      btn.createDiv({ cls: "dp-dup-mode-btn-label", text: c.label });
-      btn.createDiv({ cls: "dp-dup-mode-btn-sub", text: c.sub });
-      btn.addEventListener("click", () => {
-        this.picked = true;
-        this.resolve(c.action);
-        this.close();
+      btn.createDiv({
+        cls: "dp-dup-mode-btn-label",
+        text: `(${c.hotkey}) ${c.label}`
       });
+      btn.createDiv({ cls: "dp-dup-mode-btn-sub", text: c.sub });
+      btn.addEventListener("click", () => pick(c.action));
     }
+    this.contentEl.addEventListener("keydown", (ev) => {
+      const target = ev.target;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+        return;
+      }
+      if (ev.metaKey || ev.ctrlKey || ev.altKey)
+        return;
+      const k = ev.key.toLowerCase();
+      const hit = choices.find((c) => c.hotkey === k);
+      if (!hit)
+        return;
+      ev.preventDefault();
+      pick(hit.action);
+    });
   }
   onClose() {
     this.contentEl.empty();

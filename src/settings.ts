@@ -2352,7 +2352,7 @@ function buildTaskIdDesc(): DocumentFragment {
     "Cross-references a task across days. Default prefix ",
     makeCode("tid"),
     ". When you migrate a task's incomplete sub-tasks to the next day from the edit modal (",
-    makeCode("Move to tomorrow → Migrate incomplete"),
+    makeCode("Migrate → Split now"),
     "), the plugin marks the original parent as completed, generates a short alphanumeric ID (length configurable below), and stamps ",
     makeCode("#tid/<id>"),
     " onto both the source-day parent and the new-day copy so you can search either side and find the partner. Example: ",
