@@ -359,7 +359,8 @@
 
   .dp-section.is-habits-collapsed .dp-quote-row,
   .dp-section.is-habits-collapsed .dp-workout,
-  .dp-section.is-habits-collapsed .dp-habits {
+  .dp-section.is-habits-collapsed .dp-habits,
+  .dp-section.is-habits-collapsed .dp-upcoming {
     display: none;
   }
 
