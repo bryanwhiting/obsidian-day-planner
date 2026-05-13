@@ -5710,14 +5710,15 @@ class TaskEditModal extends Modal {
       };
 
       const applyPriorPick = (sugg: TaskSuggestion): void => {
-        // Only the title carries over from the prior task — duration, project,
-        // description, tags, and the creation date are all left at their
-        // current defaults so each pick produces a fresh task. The sub-task
-        // checklist is still copied when the user opts in via
+        // Title + project carry over from the prior task; duration,
+        // description, tags, and the creation date are left at their current
+        // defaults so each pick produces a fresh task. The sub-task checklist
+        // is still copied when the user opts in via
         // `copySubtasksOnAutocomplete`, since that's a useful pattern for
         // recurring checklists.
         input.value = sugg.title;
         input.setSelectionRange(sugg.title.length, sugg.title.length);
+        projInput.value = sugg.project ?? "";
 
         if (this.opts.copySubtasksOnAutocomplete) {
           // Drop any pending in-memory subs and adopt the source's checklist.

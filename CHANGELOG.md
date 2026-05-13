@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-13
+
+- [feat]: **Picking a prior task from the title autocomplete now pulls in its project too.** `applyPriorPick` (`src/view.ts`) previously copied only `sugg.title` into the title input — by design, per the comment block — so the user had to retype the project for every recurring task. Added `projInput.value = sugg.project ?? "";` next to the existing title write; the trailing `updateSummary()` already covers the summary refresh, and `sugg.project` is the pre-composed `proj/sub` string the project input expects (matches what `attachProjectSuggest` populates on pick). Duration, description, tags, and creation date still reset to fresh defaults so each pick produces a new task — only title + project carry over. Comment block above the function updated to reflect the new behavior. The user asked: "when i'm typing a new task and it auto-completes from a prior task, have it pull in the project. right now it just pulls in the prior task title, but i also want the project pulle din."
+
 ## 2026-05-12
 
 - [fix]: **Mobile timeline-block title is only clickable on the text, not the full bar.** The `is-mobile-condensed` variant (added in 1508fe8 to condense blocks to "start time + title" on mobile) set `.dp-block-text { flex: 1 1 auto }`, which stretched the title span to fill the entire remaining row width. Since the click handler that toggles done is bound to that span, the empty space past the text registered as a title tap instead of falling through to the block's edit handler. Changed flex-grow back to 0 (`flex: 0 1 auto`, matching the desktop default) so the span hugs its text; shrink stays at 1 so long titles still wrap inside the row. File: `src/styles.src.css` (`.dp-block.is-mobile-condensed .dp-block-text`). The user reported: "on mobile, the task title is clickable across the entire bar. I just want the text clickable. Perhaps a recent change on making it more compact affected it."

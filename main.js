@@ -8684,8 +8684,10 @@ var TaskEditModal = class extends import_obsidian7.Modal {
         priorActiveIdx = -1;
       };
       const applyPriorPick = (sugg) => {
+        var _a2;
         input.value = sugg.title;
         input.setSelectionRange(sugg.title.length, sugg.title.length);
+        projInput.value = (_a2 = sugg.project) != null ? _a2 : "";
         if (this.opts.copySubtasksOnAutocomplete) {
           subs.length = 0;
           for (const rawLine of sugg.subtaskRawLines) {
