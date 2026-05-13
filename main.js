@@ -1508,7 +1508,10 @@ var WEEKDAY_NAMES = [
 var DEFAULT_JOURNAL_SETTINGS = {
   beginDay: { sectionTitle: "Begin Day", templatePath: "" },
   closeDay: { sectionTitle: "Close Day", templatePath: "" },
-  distractions: { sectionTitle: "Distractions", templatePath: "" }
+  distractions: { sectionTitle: "Distractions", templatePath: "" },
+  // Brain Dump is templateless by design — `templatePath` is kept in the
+  // shape for uniformity but ignored by the "dump" flow format.
+  brainDump: { sectionTitle: "Brain Dump", templatePath: "" }
 };
 var DEFAULT_SETTINGS = {
   visibleStartHour: 6,
@@ -1560,7 +1563,8 @@ var DEFAULT_SETTINGS = {
   journal: {
     beginDay: { ...DEFAULT_JOURNAL_SETTINGS.beginDay },
     closeDay: { ...DEFAULT_JOURNAL_SETTINGS.closeDay },
-    distractions: { ...DEFAULT_JOURNAL_SETTINGS.distractions }
+    distractions: { ...DEFAULT_JOURNAL_SETTINGS.distractions },
+    brainDump: { ...DEFAULT_JOURNAL_SETTINGS.brainDump }
   }
 };
 var CSS_LENGTH_RE = /^\d+(?:\.\d+)?(?:px|vh|vw|em|rem|%)$/;
@@ -3027,6 +3031,11 @@ var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
       label: "Distractions",
       description: "Quick-capture log. Each answer becomes a bullet under the section."
     });
+    this.renderJournalFlow(containerEl, "brainDump", {
+      label: "Brain Dump",
+      description: "Freeform single-modal dump \u2014 no template needed. Each non-empty line of the dump becomes its own bullet under the section.",
+      hideTemplate: true
+    });
   }
   renderJournalFlow(containerEl, key, spec) {
     new import_obsidian3.Setting(containerEl).setName(spec.label).setHeading();
@@ -3042,6 +3051,8 @@ var TodaySettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    if (spec.hideTemplate)
+      return;
     new import_obsidian3.Setting(containerEl).setName("Template file").setDesc(
       "Vault path to a markdown file with one question per line. Each non-empty line is asked sequentially via a modal."
     ).addText((t) => {
@@ -9626,7 +9637,8 @@ var import_obsidian8 = require("obsidian");
 var FLOWS = {
   beginDay: { key: "beginDay", format: "qa", label: "Begin Day" },
   closeDay: { key: "closeDay", format: "qa", label: "Close Day" },
-  distractions: { key: "distractions", format: "bullet", label: "Distraction" }
+  distractions: { key: "distractions", format: "bullet", label: "Distraction" },
+  brainDump: { key: "brainDump", format: "dump", label: "Brain Dump" }
 };
 var DAY_OFFSETS = {
   today: 0,
@@ -9652,6 +9664,18 @@ async function runJournal(plugin, flowKey) {
     if (picked === null)
       return;
     dayChoice = picked;
+  }
+  if (spec.format === "dump") {
+    const file2 = await ensureNoteForOffset(plugin, DAY_OFFSETS[dayChoice]);
+    const dump = await askDump(plugin.app, spec.label);
+    if (dump === null)
+      return;
+    const bullets = formatDumpBullets(dump);
+    if (bullets.length === 0)
+      return;
+    await appendToSection(plugin.app, file2, sectionTitle, bullets);
+    new import_obsidian8.Notice(`${spec.label} logged.`);
+    return;
   }
   const questions = await readQuestions(plugin.app, flow);
   if (questions === null)
@@ -9756,6 +9780,20 @@ function formatBullet(answer) {
 ${rest.join("\n")}
 `;
 }
+function formatDumpBullets(answer) {
+  const lines = answer.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length === 0)
+    return "";
+  return lines.map((l) => `- ${l}`).join("\n") + "\n";
+}
+function askDump(app, flowLabel) {
+  return new Promise((resolve) => {
+    const modal = new QuestionModal(app, flowLabel, "", resolve);
+    modal.rows = 10;
+    modal.placeholder = "Dump it\u2026";
+    modal.open();
+  });
+}
 async function appendToSection(app, file, sectionTitle, block) {
   await app.vault.process(
     file,
@@ -9823,6 +9861,10 @@ var QuestionModal = class extends import_obsidian8.Modal {
   constructor(app, flowLabel, question, resolve) {
     super(app);
     this.settled = false;
+    // Optional overrides for non-Q+A callers (e.g. Brain Dump wants a bigger
+    // textarea + a different placeholder than per-question prompts).
+    this.rows = 4;
+    this.placeholder = "Type your answer\u2026";
     this.flowLabel = flowLabel;
     this.question = question;
     this.resolve = resolve;
@@ -9831,13 +9873,15 @@ var QuestionModal = class extends import_obsidian8.Modal {
     this.modalEl.addClass("dp-title-modal");
     this.modalEl.addClass("dp-journal-modal");
     this.titleEl.setText(this.flowLabel);
-    const prompt = this.contentEl.createDiv({ cls: "dp-journal-prompt" });
-    prompt.setText(this.question);
+    if (this.question.length > 0) {
+      const prompt = this.contentEl.createDiv({ cls: "dp-journal-prompt" });
+      prompt.setText(this.question);
+    }
     this.textarea = this.contentEl.createEl("textarea", {
       cls: "dp-journal-input"
     });
-    this.textarea.rows = 4;
-    this.textarea.placeholder = "Type your answer\u2026";
+    this.textarea.rows = this.rows;
+    this.textarea.placeholder = this.placeholder;
     this.textarea.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter" && !ev.shiftKey) {
         ev.preventDefault();
@@ -11917,6 +11961,11 @@ var TodayPlugin = class extends import_obsidian14.Plugin {
       name: "Log Distraction",
       callback: () => void runJournal(this, "distractions")
     });
+    this.addCommand({
+      id: "journal-brain-dump",
+      name: "Log Brain Dump",
+      callback: () => void runJournal(this, "brainDump")
+    });
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
     this.registerEvent(
@@ -11939,7 +11988,7 @@ var TodayPlugin = class extends import_obsidian14.Plugin {
   async onunload() {
   }
   async loadSettings() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     const data = await this.loadData();
     this.settings = {
       ...DEFAULT_SETTINGS,
@@ -11965,6 +12014,10 @@ var TodayPlugin = class extends import_obsidian14.Plugin {
         distractions: {
           ...DEFAULT_JOURNAL_SETTINGS.distractions,
           ...(_i = (_h = data == null ? void 0 : data.journal) == null ? void 0 : _h.distractions) != null ? _i : {}
+        },
+        brainDump: {
+          ...DEFAULT_JOURNAL_SETTINGS.brainDump,
+          ...(_k = (_j = data == null ? void 0 : data.journal) == null ? void 0 : _j.brainDump) != null ? _k : {}
         }
       },
       projectColors: Array.isArray(data == null ? void 0 : data.projectColors) ? data.projectColors.filter(

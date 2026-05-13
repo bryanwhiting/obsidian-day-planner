@@ -7,7 +7,10 @@ import { ensureDailyNote } from "./dailyNote";
 // "bullet" appends `- answer` lines under the section, ignoring the question
 // text in the output (used for Distractions — questions only steer the modal
 // prompt; the output is a flat bullet list for quick capture).
-type FlowFormat = "qa" | "bullet";
+// "dump" is templateless quick-capture: one big textarea, each non-empty
+// line of the answer becomes its own `- bullet` under the section. No day
+// picker, no template, no per-question loop.
+type FlowFormat = "qa" | "bullet" | "dump";
 
 interface FlowSpec {
   key: JournalFlowKey;
@@ -20,6 +23,7 @@ const FLOWS: Record<JournalFlowKey, FlowSpec> = {
   beginDay: { key: "beginDay", format: "qa", label: "Begin Day" },
   closeDay: { key: "closeDay", format: "qa", label: "Close Day" },
   distractions: { key: "distractions", format: "bullet", label: "Distraction" },
+  brainDump: { key: "brainDump", format: "dump", label: "Brain Dump" },
 };
 
 // Day choices offered by the journal day-picker. Distractions skip the
@@ -53,12 +57,25 @@ export async function runJournal(
 
   // Distractions are quick-capture by design — skip the day picker so the
   // first modal the user sees is the question itself. Begin/Close Day open
-  // a three-option picker first; Enter on the picker selects Today.
+  // a three-option picker first; Enter on the picker selects Today. Brain
+  // Dump is the most aggressive form of quick-capture and always logs to
+  // today's note with a single textarea — no template, no picker.
   let dayChoice: DayChoice = "today";
   if (spec.format === "qa") {
     const picked = await pickDay(plugin.app, spec.label);
     if (picked === null) return;
     dayChoice = picked;
+  }
+
+  if (spec.format === "dump") {
+    const file = await ensureNoteForOffset(plugin, DAY_OFFSETS[dayChoice]);
+    const dump = await askDump(plugin.app, spec.label);
+    if (dump === null) return; // Escape / Cancel — nothing was written.
+    const bullets = formatDumpBullets(dump);
+    if (bullets.length === 0) return;
+    await appendToSection(plugin.app, file, sectionTitle, bullets);
+    new Notice(`${spec.label} logged.`);
+    return;
   }
 
   const questions = await readQuestions(plugin.app, flow);
@@ -183,6 +200,31 @@ function formatBullet(answer: string): string {
   return `- ${head}\n${rest.join("\n")}\n`;
 }
 
+// Brain Dump format: split the textarea by newlines; each non-empty line
+// becomes its own `- bullet` so a rapid-fire dump produces a clean list
+// rather than one merged bullet with indented continuations. Returns "" if
+// every line is blank (caller treats that as nothing-to-write).
+function formatDumpBullets(answer: string): string {
+  const lines = answer
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return "";
+  return lines.map((l) => `- ${l}`).join("\n") + "\n";
+}
+
+function askDump(app: App, flowLabel: string): Promise<string | null> {
+  // Same modal shell as the per-question prompter but with no question body
+  // and a roomier textarea — Brain Dump is meant for stream-of-consciousness
+  // input, so Shift+Enter inserts newlines and plain Enter still submits.
+  return new Promise((resolve) => {
+    const modal = new QuestionModal(app, flowLabel, "", resolve);
+    modal.rows = 10;
+    modal.placeholder = "Dump it…";
+    modal.open();
+  });
+}
+
 // Inserts `block` at the end of the `## sectionTitle` section. If the heading
 // is missing it gets appended at the end of the file. The block is separated
 // from prior content by a single blank line so successive runs stack cleanly
@@ -289,6 +331,10 @@ class QuestionModal extends Modal {
   private resolve: (answer: string | null) => void;
   private settled = false;
   private textarea!: HTMLTextAreaElement;
+  // Optional overrides for non-Q+A callers (e.g. Brain Dump wants a bigger
+  // textarea + a different placeholder than per-question prompts).
+  rows = 4;
+  placeholder = "Type your answer…";
 
   constructor(
     app: App,
@@ -307,14 +353,18 @@ class QuestionModal extends Modal {
     this.modalEl.addClass("dp-journal-modal");
     this.titleEl.setText(this.flowLabel);
 
-    const prompt = this.contentEl.createDiv({ cls: "dp-journal-prompt" });
-    prompt.setText(this.question);
+    // Brain Dump passes an empty question — skip the prompt div in that
+    // case so the textarea sits flush under the title.
+    if (this.question.length > 0) {
+      const prompt = this.contentEl.createDiv({ cls: "dp-journal-prompt" });
+      prompt.setText(this.question);
+    }
 
     this.textarea = this.contentEl.createEl("textarea", {
       cls: "dp-journal-input",
     });
-    this.textarea.rows = 4;
-    this.textarea.placeholder = "Type your answer…";
+    this.textarea.rows = this.rows;
+    this.textarea.placeholder = this.placeholder;
     // Submit on Enter (Shift+Enter inserts a newline). Escape cancels via
     // the modal's default close handler.
     this.textarea.addEventListener("keydown", (ev) => {

@@ -95,6 +95,7 @@ export interface JournalSettings {
   beginDay: JournalFlow;
   closeDay: JournalFlow;
   distractions: JournalFlow;
+  brainDump: JournalFlow;
 }
 
 export type JournalFlowKey = keyof JournalSettings;
@@ -103,6 +104,9 @@ export const DEFAULT_JOURNAL_SETTINGS: JournalSettings = {
   beginDay: { sectionTitle: "Begin Day", templatePath: "" },
   closeDay: { sectionTitle: "Close Day", templatePath: "" },
   distractions: { sectionTitle: "Distractions", templatePath: "" },
+  // Brain Dump is templateless by design — `templatePath` is kept in the
+  // shape for uniformity but ignored by the "dump" flow format.
+  brainDump: { sectionTitle: "Brain Dump", templatePath: "" },
 };
 
 export interface TodaySettings {
@@ -277,6 +281,7 @@ export const DEFAULT_SETTINGS: TodaySettings = {
     beginDay: { ...DEFAULT_JOURNAL_SETTINGS.beginDay },
     closeDay: { ...DEFAULT_JOURNAL_SETTINGS.closeDay },
     distractions: { ...DEFAULT_JOURNAL_SETTINGS.distractions },
+    brainDump: { ...DEFAULT_JOURNAL_SETTINGS.brainDump },
   },
 };
 
@@ -2198,12 +2203,18 @@ export class TodaySettingTab extends PluginSettingTab {
       description:
         "Quick-capture log. Each answer becomes a bullet under the section.",
     });
+    this.renderJournalFlow(containerEl, "brainDump", {
+      label: "Brain Dump",
+      description:
+        "Freeform single-modal dump — no template needed. Each non-empty line of the dump becomes its own bullet under the section.",
+      hideTemplate: true,
+    });
   }
 
   private renderJournalFlow(
     containerEl: HTMLElement,
-    key: "beginDay" | "closeDay" | "distractions",
-    spec: { label: string; description: string },
+    key: "beginDay" | "closeDay" | "distractions" | "brainDump",
+    spec: { label: string; description: string; hideTemplate?: boolean },
   ): void {
     new Setting(containerEl).setName(spec.label).setHeading();
     containerEl.createEl("p", {
@@ -2225,6 +2236,8 @@ export class TodaySettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    if (spec.hideTemplate) return;
 
     new Setting(containerEl)
       .setName("Template file")

@@ -175,6 +175,12 @@ export default class TodayPlugin extends Plugin {
       callback: () => void runJournal(this, "distractions"),
     });
 
+    this.addCommand({
+      id: "journal-brain-dump",
+      name: "Log Brain Dump",
+      callback: () => void runJournal(this, "brainDump"),
+    });
+
     this.addSettingTab(new TodaySettingTab(this.app, this));
     this.registerEditorSuggest(new InlineSuggest(this));
 
@@ -229,6 +235,10 @@ export default class TodayPlugin extends Plugin {
         distractions: {
           ...DEFAULT_JOURNAL_SETTINGS.distractions,
           ...(data?.journal?.distractions ?? {}),
+        },
+        brainDump: {
+          ...DEFAULT_JOURNAL_SETTINGS.brainDump,
+          ...(data?.journal?.brainDump ?? {}),
         },
       },
       projectColors: Array.isArray(data?.projectColors)
