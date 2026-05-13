@@ -394,35 +394,20 @@ export default class TodayPlugin extends Plugin {
   }
 
   async activateShellView(): Promise<void> {
-    // Reveal an existing shell rather than opening duplicates. The shell's
-    // paired content leaf survives across reveals because the shell view
-    // instance is reused.
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_SHELL);
+    let leaf: WorkspaceLeaf | null;
     if (existing.length > 0) {
-      this.app.workspace.revealLeaf(existing[0]);
+      leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
       return;
     }
-    const navLeaf = this.app.workspace.getLeaf("tab");
-    if (!navLeaf) return;
-    await navLeaf.setViewState({
+    leaf = this.app.workspace.getLeaf("tab");
+    if (!leaf) return;
+    await leaf.setViewState({
       type: VIEW_TYPE_SHELL,
-      active: false,
-    });
-    // Split right to host the actual Today / Multi-day / Reporting view. The
-    // shell starts on Today; the user picks another row from the sidebar to
-    // swap the content leaf in place without disturbing the nav.
-    const contentLeaf = this.app.workspace.createLeafBySplit(
-      navLeaf,
-      "vertical",
-    );
-    await contentLeaf.setViewState({
-      type: VIEW_TYPE_TODAY,
       active: true,
     });
-    const navView = navLeaf.view as ShellView;
-    navView.setContentLeaf(contentLeaf, VIEW_TYPE_TODAY);
-    this.app.workspace.revealLeaf(navLeaf);
-    this.app.workspace.setActiveLeaf(contentLeaf, { focus: true });
+    this.app.workspace.revealLeaf(leaf);
   }
 
   async activateMultiDayView(): Promise<void> {

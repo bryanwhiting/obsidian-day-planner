@@ -1,52 +1,55 @@
 import { ItemView, setIcon, WorkspaceLeaf } from "obsidian";
 import type TodayPlugin from "./main";
-import { VIEW_TYPE_TODAY } from "./view";
-import { VIEW_TYPE_MULTI_DAY } from "./multiDayView";
-import { VIEW_TYPE_HABITS_STATS } from "./habitsView";
+import { TodayView, VIEW_TYPE_TODAY } from "./view";
+import { MultiDayView, VIEW_TYPE_MULTI_DAY } from "./multiDayView";
+import { HabitsStatsView, VIEW_TYPE_HABITS_STATS } from "./habitsView";
 
 export const VIEW_TYPE_SHELL = "today-shell";
 
-// Nav entries rendered in the shell sidebar. `target` is the view-type string
-// the content leaf is swapped to when the row is clicked — the sidebar
-// itself stays put, so the user keeps a persistent nav while bouncing
-// between Today / This week / Reporting in the right-hand pane.
+// `target` distinguishes which embedded view to mount when the row is
+// clicked. The shell instantiates the corresponding ItemView subclass with
+// its containerEl/contentEl rerouted into a host div inside the shell's
+// content area — so the user sees one SaaS-style window with a sticky
+// sidebar instead of two Obsidian leaves.
+type ShellTarget = "today" | "week" | "reporting";
+
 interface ShellEntry {
+  target: ShellTarget;
   label: string;
   description: string;
   icon: string;
-  target: string;
 }
 
 const ENTRIES: ShellEntry[] = [
   {
+    target: "today",
     label: "Today",
     description: "Daily-note dashboard.",
     icon: "calendar-clock",
-    target: VIEW_TYPE_TODAY,
   },
   {
+    target: "week",
     label: "This week",
     description: "Multi-day view.",
     icon: "calendar-range",
-    target: VIEW_TYPE_MULTI_DAY,
   },
   {
+    target: "reporting",
     label: "Reporting",
     description: "Habits + projects + time stats.",
     icon: "bar-chart-3",
-    target: VIEW_TYPE_HABITS_STATS,
   },
 ];
 
 export class ShellView extends ItemView {
   private plugin: TodayPlugin;
-  // The leaf that hosts whichever target view is currently visible. Paired
-  // 1:1 with the shell at activation time; if the user closes it manually,
-  // `ensureContentLeaf` recreates it on the next nav click.
-  private contentLeaf: WorkspaceLeaf | null = null;
-  // Last target view-type opened, used to mark the matching nav row as
-  // active when re-rendering the sidebar.
-  private activeTarget: string = VIEW_TYPE_TODAY;
+  private active: ShellTarget = "today";
+  // The view instance currently mounted in the content host (or null when
+  // nothing's mounted yet). We hold this so we can call onClose + unload on
+  // teardown before swapping in the next view.
+  private mounted: { target: ShellTarget; view: ItemView } | null = null;
+  private hostEl: HTMLElement | null = null;
+  private navItemsEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: TodayPlugin) {
     super(leaf);
@@ -65,71 +68,123 @@ export class ShellView extends ItemView {
     return "layout-dashboard";
   }
 
-  // Called by `activateShellView` immediately after the split is created so
-  // the sidebar knows which leaf to drive. Subsequent re-opens of an existing
-  // shell can call this again with a fresh content leaf if the prior one was
-  // closed by the user.
-  setContentLeaf(leaf: WorkspaceLeaf, initialTarget: string): void {
-    this.contentLeaf = leaf;
-    this.activeTarget = initialTarget;
-    this.render();
-  }
-
   async onOpen(): Promise<void> {
-    this.render();
+    this.renderChrome();
+    await this.mount(this.active);
   }
 
   async onClose(): Promise<void> {
+    await this.teardownMounted();
     this.contentEl.empty();
   }
 
-  private render(): void {
+  // Builds the two-pane layout: sidebar nav on the left, a host div on the
+  // right that will receive the embedded view's DOM. Re-rendered only when
+  // the shell itself opens; nav switches just update the active highlight
+  // and swap the host's contents.
+  private renderChrome(): void {
     const root = this.contentEl;
     root.empty();
-    root.addClass("dp-shell-nav");
+    root.addClass("dp-shell-app");
 
-    const header = root.createDiv({ cls: "dp-shell-sidebar-header" });
-    header.setText("Today");
+    const sidebar = root.createDiv({ cls: "dp-shell-sidebar" });
+    sidebar.createDiv({
+      cls: "dp-shell-sidebar-header",
+      text: "Today",
+    });
 
+    this.navItemsEl = sidebar.createDiv({ cls: "dp-shell-sidebar-items" });
+    this.renderNav();
+
+    const host = root.createDiv({ cls: "dp-shell-host" });
+    // The embedded view's render code reads `containerEl.children[1]` as its
+    // root, so the host needs at least two children. children[0] is a stub
+    // (it stands in for the leaf header that ItemView normally renders);
+    // children[1] is where the view actually paints. Both are nodes we
+    // control, so we can teardown by clearing children[1] without touching
+    // the stub.
+    host.createDiv({ cls: "dp-shell-host-stub" });
+    host.createDiv({ cls: "dp-shell-host-content" });
+    this.hostEl = host;
+  }
+
+  private renderNav(): void {
+    const items = this.navItemsEl;
+    if (!items) return;
+    items.empty();
     for (const entry of ENTRIES) {
-      const item = root.createDiv({ cls: "dp-shell-nav-item" });
-      if (entry.target === this.activeTarget) {
-        item.addClass("is-active");
-      }
-      const iconEl = item.createSpan({ cls: "dp-shell-nav-icon" });
+      const row = items.createDiv({ cls: "dp-shell-nav-item" });
+      if (entry.target === this.active) row.addClass("is-active");
+      const iconEl = row.createSpan({ cls: "dp-shell-nav-icon" });
       setIcon(iconEl, entry.icon);
-      const text = item.createDiv({ cls: "dp-shell-nav-text" });
+      const text = row.createDiv({ cls: "dp-shell-nav-text" });
       text.createDiv({ cls: "dp-shell-nav-label", text: entry.label });
       text.createDiv({ cls: "dp-shell-nav-desc", text: entry.description });
-      item.addEventListener("click", () => void this.openTarget(entry));
+      row.addEventListener("click", () => void this.switchTo(entry.target));
     }
   }
 
-  private async openTarget(entry: ShellEntry): Promise<void> {
-    const leaf = await this.ensureContentLeaf();
-    await leaf.setViewState({ type: entry.target, active: true });
-    this.app.workspace.setActiveLeaf(leaf, { focus: true });
-    this.activeTarget = entry.target;
-    this.render();
+  private async switchTo(target: ShellTarget): Promise<void> {
+    if (this.mounted && this.mounted.target === target) return;
+    this.active = target;
+    this.renderNav();
+    await this.mount(target);
   }
 
-  // Returns the paired content leaf, recreating it if the user closed it.
-  // The fresh leaf is opened to the right of the shell via `createLeafBySplit`
-  // so the layout matches what `activateShellView` set up initially.
-  private async ensureContentLeaf(): Promise<WorkspaceLeaf> {
-    if (this.contentLeaf && isLeafAttached(this.contentLeaf)) {
-      return this.contentLeaf;
+  // Tears down the previously-mounted view (if any) and mounts a fresh
+  // instance for `target`. The new instance is constructed against
+  // `this.leaf` (the shell's leaf) but has its containerEl/contentEl
+  // pointed at the in-shell host so its render code paints inline.
+  private async mount(target: ShellTarget): Promise<void> {
+    await this.teardownMounted();
+    const host = this.hostEl;
+    if (!host) return;
+    const view = this.constructView(target);
+    // Override the view's element references *before* onOpen runs so its
+    // render code sees our host. Casts because containerEl/contentEl are
+    // declared readonly-ish on the type but writable at runtime.
+    (view as unknown as { containerEl: HTMLElement }).containerEl = host;
+    const contentChild = host.children[1] as HTMLElement;
+    (view as unknown as { contentEl: HTMLElement }).contentEl = contentChild;
+    // Adding as a child component triggers `view.load()` so events the view
+    // registers via `registerEvent` / `registerInterval` clean up when the
+    // shell unloads (or when we swap views).
+    this.addChild(view);
+    await view.onOpen();
+    this.mounted = { target, view };
+  }
+
+  private constructView(target: ShellTarget): ItemView {
+    if (target === "today") return new TodayView(this.leaf, this.plugin);
+    if (target === "week") return new MultiDayView(this.leaf, this.plugin);
+    return new HabitsStatsView(this.leaf, this.plugin);
+  }
+
+  private async teardownMounted(): Promise<void> {
+    if (!this.mounted) return;
+    const { view } = this.mounted;
+    try {
+      await view.onClose();
+    } catch {
+      // Swallow — the view may have already cleaned itself up.
     }
-    const fresh = this.app.workspace.createLeafBySplit(this.leaf, "vertical");
-    this.contentLeaf = fresh;
-    return fresh;
+    this.removeChild(view);
+    const host = this.hostEl;
+    if (host) {
+      const content = host.children[1] as HTMLElement | undefined;
+      if (content) content.empty();
+    }
+    this.mounted = null;
   }
 }
 
-// True when the leaf is still part of the workspace tree (i.e. not closed).
-// `parent` is cleared by Obsidian when a leaf is detached, so this is the
-// cheapest signal we can read without instanceof-checking against internal
-// types.
-function isLeafAttached(leaf: WorkspaceLeaf): boolean {
-  return !!(leaf as unknown as { parent?: unknown }).parent;
+// Returns whether a leaf identifier refers to one of the embedded shell
+// target views. Other modules use this to decide whether opening a target
+// view standalone is preferable to routing through the shell.
+export function isShellEmbeddable(viewType: string): boolean {
+  return (
+    viewType === VIEW_TYPE_TODAY ||
+    viewType === VIEW_TYPE_MULTI_DAY ||
+    viewType === VIEW_TYPE_HABITS_STATS
+  );
 }

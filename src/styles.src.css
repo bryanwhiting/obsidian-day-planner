@@ -2911,13 +2911,54 @@
     background: color-mix(in srgb, var(--color-accent) 24%, transparent);
   }
 
-  /* ---------- shell view (nav sidebar) ---------- */
+  /* ---------- shell view (inline app shell) ---------- */
 
-  .dp-shell-nav {
+  .dp-shell-app {
+    display: flex;
+    flex-direction: row;
     height: 100%;
-    padding: 12px 8px;
+    width: 100%;
+    background: var(--color-bg);
+    overflow: hidden;
+  }
+
+  .dp-shell-sidebar {
+    flex: 0 0 220px;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 8px;
     background: var(--color-paper);
+    border-right: 1px solid var(--color-hairline);
     overflow-y: auto;
+  }
+
+  .dp-shell-sidebar-items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .dp-shell-host {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Stub stand-in for the leaf header the embedded view would normally see.
+   * It just reserves children[0] so the view's `containerEl.children[1]`
+   * indexing still points at the real content. Kept zero-height. */
+  .dp-shell-host-stub {
+    display: none;
+  }
+
+  .dp-shell-host-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    position: relative;
   }
 
   .dp-shell-sidebar-header {
