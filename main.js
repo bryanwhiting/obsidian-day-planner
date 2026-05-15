@@ -703,14 +703,19 @@ function parseTaskLine(filePath, lineNumber, rawLine, prefixes, defaultDurationM
 function parseFileTasks(filePath, fileContent, prefixes, defaultDurationMin) {
   const lines = fileContent.split("\n");
   const tasks = [];
-  let parent = null;
+  let last = null;
   for (let i = 0; i < lines.length; i++) {
     const m = TASK_LINE.exec(lines[i]);
     if (!m)
       continue;
     const indent = m[1];
-    if (parent && indent.length > parent.indent.length) {
-      parent.subtasks.push({
+    const migrated = m[2] === ">";
+    if (last && indent.length > last.indentLen) {
+      if (migrated)
+        continue;
+      if (last.visibleParent === null)
+        continue;
+      last.visibleParent.subtasks.push({
         lineNumber: i,
         rawLine: lines[i],
         text: m[3],
@@ -718,11 +723,15 @@ function parseFileTasks(filePath, fileContent, prefixes, defaultDurationMin) {
       });
       continue;
     }
+    if (migrated) {
+      last = { indentLen: indent.length, visibleParent: null };
+      continue;
+    }
     const t = parseTaskLine(filePath, i, lines[i], prefixes, defaultDurationMin);
     if (!t)
       continue;
     tasks.push(t);
-    parent = t;
+    last = { indentLen: indent.length, visibleParent: t };
   }
   return tasks;
 }

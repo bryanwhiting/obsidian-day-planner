@@ -479,13 +479,24 @@ export function parseFileTasks(
 ): ParsedTask[] {
   const lines = fileContent.split("\n");
   const tasks: ParsedTask[] = [];
-  let parent: ParsedTask | null = null;
+  // Tracks the indent of the most recent top-level task and the parent we'd
+  // attach a subtask to. `visibleParent === null` means the top-level was
+  // dropped (migrated `[>]`) — subsequent indented children are dropped too
+  // so they don't accidentally re-attach to an earlier parent or get parsed
+  // as fresh top-level tasks. Migrated tasks (`- [>]`) are hidden from the
+  // UI on the source day; they live elsewhere now and should only show on
+  // the destination day.
+  let last: { indentLen: number; visibleParent: ParsedTask | null } | null =
+    null;
   for (let i = 0; i < lines.length; i++) {
     const m = TASK_LINE.exec(lines[i]);
     if (!m) continue;
     const indent = m[1];
-    if (parent && indent.length > parent.indent.length) {
-      parent.subtasks.push({
+    const migrated = m[2] === ">";
+    if (last && indent.length > last.indentLen) {
+      if (migrated) continue; // hide migrated subtask
+      if (last.visibleParent === null) continue; // parent was hidden
+      last.visibleParent.subtasks.push({
         lineNumber: i,
         rawLine: lines[i],
         text: m[3],
@@ -493,10 +504,14 @@ export function parseFileTasks(
       });
       continue;
     }
+    if (migrated) {
+      last = { indentLen: indent.length, visibleParent: null };
+      continue;
+    }
     const t = parseTaskLine(filePath, i, lines[i], prefixes, defaultDurationMin);
     if (!t) continue;
     tasks.push(t);
-    parent = t;
+    last = { indentLen: indent.length, visibleParent: t };
   }
   return tasks;
 }
